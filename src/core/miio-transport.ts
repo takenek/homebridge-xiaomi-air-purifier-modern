@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
+import { isRetryableError } from "./retry";
 import type { DeviceState, MiioTransport, ReadProperty } from "./types";
 
 export interface MiioTransportOptions {
@@ -186,7 +187,13 @@ export class ModernMiioTransport implements MiioTransport {
     ) {
       // If all core fields are empty and we used legacy, retry MIOT once.
       if (this.protocolMode === "legacy") {
-        const miotState = await this.readViaMiot().catch(() => null);
+        const miotState = await this.readViaMiot().catch((error: unknown) => {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+
+          return null;
+        });
         if (miotState) {
           this.protocolMode = "miot";
           return miotState;
