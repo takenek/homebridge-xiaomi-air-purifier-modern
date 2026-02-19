@@ -25,11 +25,13 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly autoModeService: Service;
   private readonly sleepModeService: Service;
   private readonly filterService: Service;
+  private connectedLogged = false;
 
   public constructor(
     private readonly api: API,
     private readonly log: Logging,
-    name: string,
+    private readonly name: string,
+    private readonly address: string,
     private readonly client: DeviceClient,
     model: string,
   ) {
@@ -153,6 +155,11 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     const state = this.client.state;
     if (!state) {
       return;
+    }
+
+    if (!this.connectedLogged) {
+      this.connectedLogged = true;
+      this.log.info(`Connected to "${this.name}" @ ${this.address}!`);
     }
 
     this.fanService.updateCharacteristic(
