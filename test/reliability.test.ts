@@ -1,5 +1,7 @@
+import type { Socket } from "node:dgram";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceClient } from "../src/core/device-client";
+import { ModernMiioTransport } from "../src/core/miio-transport";
 import {
   DEFAULT_RETRY_POLICY,
   computeBackoffDelay,
@@ -161,5 +163,23 @@ describe("retry and polling", () => {
     expect(isRetryableError(notConnected)).toBe(true);
     expect(isRetryableError(interrupted)).toBe(true);
     expect(isRetryableError(inProgress)).toBe(true);
+  });
+
+  it("dgram socket has an error listener to prevent process crash", async () => {
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "ffffffffffffffffffffffffffffffff",
+      model: "zhimi.airpurifier.3h",
+    });
+
+    const socket = Reflect.get(transport, "socket") as Socket;
+    expect(socket.listenerCount("error")).toBeGreaterThanOrEqual(1);
+
+    // Emitting 'error' must not throw (no unhandled EventEmitter error)
+    expect(() => {
+      socket.emit("error", new Error("ENETUNREACH"));
+    }).not.toThrow();
+
+    await transport.close();
   });
 });
