@@ -282,6 +282,37 @@ describe("device client uncovered branches", () => {
     );
     await client.shutdown();
   });
+
+  it("allows init to settle when shutdown happens during retry backoff", async () => {
+    const transport = new BranchTransport();
+    transport.retryableFailuresRemaining = 1;
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+      retryPolicy: {
+        baseDelayMs: 5_000,
+        maxDelayMs: 5_000,
+        maxRetries: 3,
+        jitterFactor: 0,
+      },
+      randomFn: () => 0.5,
+    });
+
+    let settled = false;
+    const initPromise = client.init().finally(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    await client.shutdown();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await Promise.resolve();
+
+    expect(settled).toBe(true);
+    await initPromise;
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe("retry helper uncovered branches", () => {
