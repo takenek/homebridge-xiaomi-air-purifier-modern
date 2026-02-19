@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/takenek/xiaomi-mi-air-purifier-ng/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/xiaomi-mi-air-purifier-ng/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-xiaomi-air-purifier-modern)](https://www.npmjs.com/package/homebridge-xiaomi-air-purifier-modern)
-[![Homebridge](https://img.shields.io/badge/Homebridge-1.8%2B%20%7C%202.0%2B-blueviolet)](https://homebridge.io)
+[![Homebridge](https://img.shields.io/badge/Homebridge-1.11.1%2B%20%7C%202.0%2B-blueviolet)](https://homebridge.io)
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 3 / 3H / 4 / Pro).
 
@@ -28,8 +28,8 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 ## Requirements
 
-- Homebridge **1.8+** or **2.0+**
-- Node.js **20+**
+- Homebridge **1.11.1+** or **2.0+**
+- Node.js **20.20+**, **22.22+**, or **24.13+**
 - Xiaomi Mi Air Purifier on the same LAN (UDP 54321)
 - Device token (32-char hex)
 
@@ -185,6 +185,12 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+---
+
+## AI Notice
+
+This codebase was created entirely with the help of AI.
 
 ---
 
