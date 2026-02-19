@@ -20,6 +20,20 @@ interface MiioResponsePayload {
   error?: { code?: number; message?: string };
 }
 
+interface MiotProperty {
+  did: string;
+  siid: number;
+  piid: number;
+}
+
+interface MiotValueResult {
+  did?: string;
+  siid?: number;
+  piid?: number;
+  code?: number;
+  value?: unknown;
+}
+
 class MiioCommandError extends Error {
   public constructor(
     public readonly miioCode: number | null,
@@ -70,7 +84,57 @@ const toMode = (value: unknown): DeviceState["mode"] => {
     return value;
   }
 
+  if (value === 0) {
+    return "auto";
+  }
+
+  if (value === 1) {
+    return "sleep";
+  }
+
+  if (value === 2) {
+    return "favorite";
+  }
+
   return "idle";
+};
+
+const MIOT_DID = "0";
+const MIOT_POWER_PROBE: MiotProperty = { did: MIOT_DID, siid: 2, piid: 2 };
+
+const MIOT_MAP: Record<string, readonly MiotProperty[]> = {
+  power: [MIOT_POWER_PROBE],
+  fan_level: [
+    { did: MIOT_DID, siid: 10, piid: 10 },
+    { did: MIOT_DID, siid: 2, piid: 4 },
+  ],
+  mode: [{ did: MIOT_DID, siid: 2, piid: 5 }],
+  temperature: [{ did: MIOT_DID, siid: 3, piid: 8 }],
+  humidity: [{ did: MIOT_DID, siid: 3, piid: 7 }],
+  aqi: [{ did: MIOT_DID, siid: 3, piid: 6 }],
+  filter1_life: [{ did: MIOT_DID, siid: 4, piid: 3 }],
+  child_lock: [{ did: MIOT_DID, siid: 7, piid: 1 }],
+  led: [{ did: MIOT_DID, siid: 6, piid: 1 }],
+  buzzer_volume: [{ did: MIOT_DID, siid: 5, piid: 1 }],
+  motor1_speed: [{ did: MIOT_DID, siid: 10, piid: 8 }],
+  use_time: [{ did: MIOT_DID, siid: 4, piid: 2 }],
+  purify_volume: [{ did: MIOT_DID, siid: 4, piid: 1 }],
+};
+
+const LEGACY_MAP: Record<string, readonly string[]> = {
+  power: ["power"],
+  fan_level: ["fan_level", "favorite_level"],
+  mode: ["mode"],
+  temperature: ["temperature", "temp_dec"],
+  humidity: ["humidity", "rh"],
+  aqi: ["aqi", "pm25"],
+  filter1_life: ["filter1_life", "filter_life"],
+  child_lock: ["child_lock"],
+  led: ["led", "led_b"],
+  buzzer_volume: ["buzzer_volume"],
+  motor1_speed: ["motor1_speed"],
+  use_time: ["use_time"],
+  purify_volume: ["purify_volume"],
 };
 
 export class ModernMiioTransport implements MiioTransport {
@@ -81,6 +145,7 @@ export class ModernMiioTransport implements MiioTransport {
   private readonly socket: Socket;
   private session: MiioSession | null = null;
   private nextMessageId = 1;
+  private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
 
   public constructor(private readonly options: MiioTransportOptions) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
@@ -96,9 +161,124 @@ export class ModernMiioTransport implements MiioTransport {
   public async getProperties(
     _props: readonly ReadProperty[],
   ): Promise<DeviceState> {
-    const powerRaw = await this.readOne(["power"]);
-    const fanLevelRaw = await this.readOne(["fan_level", "favorite_level"]);
-    const modeRaw = await this.readOne(["mode"]);
+    if (this.protocolMode === "unknown") {
+      this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
+    }
+
+    const state =
+      this.protocolMode === "miot"
+        ? await this.readViaMiot().catch(async () => {
+            this.protocolMode = "legacy";
+            return this.readViaLegacy();
+          })
+        : await this.readViaLegacy();
+
+    if (
+      state.power === false &&
+      state.fan_level === 0 &&
+      state.mode === "idle"
+    ) {
+      // If all core fields are empty and we used legacy, retry MIOT once.
+      if (this.protocolMode === "legacy") {
+        const miotState = await this.readViaMiot().catch(() => null);
+        if (miotState) {
+          this.protocolMode = "miot";
+          return miotState;
+        }
+      }
+    }
+
+    return state;
+  }
+
+  public async setProperty(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<void> {
+    if (this.protocolMode === "unknown") {
+      this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
+    }
+
+    if (this.protocolMode === "miot") {
+      const ok = await this.trySetViaMiot(method, params);
+      if (ok) {
+        return;
+      }
+      this.protocolMode = "legacy";
+    }
+
+    await this.call(method, params);
+  }
+
+  public async close(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      this.socket.close(() => resolve());
+    });
+  }
+
+  private async detectProtocolMode(): Promise<"miot" | "legacy" | null> {
+    const probe = MIOT_POWER_PROBE;
+    try {
+      const result = await this.call("get_properties", [probe]);
+      if (Array.isArray(result) && result.length > 0) {
+        return "miot";
+      }
+    } catch {
+      // ignore and fallback
+    }
+
+    try {
+      const result = await this.call("get_prop", ["power"]);
+      if (Array.isArray(result)) {
+        return "legacy";
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  private async readViaMiot(): Promise<DeviceState> {
+    const valueByKey = new Map<string, unknown>();
+
+    for (const [key, candidates] of Object.entries(MIOT_MAP)) {
+      const value = await this.readMiotOne(candidates);
+      valueByKey.set(key, value);
+    }
+
+    const powerRaw = valueByKey.get("power");
+    const fanLevelRaw = valueByKey.get("fan_level");
+    const modeRaw = valueByKey.get("mode");
+    if (
+      powerRaw === undefined &&
+      fanLevelRaw === undefined &&
+      modeRaw === undefined
+    ) {
+      throw new Error("MIOT core properties unavailable");
+    }
+
+    return {
+      power: toBoolean(powerRaw),
+      fan_level: toNumber(fanLevelRaw),
+      mode: toMode(modeRaw),
+      temperature: toNumber(valueByKey.get("temperature")),
+      humidity: toNumber(valueByKey.get("humidity")),
+      aqi: toNumber(valueByKey.get("aqi")),
+      filter1_life: toNumber(valueByKey.get("filter1_life")),
+      child_lock: toBoolean(valueByKey.get("child_lock")),
+      led: toNumber(valueByKey.get("led")) !== 2,
+      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
+      motor1_speed: toNumber(valueByKey.get("motor1_speed")),
+      use_time: toNumber(valueByKey.get("use_time")),
+      purify_volume: toNumber(valueByKey.get("purify_volume")),
+    };
+  }
+
+  private async readViaLegacy(): Promise<DeviceState> {
+    const powerRaw = await this.readLegacyOne(LEGACY_MAP.power ?? []);
+    const fanLevelRaw = await this.readLegacyOne(LEGACY_MAP.fan_level ?? []);
+    const modeRaw = await this.readLegacyOne(LEGACY_MAP.mode ?? []);
 
     if (
       powerRaw === undefined &&
@@ -114,35 +294,54 @@ export class ModernMiioTransport implements MiioTransport {
       power: toBoolean(powerRaw),
       fan_level: toNumber(fanLevelRaw),
       mode: toMode(modeRaw),
-      temperature: toNumber(await this.readOne(["temperature", "temp_dec"])),
-      humidity: toNumber(await this.readOne(["humidity", "rh"])),
-      aqi: toNumber(await this.readOne(["aqi", "pm25"])),
-      filter1_life: toNumber(
-        await this.readOne(["filter1_life", "filter_life"]),
+      temperature: toNumber(
+        await this.readLegacyOne(LEGACY_MAP.temperature ?? []),
       ),
-      child_lock: toBoolean(await this.readOne(["child_lock"])),
-      led: toBoolean(await this.readOne(["led", "led_b"])),
-      buzzer_volume: toNumber(await this.readOne(["buzzer_volume"])),
-      motor1_speed: toNumber(await this.readOne(["motor1_speed"])),
-      use_time: toNumber(await this.readOne(["use_time"])),
-      purify_volume: toNumber(await this.readOne(["purify_volume"])),
+      humidity: toNumber(await this.readLegacyOne(LEGACY_MAP.humidity ?? [])),
+      aqi: toNumber(await this.readLegacyOne(LEGACY_MAP.aqi ?? [])),
+      filter1_life: toNumber(
+        await this.readLegacyOne(LEGACY_MAP.filter1_life ?? []),
+      ),
+      child_lock: toBoolean(
+        await this.readLegacyOne(LEGACY_MAP.child_lock ?? []),
+      ),
+      led: toBoolean(await this.readLegacyOne(LEGACY_MAP.led ?? [])),
+      buzzer_volume: toNumber(
+        await this.readLegacyOne(LEGACY_MAP.buzzer_volume ?? []),
+      ),
+      motor1_speed: toNumber(
+        await this.readLegacyOne(LEGACY_MAP.motor1_speed ?? []),
+      ),
+      use_time: toNumber(await this.readLegacyOne(LEGACY_MAP.use_time ?? [])),
+      purify_volume: toNumber(
+        await this.readLegacyOne(LEGACY_MAP.purify_volume ?? []),
+      ),
     };
   }
 
-  public async setProperty(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
-    await this.call(method, params);
+  private async readMiotOne(
+    candidates: readonly MiotProperty[],
+  ): Promise<unknown> {
+    for (const candidate of candidates) {
+      try {
+        const result = await this.call("get_properties", [candidate]);
+        if (!Array.isArray(result) || result.length === 0) {
+          continue;
+        }
+
+        const payload = result[0] as MiotValueResult;
+        if ((payload.code ?? 0) === 0) {
+          return payload.value;
+        }
+      } catch {
+        // try next candidate
+      }
+    }
+
+    return undefined;
   }
 
-  public async close(): Promise<void> {
-    await new Promise<void>((resolve) => {
-      this.socket.close(() => resolve());
-    });
-  }
-
-  private async readOne(candidates: readonly string[]): Promise<unknown> {
+  private async readLegacyOne(candidates: readonly string[]): Promise<unknown> {
     for (const candidate of candidates) {
       try {
         const response = await this.call("get_prop", [candidate]);
@@ -150,11 +349,73 @@ export class ModernMiioTransport implements MiioTransport {
           return response[0];
         }
       } catch {
-        // Try next candidate.
+        // try next candidate
       }
     }
 
     return undefined;
+  }
+
+  private async trySetViaMiot(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<boolean> {
+    const did = MIOT_DID;
+
+    const send = async (
+      items: readonly MiotValueResult[],
+    ): Promise<boolean> => {
+      const result = await this.call("set_properties", items);
+      if (!Array.isArray(result)) {
+        return false;
+      }
+
+      return result.every((item) => {
+        const typed = item as MiotValueResult;
+        return (typed.code ?? -1) === 0;
+      });
+    };
+
+    if (method === "set_power") {
+      return send([{ did, siid: 2, piid: 2, value: params[0] === "on" }]);
+    }
+
+    if (method === "set_mode") {
+      const mode = params[0];
+      const value =
+        mode === "auto"
+          ? 0
+          : mode === "sleep"
+            ? 1
+            : mode === "favorite"
+              ? 2
+              : 3;
+      return send([{ did, siid: 2, piid: 5, value }]);
+    }
+
+    if (method === "set_child_lock") {
+      return send([{ did, siid: 7, piid: 1, value: params[0] === "on" }]);
+    }
+
+    if (method === "set_led") {
+      return send([
+        { did, siid: 6, piid: 1, value: params[0] === "on" ? 0 : 2 },
+      ]);
+    }
+
+    if (method === "set_buzzer_volume") {
+      return send([{ did, siid: 5, piid: 1, value: toNumber(params[0]) > 0 }]);
+    }
+
+    if (method === "set_level_fan") {
+      const level = Math.max(1, Math.min(16, toNumber(params[0])));
+      return send([
+        { did, siid: 2, piid: 5, value: 2 },
+        { did, siid: 10, piid: 10, value: level },
+      ]);
+    }
+
+    return false;
   }
 
   private async call(
