@@ -157,6 +157,11 @@ export class ModernMiioTransport implements MiioTransport {
     this.key = toMd5(this.token);
     this.iv = toMd5(this.key, this.token);
     this.socket = dgram.createSocket("udp4");
+    this.socket.on("error", () => {
+      // Absorb socket-level errors (e.g. bind failure, OS errors).
+      // These surface through sendAndReceive timeouts and are handled
+      // by DeviceClient retry logic with proper logging.
+    });
   }
 
   public async getProperties(

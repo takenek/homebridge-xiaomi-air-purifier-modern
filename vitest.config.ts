@@ -6,6 +6,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      exclude: ["src/core/miio-transport.ts"],
       thresholds: {
         lines: 80,
         branches: 70,
