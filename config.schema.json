@@ -1,0 +1,111 @@
+{
+  "pluginAlias": "XiaomiMiAirPurifier",
+  "pluginType": "accessory",
+  "singular": false,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "Air Purifier",
+        "placeholder": "Air Purifier"
+      },
+      "address": {
+        "title": "IP Address",
+        "type": "string",
+        "required": true,
+        "format": "ipv4"
+      },
+      "token": {
+        "title": "Token",
+        "type": "string",
+        "required": true,
+        "pattern": "^\\w{32}$"
+      },
+      "model": {
+        "title": "Model",
+        "type": "string",
+        "required": true,
+        "enum": [
+          "zhimi.airpurifier.2h",
+          "zhimi.airpurifier.3",
+          "zhimi.airpurifier.3h",
+          "zhimi.airpurifier.4",
+          "zhimi.airpurifier.pro"
+        ]
+      },
+      "enableAirQuality": {
+        "title": "Air Quality",
+        "type": "boolean",
+        "default": true
+      },
+      "enableTemperature": {
+        "title": "Temperature",
+        "type": "boolean",
+        "default": true
+      },
+      "enableHumidity": {
+        "title": "Humidity",
+        "type": "boolean",
+        "default": true
+      },
+      "filterChangeThreshold": {
+        "title": "Filter Change Warning Threshold",
+        "type": "integer",
+        "default": 5,
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Show <b>Change Filter</b> warning once Filter Life reaches this value."
+      },
+      "enableFanSpeedControl": {
+        "title": "Fan Speed",
+        "type": "boolean",
+        "default": false,
+        "description": "Allows you to see control the fan speed."
+      },
+      "enableChildLockControl": {
+        "title": "Child Lock",
+        "type": "boolean",
+        "default": false,
+        "description": "Allows you to lock/unlock the physical control."
+      }
+    }
+  },
+  "layout": [
+    { "key": "name" },
+    { "key": "model" },
+    {
+      "type": "flex",
+      "flex-flow": "row wrap",
+      "items": ["address", "token"]
+    },
+    {
+      "type": "help",
+      "helpvalue": "Please check the README for instruction about how to get a <em>token</em>."
+    },
+    {
+      "type": "section",
+      "title": "Sensors",
+      "expandable": true,
+      "expanded": true,
+      "items": [
+        { "key": "enableAirQuality" },
+        { "key": "enableTemperature" },
+        { "key": "enableHumidity" }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Advanced options",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        { "key": "filterChangeThreshold" },
+        { "key": "enableFanSpeedControl" },
+        { "key": "enableChildLockControl" }
+      ]
+    }
+  ]
+}
