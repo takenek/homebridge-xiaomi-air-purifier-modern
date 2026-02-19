@@ -12,8 +12,8 @@
     "homekit"
   ],
   "engines": {
-    "node": ">=20.0.0",
-    "homebridge": ">=1.8.0"
+    "node": "^24.13.0 || ^22.22.0 || ^20.20.0",
+    "homebridge": "^1.11.1 || ^2.0.0-beta.0"
   },
   "homepage": "https://github.com/takenek/xiaomi-mi-air-purifier-ng",
   "repository": {
@@ -43,7 +43,7 @@
     "release": "npm version patch && git push --follow-tags"
   },
   "peerDependencies": {
-    "homebridge": ">=1.8.0"
+    "homebridge": "^1.11.1 || ^2.0.0-beta.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
