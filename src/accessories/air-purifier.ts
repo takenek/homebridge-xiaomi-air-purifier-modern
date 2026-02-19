@@ -34,6 +34,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly address: string,
     private readonly client: DeviceClient,
     model: string,
+    private readonly filterChangeThreshold: number,
   ) {
     this.informationService = new this.api.hap.Service.AccessoryInformation()
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Xiaomi")
@@ -206,7 +207,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     );
     this.filterService.updateCharacteristic(
       this.api.hap.Characteristic.FilterChangeIndication,
-      state.filter1_life < 10
+      state.filter1_life < this.filterChangeThreshold
         ? this.api.hap.Characteristic.FilterChangeIndication.CHANGE_FILTER
         : this.api.hap.Characteristic.FilterChangeIndication.FILTER_OK,
     );

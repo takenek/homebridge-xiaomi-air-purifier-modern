@@ -16,6 +16,7 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   address?: string;
   token?: string;
   model?: AirPurifierModel;
+  filterChangeThreshold?: number;
 };
 
 const assertString = (value: unknown, field: string): string => {
@@ -24,6 +25,14 @@ const assertString = (value: unknown, field: string): string => {
   }
 
   return value;
+};
+
+const normalizeThreshold = (value: unknown): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 10;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
 };
 
 export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
@@ -39,6 +48,9 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const address = assertString(typedConfig.address, "address");
     const token = assertString(typedConfig.token, "token");
     const model = assertString(typedConfig.model, "model") as AirPurifierModel;
+    const filterChangeThreshold = normalizeThreshold(
+      typedConfig.filterChangeThreshold,
+    );
 
     const transport = new ModernMiioTransport({
       address,
@@ -53,6 +65,7 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       address,
       client,
       model,
+      filterChangeThreshold,
     );
   }
 

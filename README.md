@@ -6,7 +6,7 @@
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 3 / 3H / 4 / Pro).
 
-This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https://github.com/takenek/xiaomi-mi-air-purifier) plugin with a modern TypeScript implementation that uses only Node.js built-ins for protocol transport.
+This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https://github.com/torifat/xiaomi-mi-air-purifier) plugin (last commit about 5 years ago) with a modern TypeScript implementation that uses only Node.js built-ins for protocol transport.
 
 ---
 
@@ -44,7 +44,7 @@ Search for `homebridge-xiaomi-air-purifier-modern` in the Homebridge plugin stor
 ### CLI
 
 ```bash
-env -u npm_config_http_proxy -u npm_config_https_proxy npm install -g homebridge-xiaomi-air-purifier-modern
+npm install -g homebridge-xiaomi-air-purifier-modern
 ```
 
 ---
@@ -179,11 +179,11 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 
 ```bash
 export NODE_OPTIONS="--unhandled-rejections=strict --trace-warnings --trace-uncaught --throw-deprecation --pending-deprecation --trace-deprecation"
-env -u npm_config_http_proxy -u npm_config_https_proxy npm ci
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck
-env -u npm_config_http_proxy -u npm_config_https_proxy npm test
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run build
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 ---

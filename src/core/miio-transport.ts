@@ -16,6 +16,7 @@ interface MiioSession {
 }
 
 interface MiioResponsePayload {
+  id?: number;
   result?: unknown;
   error?: { code?: number; message?: string };
 }
@@ -476,8 +477,9 @@ export class ModernMiioTransport implements MiioTransport {
       throw new Error("MIIO session not initialized.");
     }
 
+    const requestId = this.nextMessageId++;
     const payload = JSON.stringify({
-      id: this.nextMessageId++,
+      id: requestId,
       method,
       params,
     });
@@ -501,6 +503,7 @@ export class ModernMiioTransport implements MiioTransport {
     const response = await this.sendAndReceive(
       Buffer.concat([header, encrypted]),
       true,
+      requestId,
     );
     if (response.length < 32) {
       throw new Error("Invalid MIIO command response.");
@@ -539,6 +542,7 @@ export class ModernMiioTransport implements MiioTransport {
   private async sendAndReceive(
     packet: Buffer,
     expectEncrypted: boolean,
+    expectedResponseId?: number,
   ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -560,6 +564,21 @@ export class ModernMiioTransport implements MiioTransport {
 
         if (expectEncrypted && message.length <= 32) {
           return;
+        }
+
+        if (expectEncrypted && typeof expectedResponseId === "number") {
+          const encryptedPayload = message.subarray(32);
+          try {
+            const decrypted = this.decrypt(encryptedPayload);
+            const parsed = JSON.parse(
+              decrypted.toString("utf8"),
+            ) as MiioResponsePayload;
+            if (parsed.id !== expectedResponseId) {
+              return;
+            }
+          } catch {
+            return;
+          }
         }
 
         clearTimeout(timeout);
