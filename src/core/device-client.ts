@@ -30,9 +30,10 @@ export class DeviceClient {
   private readonly sensorPollIntervalMs: number;
   private readonly retryPolicy: RetryPolicy;
   private readonly randomFn: () => number;
-  private operationTimer?: NodeJS.Timeout;
-  private sensorTimer?: NodeJS.Timeout;
-  private retryTimer?: NodeJS.Timeout;
+  private operationTimer: NodeJS.Timeout | undefined;
+  private sensorTimer: NodeJS.Timeout | undefined;
+  private retryTimer: NodeJS.Timeout | undefined;
+  private retryDelayResolve: (() => void) | undefined;
   private destroyed = false;
   private currentState: DeviceState | null = null;
   private listeners: Array<(state: DeviceState) => void> = [];
@@ -58,6 +59,10 @@ export class DeviceClient {
 
   public async init(): Promise<void> {
     await this.pollWithRetry();
+    if (this.destroyed) {
+      return;
+    }
+
     this.startPolling();
   }
 
@@ -160,7 +165,17 @@ export class DeviceClient {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => {
-      this.retryTimer = setTimeout(resolve, ms);
+      if (this.destroyed) {
+        resolve();
+        return;
+      }
+
+      this.retryDelayResolve = resolve;
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = undefined;
+        this.retryDelayResolve = undefined;
+        resolve();
+      }, ms);
     });
   }
 
@@ -175,6 +190,13 @@ export class DeviceClient {
 
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
+
+    if (this.retryDelayResolve) {
+      const resolve = this.retryDelayResolve;
+      this.retryDelayResolve = undefined;
+      resolve();
     }
   }
 }
