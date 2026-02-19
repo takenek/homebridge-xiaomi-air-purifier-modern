@@ -311,6 +311,7 @@ describe("device client uncovered branches", () => {
 
     expect(settled).toBe(true);
     await initPromise;
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

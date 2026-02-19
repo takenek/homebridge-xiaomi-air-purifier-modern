@@ -59,6 +59,10 @@ export class DeviceClient {
 
   public async init(): Promise<void> {
     await this.pollWithRetry();
+    if (this.destroyed) {
+      return;
+    }
+
     this.startPolling();
   }
 
