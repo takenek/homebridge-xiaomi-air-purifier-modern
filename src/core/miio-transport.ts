@@ -21,6 +21,19 @@ interface MiioResponsePayload {
   error?: { code?: number; message?: string };
 }
 
+class MiioCommandError extends Error {
+  public constructor(
+    public readonly miioCode: number | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MiioCommandError";
+    if (miioCode !== null) {
+      Reflect.set(this, "code", String(miioCode));
+    }
+  }
+}
+
 const MIIO_PORT = 54321;
 const MIIO_MAGIC = 0x2131;
 
@@ -84,14 +97,38 @@ export class ModernMiioTransport implements MiioTransport {
   public async getProperties(
     props: readonly ReadProperty[],
   ): Promise<DeviceState> {
-    const response = await this.call("get_prop", props);
-    if (!Array.isArray(response)) {
-      throw new Error("Invalid get_prop response payload.");
-    }
-
     const values = new Map<ReadProperty, unknown>();
-    for (const [index, prop] of props.entries()) {
-      values.set(prop, response[index]);
+
+    try {
+      const response = await this.call("get_prop", props);
+      if (!Array.isArray(response)) {
+        throw new Error("Invalid get_prop response payload.");
+      }
+
+      for (const [index, prop] of props.entries()) {
+        values.set(prop, response[index]);
+      }
+    } catch (error: unknown) {
+      if (
+        !(error instanceof MiioCommandError) ||
+        error.miioCode === null ||
+        error.miioCode >= 0
+      ) {
+        throw error;
+      }
+
+      // Some models reject batched get_prop with -5001 for unsupported fields.
+      // Fall back to single-property reads and keep defaults for unavailable props.
+      for (const prop of props) {
+        try {
+          const singleResponse = await this.call("get_prop", [prop]);
+          if (Array.isArray(singleResponse)) {
+            values.set(prop, singleResponse[0]);
+          }
+        } catch {
+          values.set(prop, undefined);
+        }
+      }
     }
 
     return {
@@ -219,7 +256,8 @@ export class ModernMiioTransport implements MiioTransport {
     ) as MiioResponsePayload;
 
     if (parsed.error) {
-      throw new Error(
+      throw new MiioCommandError(
+        parsed.error.code ?? null,
         `MIIO error${parsed.error.code ? ` ${parsed.error.code}` : ""}: ${parsed.error.message ?? "Unknown"}`,
       );
     }
