@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceClient } from "../src/core/device-client";
-import { DEFAULT_RETRY_POLICY, computeBackoffDelay } from "../src/core/retry";
+import {
+  DEFAULT_RETRY_POLICY,
+  computeBackoffDelay,
+  isRetryableError,
+} from "../src/core/retry";
 import type { DeviceState, MiioTransport } from "../src/core/types";
 
 const state: DeviceState = {
@@ -89,6 +93,9 @@ describe("retry and polling", () => {
         "ECONNREFUSED",
         "ECONNABORTED",
         "EPIPE",
+        "ENOTCONN",
+        "EINTR",
+        "EALREADY",
         "EHOSTUNREACH",
         "ENETUNREACH",
         "ENETDOWN",
@@ -139,5 +146,20 @@ describe("retry and polling", () => {
     );
     expect(d2).toBeGreaterThan(d1);
     expect(d9).toBe(1000);
+  });
+
+  it("treats transient socket restart errors as retryable", () => {
+    const notConnected = new Error("socket not connected");
+    Reflect.set(notConnected, "code", "ENOTCONN");
+
+    const interrupted = new Error("syscall interrupted");
+    Reflect.set(interrupted, "code", "EINTR");
+
+    const inProgress = new Error("operation already in progress");
+    Reflect.set(inProgress, "code", "EALREADY");
+
+    expect(isRetryableError(notConnected)).toBe(true);
+    expect(isRetryableError(interrupted)).toBe(true);
+    expect(isRetryableError(inProgress)).toBe(true);
   });
 });
