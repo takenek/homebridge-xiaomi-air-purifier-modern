@@ -1,0 +1,56 @@
+{
+  "name": "homebridge-xiaomi-air-purifier-modern",
+  "version": "1.0.0",
+  "description": "Modern Homebridge plugin for Xiaomi Mi Air Purifier (2H/3/3H/4/Pro)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [
+    "homebridge-plugin",
+    "homebridge",
+    "xiaomi",
+    "air-purifier",
+    "homekit"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "homebridge": ">=1.8.0"
+  },
+  "homepage": "https://github.com/takenek/xiaomi-mi-air-purifier-ng",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/takenek/xiaomi-mi-air-purifier-ng.git"
+  },
+  "bugs": {
+    "url": "https://github.com/takenek/xiaomi-mi-air-purifier-ng/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "dist",
+    "config.schema.json",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "RELEASE_CHECKLIST.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "prepack": "npm run build",
+    "release": "npm version patch && git push --follow-tags"
+  },
+  "peerDependencies": {
+    "homebridge": ">=1.8.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.13.10",
+    "@vitest/coverage-v8": "^4.0.0",
+    "typescript": "^5.8.2",
+    "vitest": "^4.0.0"
+  },
+  "author": "takenek"
+}
