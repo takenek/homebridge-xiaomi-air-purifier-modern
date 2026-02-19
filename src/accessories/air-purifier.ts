@@ -24,7 +24,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly ledService: Service;
   private readonly autoModeService: Service;
   private readonly sleepModeService: Service;
-  private readonly batteryService: Service;
+  private readonly filterService: Service;
 
   public constructor(
     private readonly api: API,
@@ -62,7 +62,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       "Sleep Mode",
       "mode_sleep",
     );
-    this.batteryService = new this.api.hap.Service.Battery("Filter Life");
+    this.filterService = new this.api.hap.Service.FilterMaintenance(
+      "Filter Life",
+    );
 
     this.bindHandlers();
     this.client.onStateUpdate(() => this.refreshCharacteristics());
@@ -90,7 +92,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.ledService,
       this.autoModeService,
       this.sleepModeService,
-      this.batteryService,
+      this.filterService,
     ];
   }
 
@@ -191,19 +193,15 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       state.mode === "sleep",
     );
 
-    this.batteryService.updateCharacteristic(
-      this.api.hap.Characteristic.BatteryLevel,
+    this.filterService.updateCharacteristic(
+      this.api.hap.Characteristic.FilterLifeLevel,
       state.filter1_life,
     );
-    this.batteryService.updateCharacteristic(
-      this.api.hap.Characteristic.StatusLowBattery,
+    this.filterService.updateCharacteristic(
+      this.api.hap.Characteristic.FilterChangeIndication,
       state.filter1_life < 10
-        ? this.api.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
-        : this.api.hap.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL,
-    );
-    this.batteryService.updateCharacteristic(
-      this.api.hap.Characteristic.ChargingState,
-      this.api.hap.Characteristic.ChargingState.NOT_CHARGEABLE,
+        ? this.api.hap.Characteristic.FilterChangeIndication.CHANGE_FILTER
+        : this.api.hap.Characteristic.FilterChangeIndication.FILTER_OK,
     );
   }
 }

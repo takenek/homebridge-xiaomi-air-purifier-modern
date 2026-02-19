@@ -7,7 +7,7 @@ Nowoczesna, utrzymywalna wtyczka Homebridge dla Xiaomi Mi Air Purifier (2H/3/3H/
 - Air Quality Sensor (AQI -> HomeKit AirQuality)
 - Temperature + Humidity
 - Switch: Child Lock, LED Night Mode, Auto Mode, Sleep Mode
-- Battery service jako `filter1_life`
+- Filter Maintenance service jako `filter1_life` (bez sztucznego Battery/Charging State)
 - Polling: operacyjny 10s, sensory 30s
 - Retry/backoff wykładniczy z jitterem
 - Wbudowany transport MIIO (UDP/AES) bez zależności od przestarzałego `miio`
