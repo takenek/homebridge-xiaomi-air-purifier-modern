@@ -188,6 +188,12 @@ npm run build
 
 ---
 
+## AI Notice
+
+This codebase was created entirely with the help of AI.
+
+---
+
 ## License
 
 MIT
