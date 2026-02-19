@@ -283,6 +283,21 @@ describe("device client uncovered branches", () => {
     await client.shutdown();
   });
 
+  it("resolves delay immediately after shutdown without scheduling timer", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    await client.shutdown();
+    await (client as unknown as { delay(ms: number): Promise<void> }).delay(
+      5_000,
+    );
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("allows init to settle when shutdown happens during retry backoff", async () => {
     const transport = new BranchTransport();
     transport.retryableFailuresRemaining = 1;
