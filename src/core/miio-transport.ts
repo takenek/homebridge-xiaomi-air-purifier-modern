@@ -16,7 +16,6 @@ interface MiioSession {
 }
 
 interface MiioResponsePayload {
-  id?: number;
   result?: unknown;
   error?: { code?: number; message?: string };
 }
@@ -95,56 +94,38 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   public async getProperties(
-    props: readonly ReadProperty[],
+    _props: readonly ReadProperty[],
   ): Promise<DeviceState> {
-    const values = new Map<ReadProperty, unknown>();
+    const powerRaw = await this.readOne(["power"]);
+    const fanLevelRaw = await this.readOne(["fan_level", "favorite_level"]);
+    const modeRaw = await this.readOne(["mode"]);
 
-    try {
-      const response = await this.call("get_prop", props);
-      if (!Array.isArray(response)) {
-        throw new Error("Invalid get_prop response payload.");
-      }
-
-      for (const [index, prop] of props.entries()) {
-        values.set(prop, response[index]);
-      }
-    } catch (error: unknown) {
-      if (
-        !(error instanceof MiioCommandError) ||
-        error.miioCode === null ||
-        error.miioCode >= 0
-      ) {
-        throw error;
-      }
-
-      // Some models reject batched get_prop with -5001 for unsupported fields.
-      // Fall back to single-property reads and keep defaults for unavailable props.
-      for (const prop of props) {
-        try {
-          const singleResponse = await this.call("get_prop", [prop]);
-          if (Array.isArray(singleResponse)) {
-            values.set(prop, singleResponse[0]);
-          }
-        } catch {
-          values.set(prop, undefined);
-        }
-      }
+    if (
+      powerRaw === undefined &&
+      fanLevelRaw === undefined &&
+      modeRaw === undefined
+    ) {
+      throw new Error(
+        "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
+      );
     }
 
     return {
-      power: toBoolean(values.get("power")),
-      fan_level: toNumber(values.get("fan_level")),
-      mode: toMode(values.get("mode")),
-      temperature: toNumber(values.get("temperature")),
-      humidity: toNumber(values.get("humidity")),
-      aqi: toNumber(values.get("aqi")),
-      filter1_life: toNumber(values.get("filter1_life")),
-      child_lock: toBoolean(values.get("child_lock")),
-      led: toBoolean(values.get("led")),
-      buzzer_volume: toNumber(values.get("buzzer_volume")),
-      motor1_speed: toNumber(values.get("motor1_speed")),
-      use_time: toNumber(values.get("use_time")),
-      purify_volume: toNumber(values.get("purify_volume")),
+      power: toBoolean(powerRaw),
+      fan_level: toNumber(fanLevelRaw),
+      mode: toMode(modeRaw),
+      temperature: toNumber(await this.readOne(["temperature", "temp_dec"])),
+      humidity: toNumber(await this.readOne(["humidity", "rh"])),
+      aqi: toNumber(await this.readOne(["aqi", "pm25"])),
+      filter1_life: toNumber(
+        await this.readOne(["filter1_life", "filter_life"]),
+      ),
+      child_lock: toBoolean(await this.readOne(["child_lock"])),
+      led: toBoolean(await this.readOne(["led", "led_b"])),
+      buzzer_volume: toNumber(await this.readOne(["buzzer_volume"])),
+      motor1_speed: toNumber(await this.readOne(["motor1_speed"])),
+      use_time: toNumber(await this.readOne(["use_time"])),
+      purify_volume: toNumber(await this.readOne(["purify_volume"])),
     };
   }
 
@@ -161,6 +142,21 @@ export class ModernMiioTransport implements MiioTransport {
     });
   }
 
+  private async readOne(candidates: readonly string[]): Promise<unknown> {
+    for (const candidate of candidates) {
+      try {
+        const response = await this.call("get_prop", [candidate]);
+        if (Array.isArray(response)) {
+          return response[0];
+        }
+      } catch {
+        // Try next candidate.
+      }
+    }
+
+    return undefined;
+  }
+
   private async call(
     method: string,
     params: readonly unknown[],
@@ -173,7 +169,7 @@ export class ModernMiioTransport implements MiioTransport {
       return await this.sendCommand(method, params);
     } catch (error: unknown) {
       this.session = null;
-      if (error instanceof Error && this.isTransportError(error)) {
+      if (this.isTransportError(error)) {
         await this.handshake();
         return this.sendCommand(method, params);
       }
@@ -182,7 +178,11 @@ export class ModernMiioTransport implements MiioTransport {
     }
   }
 
-  private isTransportError(error: Error): boolean {
+  private isTransportError(error: unknown): boolean {
+    if (!(error instanceof Error) || error instanceof MiioCommandError) {
+      return false;
+    }
+
     const code = Reflect.get(error, "code");
     return typeof code === "string";
   }
