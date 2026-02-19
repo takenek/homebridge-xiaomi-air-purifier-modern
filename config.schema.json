@@ -1,0 +1,59 @@
+{
+  "pluginAlias": "XiaomiMiAirPurifier",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Xiaomi Mi Air Purifier"
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "address", "token", "model"],
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "default": "Air Purifier"
+            },
+            "address": {
+              "title": "IP Address",
+              "type": "string",
+              "format": "ipv4"
+            },
+            "token": {
+              "title": "Token",
+              "type": "string",
+              "pattern": "^\\w{32}$"
+            },
+            "model": {
+              "title": "Model",
+              "type": "string",
+              "enum": [
+                "zhimi.airpurifier.2h",
+                "zhimi.airpurifier.3",
+                "zhimi.airpurifier.3h",
+                "zhimi.airpurifier.4",
+                "zhimi.airpurifier.pro"
+              ]
+            },
+            "_bridge": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "username": { "type": "string" },
+                "port": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
