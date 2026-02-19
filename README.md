@@ -19,16 +19,16 @@ env -u npm_config_http_proxy -u npm_config_https_proxy npm i -g homebridge-xiaom
 ## Homebridge config (multi-device)
 ```json
 {
-  "platform": "XiaomiMiAirPurifier",
-  "name": "Xiaomi Mi Air Purifier",
-  "devices": [
+  "accessories": [
     {
+      "accessory": "XiaomiMiAirPurifier",
       "name": "Salon Purifier",
       "address": "192.168.1.50",
       "token": "0123456789abcdef0123456789abcdef",
       "model": "zhimi.airpurifier.4"
     },
     {
+      "accessory": "XiaomiMiAirPurifier",
       "name": "Bedroom Purifier",
       "address": "192.168.1.51",
       "token": "fedcba9876543210fedcba9876543210",

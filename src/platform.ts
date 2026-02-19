@@ -1,84 +1,61 @@
 import type {
   API,
-  DynamicPlatformPlugin,
-  Logger,
-  PlatformAccessory,
-  PlatformConfig,
+  AccessoryConfig,
+  AccessoryPlugin,
+  Logging,
 } from "homebridge";
 import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
 import type { AirPurifierModel } from "./core/types";
 
-export const PLATFORM_NAME = "XiaomiMiAirPurifier";
+export const ACCESSORY_NAME = "XiaomiMiAirPurifier";
 export const PLUGIN_NAME = "homebridge-xiaomi-air-purifier-modern";
 
-interface DeviceConfig {
-  name: string;
-  address: string;
-  token: string;
-  model: AirPurifierModel;
-}
+type XiaomiAccessoryConfig = AccessoryConfig & {
+  address?: string;
+  token?: string;
+  model?: AirPurifierModel;
+};
 
-interface XiaomiPlatformConfig extends PlatformConfig {
-  devices?: DeviceConfig[];
-}
+const assertString = (value: unknown, field: string): string => {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Invalid or missing config field: ${field}`);
+  }
 
-export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
-  public readonly accessories: PlatformAccessory[] = [];
+  return value;
+};
+
+export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
+  private readonly delegate: AirPurifierAccessory;
 
   public constructor(
-    public readonly log: Logger,
-    public readonly config: XiaomiPlatformConfig,
-    public readonly api: API,
+    private readonly log: Logging,
+    config: AccessoryConfig,
+    private readonly api: API,
   ) {
-    this.api.on("didFinishLaunching", () => {
-      void this.discoverDevices();
-    });
-  }
+    const typedConfig = config as XiaomiAccessoryConfig;
+    const name = assertString(typedConfig.name, "name");
+    const address = assertString(typedConfig.address, "address");
+    const token = assertString(typedConfig.token, "token");
+    const model = assertString(typedConfig.model, "model") as AirPurifierModel;
 
-  public configureAccessory(accessory: PlatformAccessory): void {
-    this.accessories.push(accessory);
-  }
-
-  private async discoverDevices(): Promise<void> {
-    const devices = this.config.devices ?? [];
-
-    for (const deviceConfig of devices) {
-      const uuid = this.api.hap.uuid.generate(
-        `${deviceConfig.address}-${deviceConfig.token}`,
-      );
-      const existingAccessory = this.accessories.find(
-        (accessory) => accessory.UUID === uuid,
-      );
-
-      if (existingAccessory) {
-        this.log.info(`Restoring accessory from cache: ${deviceConfig.name}`);
-        this.attachAccessory(existingAccessory, deviceConfig);
-      } else {
-        this.log.info(`Adding new accessory: ${deviceConfig.name}`);
-        const accessory = new this.api.platformAccessory(
-          deviceConfig.name,
-          uuid,
-        );
-        this.attachAccessory(accessory, deviceConfig);
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
-          accessory,
-        ]);
-      }
-    }
-  }
-
-  private attachAccessory(
-    accessory: PlatformAccessory,
-    config: DeviceConfig,
-  ): void {
     const transport = new ModernMiioTransport({
-      address: config.address,
-      token: config.token,
-      model: config.model,
+      address,
+      token,
+      model,
     });
     const client = new DeviceClient(transport, this.log);
-    new AirPurifierAccessory(this, accessory, client, config);
+    this.delegate = new AirPurifierAccessory(
+      this.api,
+      this.log,
+      name,
+      client,
+      model,
+    );
+  }
+
+  public getServices() {
+    return this.delegate.getServices();
   }
 }
