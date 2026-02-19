@@ -6,16 +6,16 @@ import {
 } from "../src/core/mappers";
 
 describe("fan level mapping", () => {
-  it("maps fan_level 1..16 to 0..100", () => {
-    expect(fanLevelToRotationSpeed(1)).toBe(0);
-    expect(fanLevelToRotationSpeed(16)).toBe(100);
-    expect(fanLevelToRotationSpeed(8)).toBeGreaterThan(40);
+  it("maps fan_level 1..16 to 100..0", () => {
+    expect(fanLevelToRotationSpeed(1)).toBe(100);
+    expect(fanLevelToRotationSpeed(16)).toBe(0);
+    expect(fanLevelToRotationSpeed(14)).toBe(13);
   });
 
   it("maps rotation speed back to fan level", () => {
-    expect(rotationSpeedToFanLevel(0)).toBe(1);
-    expect(rotationSpeedToFanLevel(100)).toBe(16);
-    expect(rotationSpeedToFanLevel(50)).toBeGreaterThanOrEqual(8);
+    expect(rotationSpeedToFanLevel(0)).toBe(16);
+    expect(rotationSpeedToFanLevel(100)).toBe(1);
+    expect(rotationSpeedToFanLevel(13)).toBe(14);
   });
 });
 

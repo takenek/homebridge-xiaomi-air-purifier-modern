@@ -3,14 +3,14 @@ export const FAN_LEVEL_MAX = 16;
 
 export const fanLevelToRotationSpeed = (fanLevel: number): number => {
   const clamped = Math.max(FAN_LEVEL_MIN, Math.min(FAN_LEVEL_MAX, fanLevel));
-  const ratio = (clamped - FAN_LEVEL_MIN) / (FAN_LEVEL_MAX - FAN_LEVEL_MIN);
+  const ratio = (FAN_LEVEL_MAX - clamped) / (FAN_LEVEL_MAX - FAN_LEVEL_MIN);
   return Math.round(ratio * 100);
 };
 
 export const rotationSpeedToFanLevel = (speed: number): number => {
   const clamped = Math.max(0, Math.min(100, speed));
   const ratio = clamped / 100;
-  return Math.round(ratio * (FAN_LEVEL_MAX - FAN_LEVEL_MIN) + FAN_LEVEL_MIN);
+  return Math.round(FAN_LEVEL_MAX - ratio * (FAN_LEVEL_MAX - FAN_LEVEL_MIN));
 };
 
 export type HomeKitAirQuality = 1 | 2 | 3 | 4 | 5;
