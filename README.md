@@ -10,6 +10,7 @@ Nowoczesna, utrzymywalna wtyczka Homebridge dla Xiaomi Mi Air Purifier (2H/3/3H/
 - Battery service jako `filter1_life`
 - Polling: operacyjny 10s, sensory 30s
 - Retry/backoff wykładniczy z jitterem
+- Wbudowany transport MIIO (UDP/AES) bez zależności od przestarzałego `miio`
 
 ## Installation
 ```bash
