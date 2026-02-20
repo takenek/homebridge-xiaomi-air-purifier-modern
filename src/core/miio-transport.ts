@@ -150,6 +150,17 @@ export class ModernMiioTransport implements MiioTransport {
   private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
   private socketClosed = false;
 
+  private reportSuppressedError(context: string, error: unknown): void {
+    const code =
+      error instanceof Error
+        ? String(Reflect.get(error, "code") ?? "UNKNOWN")
+        : "UNKNOWN";
+    const message = error instanceof Error ? error.message : String(error);
+    process.emitWarning(
+      `[miio-transport:${context}] suppressed error (code=${code}): ${message}`,
+    );
+  }
+
   public constructor(private readonly options: MiioTransportOptions) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
     this.token = Buffer.from(options.token, "hex");
@@ -159,10 +170,8 @@ export class ModernMiioTransport implements MiioTransport {
     this.key = toMd5(this.token);
     this.iv = toMd5(this.key, this.token);
     this.socket = dgram.createSocket("udp4");
-    this.socket.on("error", () => {
-      // Absorb socket-level errors (e.g. bind failure, OS errors).
-      // These surface through sendAndReceive timeouts and are handled
-      // by DeviceClient retry logic with proper logging.
+    this.socket.on("error", (error: Error) => {
+      this.reportSuppressedError("socket", error);
     });
   }
 
@@ -261,8 +270,8 @@ export class ModernMiioTransport implements MiioTransport {
       if (Array.isArray(result) && result.length > 0) {
         return "miot";
       }
-    } catch {
-      // ignore and fallback
+    } catch (error: unknown) {
+      this.reportSuppressedError("detect-miot", error);
     }
 
     try {
@@ -270,7 +279,8 @@ export class ModernMiioTransport implements MiioTransport {
       if (Array.isArray(result)) {
         return "legacy";
       }
-    } catch {
+    } catch (error: unknown) {
+      this.reportSuppressedError("detect-legacy", error);
       return null;
     }
 
