@@ -256,7 +256,11 @@ it("uses MIOT batch read to minimize round-trips", async () => {
   const call = vi
     .spyOn(transportInternals, "call")
     .mockImplementation(async (_method, params) => {
-      const items = params as Array<{ did: string; siid: number; piid: number }>;
+      const items = params as Array<{
+        did: string;
+        siid: number;
+        piid: number;
+      }>;
       return items.map((item) => ({
         did: item.did,
         siid: item.siid,
@@ -331,7 +335,11 @@ it("falls back to per-property MIOT reads when batch query is unsupported", asyn
   const call = vi
     .spyOn(transportInternals, "call")
     .mockImplementation(async (_method, params) => {
-      const items = params as Array<{ did: string; siid: number; piid: number }>;
+      const items = params as Array<{
+        did: string;
+        siid: number;
+        piid: number;
+      }>;
       if (items.length > 1) {
         throw new Error("unsupported batch get_properties");
       }
