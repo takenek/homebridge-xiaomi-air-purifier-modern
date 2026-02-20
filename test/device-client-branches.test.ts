@@ -359,6 +359,50 @@ describe("device client uncovered branches", () => {
     await initPromise;
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("continues queued operations after previous command rejection", async () => {
+    const transport = new BranchTransport();
+    const originalSetProperty = transport.setProperty.bind(transport);
+    let failFirst = true;
+    transport.setProperty = async (method, params) => {
+      if (failFirst) {
+        failFirst = false;
+        throw new Error("write-failed");
+      }
+      await originalSetProperty(method, params);
+    };
+
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    await client.init();
+
+    await expect(client.setPower(true)).rejects.toBeInstanceOf(Error);
+    await expect(client.setLed(true)).resolves.toBeUndefined();
+
+    expect(transport.setCalls).toEqual([{ method: "set_led", params: ["on"] }]);
+
+    await client.shutdown();
+  });
+
+  it("covers queue recovery callback on pre-rejected queue", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    await client.init();
+    (client as unknown as { operationQueue: Promise<void> }).operationQueue =
+      Promise.reject(new Error("pre-rejected"));
+
+    await expect(client.setLed(true)).resolves.toBeUndefined();
+    await client.shutdown();
+  });
 });
 
 describe("retry helper uncovered branches", () => {

@@ -14,14 +14,13 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 | HomeKit Service | Description |
 |-----------------|-------------|
-| Fan v2 | Power on/off + rotation speed (fan level mapped to 0–100%) |
+| Switch: Power | Main purifier power ON/OFF |
 | Air Quality Sensor | AQI mapped to Excellent/Good/Fair/Poor |
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Device child lock |
 | Switch: LED Night Mode | LED indicator on/off |
-| Switch: Auto Mode | Sets device to `auto` mode |
-| Switch: Sleep Mode | Sets device to `sleep` mode |
+| Switch: Mode AUTO/NIGHT | One mutual-exclusive switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Filter Maintenance | `filter1_life` as filter life level + change indication |
 
 ---
@@ -110,13 +109,6 @@ Common methods:
 
 ## HomeKit mapping details
 
-### Fan speed mapping
-
-```text
-RotationSpeed = round((fan_level - 1) / 15 * 100)
-fan_level     = round(RotationSpeed / 100 * 15 + 1)
-```
-
 ### AQI mapping
 
 | AQI range | HomeKit AirQuality |
@@ -126,12 +118,11 @@ fan_level     = round(RotationSpeed / 100 * 15 + 1)
 | 71–100 | Fair |
 | > 100 | Poor |
 
-### Mode switches
+### Mode switch (AUTO/NIGHT)
 
-- Auto switch ON → `set_mode("auto")`
-- Sleep switch ON → `set_mode("sleep")`
-- Turning OFF active switch → `set_mode("idle")`
-- Polling synchronizes switch state with real device mode
+- One switch only: `ON => auto`, `OFF => sleep`.
+- When `Power` is OFF, mode writes are intentionally rejected by plugin logic (`onSet` ignored and switch state refreshed from device); in HomeKit this behaves as non-accepting/unavailable control.
+- Polling and write-after-read sync keep HomeKit, plugin state, and device state consistent.
 
 ### Filter life mapping
 
@@ -197,3 +188,22 @@ This codebase was created entirely with the help of AI.
 ## License
 
 MIT
+
+
+## Test matrix (network + status resilience)
+
+Automated Vitest scenarios cover:
+
+1. Purifier restart detection + state refresh without Homebridge restart.
+2. Router/Wi-Fi restart + reconnect and state resync.
+3. Packet loss/timeouts + retry/backoff without crashes/flapping.
+4. Homebridge restart bootstrap (initial state and switch set consistency).
+5. Plugin hot reload (shutdown/init lifecycle without timer leaks/duplicates).
+6. Short Wi-Fi outage (5-30s equivalent) with quick state restore.
+7. Long Wi-Fi outage (retries exhausted, process stable, full resync after return).
+
+Run tests:
+
+```bash
+./node_modules/.bin/vitest run --coverage
+```
