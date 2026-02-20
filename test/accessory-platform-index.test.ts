@@ -330,6 +330,56 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(client.calls).toContain("shutdown");
   });
 
+  it("logs shutdown error instead of leaving unhandled rejection", async () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+    client.shutdown = vi.fn().mockRejectedValue(new Error("close-failed"));
+
+    new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    api.emit("shutdown");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(logger.warn).toHaveBeenCalledWith("Shutdown error: close-failed");
+  });
+
+  it("logs non-Error shutdown rejection", async () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+    client.shutdown = vi.fn().mockRejectedValue("raw-shutdown-error");
+
+    new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    api.emit("shutdown");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Shutdown error: raw-shutdown-error",
+    );
+  });
+
   it("updates AUTO and NIGHT mode switches based on current state and avoids duplicate pushes", () => {
     const api = makeApi();
     const logger = makeLogger();

@@ -83,7 +83,10 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       });
 
     this.api.on("shutdown", () => {
-      void this.client.shutdown();
+      void this.client.shutdown().catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.warn(`Shutdown error: ${message}`);
+      });
     });
   }
 
