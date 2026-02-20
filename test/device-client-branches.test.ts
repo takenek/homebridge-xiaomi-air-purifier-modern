@@ -115,6 +115,37 @@ describe("device client uncovered branches", () => {
     await client.shutdown();
   });
 
+  it("keeps polling when a state listener throws", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    client.onStateUpdate(() => {
+      throw new Error("listener-broke");
+    });
+    client.onStateUpdate(() => {
+      throw "raw-listener-error";
+    });
+
+    await client.init();
+
+    await vi.advanceTimersByTimeAsync(10);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("State listener failed: listener-broke"),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("State listener failed: Unknown listener error"),
+    );
+    expect(transport.callCount).toBeGreaterThanOrEqual(2);
+
+    await client.shutdown();
+  });
+
   it("covers all set* branches and parameter variants", async () => {
     const transport = new BranchTransport();
     const logger = makeLogger();

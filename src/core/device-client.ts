@@ -129,7 +129,13 @@ export class DeviceClient {
         const state = await this.transport.getProperties(READ_PROPERTIES);
         this.currentState = state;
         for (const listener of this.listeners) {
-          listener(state);
+          try {
+            listener(state);
+          } catch (error: unknown) {
+            const message =
+              error instanceof Error ? error.message : "Unknown listener error";
+            this.logger.warn(`State listener failed: ${message}`);
+          }
         }
         if (attempt > 0) {
           this.logger.info(
