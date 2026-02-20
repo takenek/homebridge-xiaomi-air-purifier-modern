@@ -59,9 +59,6 @@ class FakeService {
 
 const makeApi = () => {
   const events = new Map<string, Array<() => void>>();
-  const switchFactory = (name: string, subtype?: string) =>
-    new FakeService(`Switch:${name}`, subtype);
-
   const api = {
     hap: {
       Service: {

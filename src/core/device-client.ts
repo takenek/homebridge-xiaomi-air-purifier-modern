@@ -1,8 +1,8 @@
 import {
-  DEFAULT_RETRY_POLICY,
-  type RetryPolicy,
   computeBackoffDelay,
+  DEFAULT_RETRY_POLICY,
   isRetryableError,
+  type RetryPolicy,
 } from "./retry";
 import {
   type DeviceMode,
