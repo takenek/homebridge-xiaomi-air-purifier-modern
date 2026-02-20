@@ -175,7 +175,10 @@ export class ModernMiioTransport implements MiioTransport {
 
     const state =
       this.protocolMode === "miot"
-        ? await this.readViaMiot().catch(async () => {
+        ? await this.readViaMiot().catch(async (error: unknown) => {
+            if (isRetryableError(error)) {
+              throw error;
+            }
             this.protocolMode = "legacy";
             return this.readViaLegacy();
           })
@@ -368,7 +371,10 @@ export class ModernMiioTransport implements MiioTransport {
         if ((payload.code ?? 0) === 0) {
           return payload.value;
         }
-      } catch {
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
         // try next candidate
       }
     }
@@ -383,7 +389,10 @@ export class ModernMiioTransport implements MiioTransport {
         if (Array.isArray(response)) {
           return response[0];
         }
-      } catch {
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
         // try next candidate
       }
     }
