@@ -20,7 +20,8 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Device child lock |
 | Switch: LED Night Mode | LED indicator on/off |
-| Switch: Mode AUTO/NIGHT | One mutual-exclusive switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
+| Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
+| Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
 | Filter Maintenance | `filter1_life` as filter life level + change indication |
 
 ---

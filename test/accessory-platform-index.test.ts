@@ -186,7 +186,7 @@ class FakeClient {
 }
 
 describe("AirPurifierAccessory switch contract", () => {
-  it("publishes only Power, Child Lock, LED and single mode switch", async () => {
+  it("publishes Power, Child Lock, LED and separate AUTO/NIGHT mode switches", async () => {
     const api = makeApi();
     const logger = makeLogger();
     const client = new FakeClient();
@@ -210,7 +210,8 @@ describe("AirPurifierAccessory switch contract", () => {
       "Switch:Power",
       "Switch:Child Lock",
       "Switch:LED Night Mode",
-      "Switch:Mode AUTO/NIGHT",
+      "Switch:Mode AUTO ON/OFF",
+      "Switch:Mode NIGHT ON/OFF",
     ]);
 
     for (const service of accessory.getServices()) {
@@ -226,13 +227,24 @@ describe("AirPurifierAccessory switch contract", () => {
       ).toBe(true);
     }
 
-    const modeService = accessory
+    const modeAutoService = accessory
       .getServices()
       .find(
         (service) =>
-          (service as unknown as FakeService).name === "Switch:Mode AUTO/NIGHT",
+          (service as unknown as FakeService).name ===
+          "Switch:Mode AUTO ON/OFF",
       ) as unknown as FakeService;
-    const modeSetter = modeService.getCharacteristic(
+    const modeNightService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Switch:Mode NIGHT ON/OFF",
+      ) as unknown as FakeService;
+    const modeAutoSetter = modeAutoService.getCharacteristic(
+      api.hap.Characteristic.On,
+    ).onSetHandler;
+    const modeNightSetter = modeNightService.getCharacteristic(
       api.hap.Characteristic.On,
     ).onSetHandler;
 
@@ -264,22 +276,26 @@ describe("AirPurifierAccessory switch contract", () => {
     await ledService
       .getCharacteristic(api.hap.Characteristic.On)
       .onSetHandler?.(false);
-    await modeSetter?.(true);
-    await modeSetter?.(false);
+    await modeAutoSetter?.(true);
+    await modeAutoSetter?.(false);
+    await modeNightSetter?.(true);
+    await modeNightSetter?.(false);
     expect(client.calls).toEqual(
       expect.arrayContaining([
         "power:false",
         "child:true",
         "led:false",
         "mode:auto",
+        "mode:sleep",
       ]),
     );
 
     client.state = { ...baseState, power: false, mode: "sleep" };
-    await modeSetter?.(false);
+    await modeAutoSetter?.(false);
+    await modeNightSetter?.(true);
     expect(
       client.calls.filter((entry) => entry.startsWith("mode:")),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(logger.debug).toHaveBeenCalledWith(
       "Ignoring mode change while device power is OFF.",
     );
@@ -288,7 +304,7 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(client.calls).toContain("shutdown");
   });
 
-  it("updates mode switch availability based on current power and avoids duplicate pushes", () => {
+  it("updates AUTO and NIGHT mode switches based on current state and avoids duplicate pushes", () => {
     const api = makeApi();
     const logger = makeLogger();
     const client = new FakeClient();
@@ -316,11 +332,19 @@ describe("AirPurifierAccessory switch contract", () => {
       listener(client.state);
     }
 
-    const modeService = accessory
+    const modeAutoService = accessory
       .getServices()
       .find(
         (service) =>
-          (service as unknown as FakeService).name === "Switch:Mode AUTO/NIGHT",
+          (service as unknown as FakeService).name ===
+          "Switch:Mode AUTO ON/OFF",
+      ) as unknown as FakeService;
+    const modeNightService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Switch:Mode NIGHT ON/OFF",
       ) as unknown as FakeService;
 
     expect(logger.info).toHaveBeenCalledWith(
@@ -328,16 +352,24 @@ describe("AirPurifierAccessory switch contract", () => {
     );
 
     expect(
-      modeService.updates.every((update) => update.characteristic === "on"),
+      modeAutoService.updates.every((update) => update.characteristic === "on"),
+    ).toBe(true);
+    expect(
+      modeNightService.updates.every(
+        (update) => update.characteristic === "on",
+      ),
     ).toBe(true);
 
     client.state = { ...baseState, power: false, mode: "sleep" };
     for (const listener of client.listeners) {
       listener(client.state);
     }
-    expect(modeService.updates.some((update) => update.value === false)).toBe(
-      true,
-    );
+    expect(
+      modeAutoService.updates.some((update) => update.value === false),
+    ).toBe(true);
+    expect(
+      modeNightService.updates.some((update) => update.value === true),
+    ).toBe(true);
   });
 
   it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {

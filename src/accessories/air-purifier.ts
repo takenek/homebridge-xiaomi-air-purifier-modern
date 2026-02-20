@@ -7,7 +7,12 @@ import type {
 } from "homebridge";
 import type { DeviceClient } from "../core/device-client";
 import { aqiToHomeKitAirQuality } from "../core/mappers";
-import { modeToAutoNightSwitchState } from "../core/mode-policy";
+import {
+  isAutoModeSwitchOn,
+  isNightModeSwitchOn,
+  resolveModeFromAutoSwitch,
+  resolveModeFromNightSwitch,
+} from "../core/mode-policy";
 
 export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly informationService: Service;
@@ -17,7 +22,8 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly humidityService: Service;
   private readonly childLockService: Service;
   private readonly ledService: Service;
-  private readonly modeService: Service;
+  private readonly modeAutoService: Service;
+  private readonly modeNightService: Service;
   private readonly filterService: Service;
   private readonly characteristicCache = new Map<string, CharacteristicValue>();
   private connectedLogged = false;
@@ -52,9 +58,13 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       "child_lock",
     );
     this.ledService = new this.api.hap.Service.Switch("LED Night Mode", "led");
-    this.modeService = new this.api.hap.Service.Switch(
-      "Mode AUTO/NIGHT",
-      "mode_auto_night",
+    this.modeAutoService = new this.api.hap.Service.Switch(
+      "Mode AUTO ON/OFF",
+      "mode_auto",
+    );
+    this.modeNightService = new this.api.hap.Service.Switch(
+      "Mode NIGHT ON/OFF",
+      "mode_night",
     );
     this.filterService = new this.api.hap.Service.FilterMaintenance(
       "Filter Life",
@@ -79,13 +89,15 @@ export class AirPurifierAccessory implements AccessoryPlugin {
 
   private applyServiceNames(): void {
     const namedServices: Array<{ service: Service; name: string }> = [
+      { service: this.informationService, name: this.name },
       { service: this.powerService, name: "Power" },
       { service: this.airQualityService, name: `${this.name} Air Quality` },
       { service: this.temperatureService, name: `${this.name} Temperature` },
       { service: this.humidityService, name: `${this.name} Humidity` },
       { service: this.childLockService, name: "Child Lock" },
       { service: this.ledService, name: "LED Night Mode" },
-      { service: this.modeService, name: "Mode AUTO/NIGHT" },
+      { service: this.modeAutoService, name: "Mode AUTO ON/OFF" },
+      { service: this.modeNightService, name: "Mode NIGHT ON/OFF" },
       { service: this.filterService, name: "Filter Life" },
     ];
 
@@ -110,7 +122,8 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.humidityService,
       this.childLockService,
       this.ledService,
-      this.modeService,
+      this.modeAutoService,
+      this.modeNightService,
       this.filterService,
     ];
   }
@@ -134,22 +147,39 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.client.setLed(Boolean(value)),
       );
 
-    this.modeService
+    this.modeAutoService
       .getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) => {
-        await this.handleModeSwitch(Boolean(value));
+        const state = this.client.state;
+        const mode = resolveModeFromAutoSwitch(
+          Boolean(value),
+          Boolean(state?.power),
+        );
+        await this.handleModeSwitch(mode);
+      });
+
+    this.modeNightService
+      .getCharacteristic(this.api.hap.Characteristic.On)
+      .onSet(async (value: CharacteristicValue) => {
+        const state = this.client.state;
+        const mode = resolveModeFromNightSwitch(
+          Boolean(value),
+          Boolean(state?.power),
+        );
+        await this.handleModeSwitch(mode);
       });
   }
 
-  private async handleModeSwitch(enabled: boolean): Promise<void> {
-    const state = this.client.state;
-    if (!state || !state.power) {
+  private async handleModeSwitch(
+    nextMode: "auto" | "sleep" | null,
+  ): Promise<void> {
+    if (!nextMode) {
       this.log.debug("Ignoring mode change while device power is OFF.");
       this.refreshCharacteristics();
       return;
     }
 
-    await this.client.setMode(enabled ? "auto" : "sleep");
+    await this.client.setMode(nextMode);
   }
 
   private refreshCharacteristics(): void {
@@ -196,9 +226,14 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       state.led,
     );
     this.updateCharacteristicIfNeeded(
-      this.modeService,
+      this.modeAutoService,
       this.api.hap.Characteristic.On,
-      modeToAutoNightSwitchState(state.mode),
+      isAutoModeSwitchOn(state.mode),
+    );
+    this.updateCharacteristicIfNeeded(
+      this.modeNightService,
+      this.api.hap.Characteristic.On,
+      isNightModeSwitchOn(state.mode),
     );
 
     this.updateCharacteristicIfNeeded(
