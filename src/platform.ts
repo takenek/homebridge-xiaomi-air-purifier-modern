@@ -1,7 +1,7 @@
 import type {
-  API,
   AccessoryConfig,
   AccessoryPlugin,
+  API,
   Logging,
 } from "homebridge";
 import { AirPurifierAccessory } from "./accessories/air-purifier";

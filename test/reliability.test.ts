@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceClient } from "../src/core/device-client";
 import { ModernMiioTransport } from "../src/core/miio-transport";
 import {
-  DEFAULT_RETRY_POLICY,
   computeBackoffDelay,
+  DEFAULT_RETRY_POLICY,
   isRetryableError,
 } from "../src/core/retry";
 import type { DeviceState, MiioTransport } from "../src/core/types";

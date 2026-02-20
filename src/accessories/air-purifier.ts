@@ -1,6 +1,6 @@
 import type {
-  API,
   AccessoryPlugin,
+  API,
   CharacteristicValue,
   Logging,
   Service,
