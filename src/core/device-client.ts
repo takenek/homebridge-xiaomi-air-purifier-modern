@@ -39,6 +39,13 @@ export class DeviceClient {
   private listeners: Array<(state: DeviceState) => void> = [];
   private operationQueue: Promise<void> = Promise.resolve();
 
+  private logSuppressedQueueError(error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.debug(
+      `Suppressed previous queued operation error to keep queue alive: ${message}`,
+    );
+  }
+
   public constructor(
     private readonly transport: MiioTransport,
     private readonly logger: Logger,
@@ -136,11 +143,15 @@ export class DeviceClient {
     });
     const previous = this.operationQueue;
     this.operationQueue = previous
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        this.logSuppressedQueueError(error);
+      })
       .then(async () => pending);
 
     try {
-      await previous.catch(() => undefined);
+      await previous.catch((error: unknown) => {
+        this.logSuppressedQueueError(error);
+      });
       return await operation();
     } finally {
       release?.();
