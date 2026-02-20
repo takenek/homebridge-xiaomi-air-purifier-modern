@@ -6,12 +6,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      include: ["src/**/*.ts"],
       exclude: ["src/core/miio-transport.ts"],
       thresholds: {
-        lines: 80,
-        branches: 70,
-        functions: 80,
-        statements: 80,
+        lines: 100,
+        branches: 100,
+        functions: 100,
+        statements: 100,
       },
     },
   },
