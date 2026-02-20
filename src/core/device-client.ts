@@ -37,6 +37,7 @@ export class DeviceClient {
   private destroyed = false;
   private currentState: DeviceState | null = null;
   private listeners: Array<(state: DeviceState) => void> = [];
+  private operationQueue: Promise<void> = Promise.resolve();
 
   public constructor(
     private readonly transport: MiioTransport,
@@ -58,7 +59,9 @@ export class DeviceClient {
   }
 
   public async init(): Promise<void> {
-    await this.pollWithRetry();
+    await this.enqueueOperation(async () => {
+      await this.pollWithRetry();
+    });
     if (this.destroyed) {
       return;
     }
@@ -73,35 +76,37 @@ export class DeviceClient {
   }
 
   public async setPower(value: boolean): Promise<void> {
-    await this.transport.setProperty("set_power", [value ? "on" : "off"]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_power", [value ? "on" : "off"]);
   }
 
   public async setFanLevel(fanLevel: number): Promise<void> {
-    await this.transport.setProperty("set_level_fan", [fanLevel]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_level_fan", [fanLevel]);
   }
 
   public async setMode(mode: DeviceMode): Promise<void> {
-    await this.transport.setProperty("set_mode", [mode]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_mode", [mode]);
   }
 
   public async setChildLock(enabled: boolean): Promise<void> {
-    await this.transport.setProperty("set_child_lock", [
-      enabled ? "on" : "off",
-    ]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_child_lock", [enabled ? "on" : "off"]);
   }
 
   public async setLed(enabled: boolean): Promise<void> {
-    await this.transport.setProperty("set_led", [enabled ? "on" : "off"]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_led", [enabled ? "on" : "off"]);
   }
 
   public async setBuzzerVolume(volume: number): Promise<void> {
-    await this.transport.setProperty("set_buzzer_volume", [volume]);
-    await this.pollWithRetry();
+    await this.enqueueSetAndSync("set_buzzer_volume", [volume]);
+  }
+
+  private async enqueueSetAndSync(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<void> {
+    await this.enqueueOperation(async () => {
+      await this.transport.setProperty(method, params);
+      await this.pollWithRetry();
+    });
   }
 
   private startPolling(): void {
@@ -115,11 +120,31 @@ export class DeviceClient {
   }
 
   private safePoll(channel: "operation" | "sensor"): void {
-    void this.pollWithRetry().catch((error: unknown) => {
+    void this.enqueueOperation(async () => {
+      await this.pollWithRetry();
+    }).catch((error: unknown) => {
       const message =
         error instanceof Error ? error.message : "Unknown poll error";
       this.logger.warn(`[${channel}] poll failed: ${message}`);
     });
+  }
+
+  private async enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    let release: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const previous = this.operationQueue;
+    this.operationQueue = previous
+      .catch(() => undefined)
+      .then(async () => pending);
+
+    try {
+      await previous.catch(() => undefined);
+      return await operation();
+    } finally {
+      release?.();
+    }
   }
 
   private async pollWithRetry(): Promise<void> {
