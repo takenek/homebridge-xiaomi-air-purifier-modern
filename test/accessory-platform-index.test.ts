@@ -1,10 +1,36 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
+import { ModernMiioTransport } from "../src/core/miio-transport";
 import {
   ACCESSORY_NAME,
   PLUGIN_NAME,
   XiaomiAirPurifierAccessoryPlugin,
 } from "../src/platform";
+
+beforeEach(() => {
+  vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+  vi.spyOn(ModernMiioTransport.prototype, "getProperties").mockResolvedValue({
+    power: true,
+    fan_level: 8,
+    mode: "auto",
+    temperature: 21,
+    humidity: 40,
+    aqi: 10,
+    filter1_life: 90,
+    child_lock: false,
+    led: true,
+    buzzer_volume: 50,
+    motor1_speed: 1000,
+    use_time: 10,
+    purify_volume: 10,
+  });
+  vi.spyOn(ModernMiioTransport.prototype, "setProperty").mockResolvedValue();
+  vi.spyOn(ModernMiioTransport.prototype, "close").mockResolvedValue();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 class FakeCharacteristic {
   public onSetHandler: ((value: unknown) => Promise<void> | void) | null = null;

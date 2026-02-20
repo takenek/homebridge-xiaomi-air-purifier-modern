@@ -166,6 +166,10 @@ describe("retry and polling", () => {
   });
 
   it("dgram socket has an error listener to prevent process crash", async () => {
+    const emitWarning = vi
+      .spyOn(process, "emitWarning")
+      .mockImplementation(() => undefined);
+
     const transport = new ModernMiioTransport({
       address: "127.0.0.1",
       token: "ffffffffffffffffffffffffffffffff",
@@ -179,6 +183,9 @@ describe("retry and polling", () => {
     expect(() => {
       socket.emit("error", new Error("ENETUNREACH"));
     }).not.toThrow();
+    expect(emitWarning).toHaveBeenCalledWith(
+      expect.stringContaining("[miio-transport:socket]"),
+    );
 
     await transport.close();
   });
