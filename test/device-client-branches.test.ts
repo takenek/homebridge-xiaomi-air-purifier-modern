@@ -314,6 +314,38 @@ describe("device client uncovered branches", () => {
     await client.shutdown();
   });
 
+  it("logs suppressed queue errors when prior queued operation failed", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    const clientInternals = client as unknown as {
+      operationQueue: Promise<void>;
+    };
+    clientInternals.operationQueue = Promise.reject(new Error("queue-broke"));
+
+    await client.setPower(true);
+
+    clientInternals.operationQueue = Promise.reject("queue-raw");
+    await client.setLed(false);
+
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Suppressed previous queued operation error to keep queue alive: queue-broke",
+      ),
+    );
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Suppressed previous queued operation error to keep queue alive: queue-raw",
+      ),
+    );
+
+    await client.shutdown();
+  });
+
   it("resolves delay immediately after shutdown without scheduling timer", async () => {
     const transport = new BranchTransport();
     const logger = makeLogger();

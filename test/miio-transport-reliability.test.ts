@@ -1,3 +1,4 @@
+import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModernMiioTransport } from "../src/core/miio-transport";
@@ -175,6 +176,65 @@ describe("ModernMiioTransport reliability", () => {
     fakeSocket.emit("error", failure);
 
     await expect(pending).rejects.toBe(failure);
+
+    await transport.close();
+  });
+
+  it("emits diagnostics for suppressed socket and detection errors", async () => {
+    const emitWarning = vi
+      .spyOn(process, "emitWarning")
+      .mockImplementation(() => undefined);
+
+    class FakeSocket extends EventEmitter {
+      public send(
+        _packet: Buffer,
+        _port: number,
+        _address: string,
+        callback: (error: Error | null) => void,
+      ): void {
+        callback(null);
+      }
+
+      public close(callback?: () => void): void {
+        callback?.();
+      }
+    }
+
+    const fakeSocket = new FakeSocket();
+    vi.spyOn(dgram, "createSocket").mockReturnValue(
+      fakeSocket as unknown as dgram.Socket,
+    );
+
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "00112233445566778899aabbccddeeff",
+      model: "zhimi.airpurifier.ma4",
+      timeoutMs: 50,
+    });
+    const transportInternals = transport as unknown as {
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+    };
+
+    fakeSocket.emit(
+      "error",
+      Object.assign(new Error("wifi blip"), { code: "ENETDOWN" }),
+    );
+
+    vi.spyOn(transportInternals, "call").mockRejectedValue(
+      Object.assign(new Error("router unavailable"), { code: "EHOSTUNREACH" }),
+    );
+    await expect(transportInternals.detectProtocolMode()).resolves.toBeNull();
+
+    expect(emitWarning).toHaveBeenCalledWith(
+      expect.stringContaining("[miio-transport:socket]"),
+    );
+    expect(emitWarning).toHaveBeenCalledWith(
+      expect.stringContaining("[miio-transport:detect-miot]"),
+    );
+    expect(emitWarning).toHaveBeenCalledWith(
+      expect.stringContaining("[miio-transport:detect-legacy]"),
+    );
 
     await transport.close();
   });
