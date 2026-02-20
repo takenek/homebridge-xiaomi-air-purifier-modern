@@ -579,8 +579,14 @@ export class ModernMiioTransport implements MiioTransport {
     expectedResponseId?: number,
   ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const cleanup = () => {
+        clearTimeout(timeout);
         this.socket.off("message", onMessage);
+        this.socket.off("error", onError);
+      };
+
+      const timeout = setTimeout(() => {
+        cleanup();
         const error = new Error(`MIIO timeout after ${this.timeoutMs}ms`);
         Reflect.set(error, "code", "ETIMEDOUT");
         reject(error);
@@ -615,16 +621,20 @@ export class ModernMiioTransport implements MiioTransport {
           }
         }
 
-        clearTimeout(timeout);
-        this.socket.off("message", onMessage);
+        cleanup();
         resolve(message);
       };
 
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+
       this.socket.on("message", onMessage);
+      this.socket.once("error", onError);
       this.socket.send(packet, MIIO_PORT, this.options.address, (error) => {
         if (error) {
-          clearTimeout(timeout);
-          this.socket.off("message", onMessage);
+          cleanup();
           reject(error);
         }
       });
