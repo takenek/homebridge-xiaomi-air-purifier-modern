@@ -148,6 +148,7 @@ export class ModernMiioTransport implements MiioTransport {
   private session: MiioSession | null = null;
   private nextMessageId = 1;
   private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
+  private socketClosed = false;
 
   public constructor(private readonly options: MiioTransportOptions) {
     this.timeoutMs = options.timeoutMs ?? 5_000;
@@ -224,8 +225,29 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   public async close(): Promise<void> {
+    if (this.socketClosed) {
+      return;
+    }
+
     await new Promise<void>((resolve) => {
-      this.socket.close(() => resolve());
+      try {
+        this.socket.close(() => {
+          this.socketClosed = true;
+          resolve();
+        });
+      } catch (error: unknown) {
+        const code =
+          error instanceof Error
+            ? String(Reflect.get(error, "code") ?? "")
+            : "";
+        if (code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
+          this.socketClosed = true;
+          resolve();
+          return;
+        }
+
+        throw error;
+      }
     });
   }
 
