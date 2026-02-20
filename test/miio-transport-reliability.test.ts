@@ -58,4 +58,16 @@ describe("ModernMiioTransport reliability", () => {
 
     await transport.close();
   });
+
+  it("close is idempotent after socket shutdown", async () => {
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "00112233445566778899aabbccddeeff",
+      model: "zhimi.airpurifier.ma4",
+      timeoutMs: 50,
+    });
+
+    await expect(transport.close()).resolves.toBeUndefined();
+    await expect(transport.close()).resolves.toBeUndefined();
+  });
 });
