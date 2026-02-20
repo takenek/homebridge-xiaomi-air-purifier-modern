@@ -105,7 +105,6 @@ const makeApi = () => {
         AirQuality: { UUID: "airQuality" },
         CurrentTemperature: { UUID: "temp" },
         CurrentRelativeHumidity: { UUID: "humidity" },
-        StatusActive: { UUID: "statusActive" },
         FilterLifeLevel: { UUID: "filterLife" },
         FilterChangeIndication: {
           UUID: "filterIndication",
@@ -312,13 +311,9 @@ describe("AirPurifierAccessory switch contract", () => {
       'Connected to "Office" @ 10.0.0.1!',
     );
 
-    const activeUpdates = modeService.updates.filter(
-      (update) =>
-        update.characteristic === api.hap.Characteristic.StatusActive.UUID,
-    );
-    expect(activeUpdates).toEqual([
-      { characteristic: "statusActive", value: true },
-    ]);
+    expect(
+      modeService.updates.every((update) => update.characteristic === "on"),
+    ).toBe(true);
 
     client.state = { ...baseState, power: false, mode: "sleep" };
     for (const listener of client.listeners) {

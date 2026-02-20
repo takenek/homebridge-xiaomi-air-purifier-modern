@@ -174,11 +174,6 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.api.hap.Characteristic.On,
       modeToAutoNightSwitchState(state.mode),
     );
-    this.updateCharacteristicIfNeeded(
-      this.modeService,
-      this.api.hap.Characteristic.StatusActive,
-      state.power,
-    );
 
     this.updateCharacteristicIfNeeded(
       this.filterService,
