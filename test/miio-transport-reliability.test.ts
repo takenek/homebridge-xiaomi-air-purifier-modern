@@ -72,6 +72,67 @@ describe("ModernMiioTransport reliability", () => {
     await expect(transport.close()).resolves.toBeUndefined();
   });
 
+  it("does not downgrade retryable MIOT read errors to legacy fallback", async () => {
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "00112233445566778899aabbccddeeff",
+      model: "zhimi.airpurifier.ma4",
+      timeoutMs: 50,
+    });
+
+    const retryableError = Object.assign(new Error("temporary wifi loss"), {
+      code: "EHOSTUNREACH",
+    });
+
+    const transportInternals = transport as unknown as {
+      detectProtocolMode: () => Promise<"legacy" | "miot" | null>;
+      readViaMiot: () => Promise<DeviceState>;
+      readViaLegacy: () => Promise<DeviceState>;
+    };
+
+    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue(
+      "miot",
+    );
+    vi.spyOn(transportInternals, "readViaMiot").mockRejectedValue(
+      retryableError,
+    );
+    const readViaLegacy = vi
+      .spyOn(transportInternals, "readViaLegacy")
+      .mockResolvedValue(legacyEmptyState);
+
+    await expect(transport.getProperties([])).rejects.toBe(retryableError);
+    expect(readViaLegacy).not.toHaveBeenCalled();
+
+    await transport.close();
+  });
+
+  it("does not mask retryable legacy property read errors", async () => {
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "00112233445566778899aabbccddeeff",
+      model: "zhimi.airpurifier.ma4",
+      timeoutMs: 50,
+    });
+
+    const retryableError = Object.assign(new Error("router restart"), {
+      code: "ETIMEDOUT",
+    });
+
+    const transportInternals = transport as unknown as {
+      detectProtocolMode: () => Promise<"legacy" | "miot" | null>;
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    };
+
+    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue(
+      "legacy",
+    );
+    vi.spyOn(transportInternals, "call").mockRejectedValue(retryableError);
+
+    await expect(transport.getProperties([])).rejects.toBe(retryableError);
+
+    await transport.close();
+  });
+
   it("fails fast on socket error without waiting for timeout", async () => {
     class FakeSocket extends EventEmitter {
       public send(
