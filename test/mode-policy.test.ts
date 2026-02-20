@@ -1,33 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
-  modeToAutoNightSwitchState,
-  resolveAutoNightModeUpdate,
-  resolveModeOnSwitchToggle,
+  isAutoModeSwitchOn,
+  isNightModeSwitchOn,
+  resolveModeFromAutoSwitch,
+  resolveModeFromNightSwitch,
 } from "../src/core/mode-policy";
 
 describe("mode switch policy", () => {
-  it("enabling switch sets explicit mode", () => {
-    expect(resolveModeOnSwitchToggle(true, "auto", "sleep")).toBe("auto");
-    expect(resolveModeOnSwitchToggle(true, "sleep", "idle")).toBe("sleep");
+  it("maps mode to AUTO switch state", () => {
+    expect(isAutoModeSwitchOn("auto")).toBe(true);
+    expect(isAutoModeSwitchOn("sleep")).toBe(false);
+    expect(isAutoModeSwitchOn("idle")).toBe(false);
   });
 
-  it("disabling active mode goes to idle", () => {
-    expect(resolveModeOnSwitchToggle(false, "auto", "auto")).toBe("idle");
+  it("maps mode to NIGHT switch state", () => {
+    expect(isNightModeSwitchOn("sleep")).toBe(true);
+    expect(isNightModeSwitchOn("auto")).toBe(false);
+    expect(isNightModeSwitchOn("idle")).toBe(false);
   });
 
-  it("disabling inactive mode keeps state", () => {
-    expect(resolveModeOnSwitchToggle(false, "sleep", "auto")).toBeNull();
+  it("resolves AUTO switch toggles to auto/sleep", () => {
+    expect(resolveModeFromAutoSwitch(true, true)).toBe("auto");
+    expect(resolveModeFromAutoSwitch(false, true)).toBe("sleep");
+    expect(resolveModeFromAutoSwitch(true, false)).toBeNull();
   });
 
-  it("maps mode to unified auto/night switch state", () => {
-    expect(modeToAutoNightSwitchState("auto")).toBe(true);
-    expect(modeToAutoNightSwitchState("sleep")).toBe(false);
-    expect(modeToAutoNightSwitchState("idle")).toBe(false);
-  });
-
-  it("blocks mode change when power is off", () => {
-    expect(resolveAutoNightModeUpdate(true, false)).toBeNull();
-    expect(resolveAutoNightModeUpdate(false, true)).toBe("sleep");
-    expect(resolveAutoNightModeUpdate(true, true)).toBe("auto");
+  it("resolves NIGHT switch toggles to sleep/auto", () => {
+    expect(resolveModeFromNightSwitch(true, true)).toBe("sleep");
+    expect(resolveModeFromNightSwitch(false, true)).toBe("auto");
+    expect(resolveModeFromNightSwitch(false, false)).toBeNull();
   });
 });

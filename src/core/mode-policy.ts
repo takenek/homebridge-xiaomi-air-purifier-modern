@@ -1,25 +1,12 @@
 import type { DeviceMode } from "./types";
 
-export const resolveModeOnSwitchToggle = (
-  enabled: boolean,
-  targetMode: Extract<DeviceMode, "auto" | "sleep">,
-  currentMode: DeviceMode,
-): DeviceMode | null => {
-  if (enabled) {
-    return targetMode;
-  }
-
-  if (currentMode === targetMode) {
-    return "idle";
-  }
-
-  return null;
-};
-
-export const modeToAutoNightSwitchState = (mode: DeviceMode): boolean =>
+export const isAutoModeSwitchOn = (mode: DeviceMode): boolean =>
   mode === "auto";
 
-export const resolveAutoNightModeUpdate = (
+export const isNightModeSwitchOn = (mode: DeviceMode): boolean =>
+  mode === "sleep";
+
+export const resolveModeFromAutoSwitch = (
   enabled: boolean,
   powerOn: boolean,
 ): Extract<DeviceMode, "auto" | "sleep"> | null => {
@@ -28,4 +15,15 @@ export const resolveAutoNightModeUpdate = (
   }
 
   return enabled ? "auto" : "sleep";
+};
+
+export const resolveModeFromNightSwitch = (
+  enabled: boolean,
+  powerOn: boolean,
+): Extract<DeviceMode, "auto" | "sleep"> | null => {
+  if (!powerOn) {
+    return null;
+  }
+
+  return enabled ? "sleep" : "auto";
 };
