@@ -288,12 +288,7 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   private async readViaMiot(): Promise<DeviceState> {
-    const valueByKey = new Map<string, unknown>();
-
-    for (const [key, candidates] of Object.entries(MIOT_MAP)) {
-      const value = await this.readMiotOne(candidates);
-      valueByKey.set(key, value);
-    }
+    const valueByKey = await this.readViaMiotBatch();
 
     const powerRaw = valueByKey.get("power");
     const fanLevelRaw = valueByKey.get("fan_level");
@@ -321,6 +316,71 @@ export class ModernMiioTransport implements MiioTransport {
       use_time: toNumber(valueByKey.get("use_time")),
       purify_volume: toNumber(valueByKey.get("purify_volume")),
     };
+  }
+
+  private async readViaMiotBatch(): Promise<Map<string, unknown>> {
+    const uniqueCandidates = new Set<string>();
+    const requestCandidates: MiotProperty[] = [];
+    for (const [, candidates] of Object.entries(MIOT_MAP)) {
+      for (const candidate of candidates) {
+        const signature = `${candidate.did}:${candidate.siid}:${candidate.piid}`;
+        if (!uniqueCandidates.has(signature)) {
+          uniqueCandidates.add(signature);
+          requestCandidates.push(candidate);
+        }
+      }
+    }
+
+    try {
+      const response = await this.call("get_properties", requestCandidates);
+      if (!Array.isArray(response)) {
+        throw new Error("MIOT batch response is not an array");
+      }
+
+      const valueBySignature = new Map<string, unknown>();
+      for (const item of response) {
+        const payload = item as MiotValueResult;
+        if (
+          payload.did === undefined ||
+          payload.siid === undefined ||
+          payload.piid === undefined
+        ) {
+          continue;
+        }
+
+        if ((payload.code ?? 0) !== 0) {
+          continue;
+        }
+
+        const signature = `${payload.did}:${payload.siid}:${payload.piid}`;
+        valueBySignature.set(signature, payload.value);
+      }
+
+      const valueByKey = new Map<string, unknown>();
+      for (const [key, candidates] of Object.entries(MIOT_MAP)) {
+        for (const candidate of candidates) {
+          const signature = `${candidate.did}:${candidate.siid}:${candidate.piid}`;
+          if (valueBySignature.has(signature)) {
+            valueByKey.set(key, valueBySignature.get(signature));
+            break;
+          }
+        }
+      }
+
+      return valueByKey;
+    } catch (error: unknown) {
+      if (isRetryableError(error)) {
+        throw error;
+      }
+
+      const valueByKey = new Map<string, unknown>();
+      for (const [key, candidates] of Object.entries(MIOT_MAP)) {
+        const value = await this.readMiotOne(candidates);
+        valueByKey.set(key, value);
+      }
+
+      return valueByKey;
+    }
   }
 
   private async readViaLegacy(): Promise<DeviceState> {

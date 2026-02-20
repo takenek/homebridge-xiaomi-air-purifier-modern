@@ -239,3 +239,140 @@ describe("ModernMiioTransport reliability", () => {
     await transport.close();
   });
 });
+
+it("uses MIOT batch read to minimize round-trips", async () => {
+  const transport = new ModernMiioTransport({
+    address: "127.0.0.1",
+    token: "00112233445566778899aabbccddeeff",
+    model: "zhimi.airpurifier.pro",
+    timeoutMs: 50,
+  });
+
+  const transportInternals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    readViaMiot: () => Promise<DeviceState>;
+  };
+
+  const call = vi
+    .spyOn(transportInternals, "call")
+    .mockImplementation(async (_method, params) => {
+      const items = params as Array<{
+        did: string;
+        siid: number;
+        piid: number;
+      }>;
+      return items.map((item) => ({
+        did: item.did,
+        siid: item.siid,
+        piid: item.piid,
+        code: 0,
+        value:
+          item.siid === 2 && item.piid === 2
+            ? true
+            : item.siid === 10 && item.piid === 10
+              ? 9
+              : item.siid === 2 && item.piid === 5
+                ? 0
+                : item.siid === 3 && item.piid === 8
+                  ? 24
+                  : item.siid === 3 && item.piid === 7
+                    ? 41
+                    : item.siid === 3 && item.piid === 6
+                      ? 12
+                      : item.siid === 4 && item.piid === 3
+                        ? 70
+                        : item.siid === 7 && item.piid === 1
+                          ? false
+                          : item.siid === 6 && item.piid === 1
+                            ? 0
+                            : item.siid === 5 && item.piid === 1
+                              ? 50
+                              : item.siid === 10 && item.piid === 8
+                                ? 1200
+                                : item.siid === 4 && item.piid === 2
+                                  ? 30
+                                  : item.siid === 4 && item.piid === 1
+                                    ? 400
+                                    : 0,
+      }));
+    });
+
+  const state = await transportInternals.readViaMiot();
+
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(state).toMatchObject({
+    power: true,
+    fan_level: 9,
+    mode: "auto",
+    temperature: 24,
+    humidity: 41,
+    aqi: 12,
+    filter1_life: 70,
+    child_lock: false,
+    led: true,
+    buzzer_volume: 50,
+    motor1_speed: 1200,
+    use_time: 30,
+    purify_volume: 400,
+  });
+
+  await transport.close();
+});
+
+it("falls back to per-property MIOT reads when batch query is unsupported", async () => {
+  const transport = new ModernMiioTransport({
+    address: "127.0.0.1",
+    token: "00112233445566778899aabbccddeeff",
+    model: "zhimi.airpurifier.pro",
+    timeoutMs: 50,
+  });
+
+  const transportInternals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    readViaMiot: () => Promise<DeviceState>;
+  };
+
+  const call = vi
+    .spyOn(transportInternals, "call")
+    .mockImplementation(async (_method, params) => {
+      const items = params as Array<{
+        did: string;
+        siid: number;
+        piid: number;
+      }>;
+      if (items.length > 1) {
+        throw new Error("unsupported batch get_properties");
+      }
+
+      const [item] = items;
+      const value =
+        item.siid === 2 && item.piid === 2
+          ? true
+          : item.siid === 10 && item.piid === 10
+            ? 7
+            : item.siid === 2 && item.piid === 5
+              ? 1
+              : 0;
+
+      return [
+        {
+          did: item.did,
+          siid: item.siid,
+          piid: item.piid,
+          code: 0,
+          value,
+        },
+      ];
+    });
+
+  const state = await transportInternals.readViaMiot();
+
+  const firstCallParams = call.mock.calls[0]?.[1] as unknown[];
+  expect(firstCallParams.length).toBeGreaterThan(1);
+  expect(call).toHaveBeenCalledTimes(14);
+  expect(state.power).toBe(true);
+  expect(state.fan_level).toBe(7);
+  expect(state.mode).toBe("sleep");
+
+  await transport.close();
+});
