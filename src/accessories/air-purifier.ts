@@ -60,6 +60,8 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       "Filter Life",
     );
 
+    this.applyServiceNames();
+
     this.bindHandlers();
     this.client.onStateUpdate(() => this.refreshCharacteristics());
     void this.client
@@ -73,6 +75,30 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     this.api.on("shutdown", () => {
       void this.client.shutdown();
     });
+  }
+
+  private applyServiceNames(): void {
+    const namedServices: Array<{ service: Service; name: string }> = [
+      { service: this.powerService, name: "Power" },
+      { service: this.airQualityService, name: `${this.name} Air Quality` },
+      { service: this.temperatureService, name: `${this.name} Temperature` },
+      { service: this.humidityService, name: `${this.name} Humidity` },
+      { service: this.childLockService, name: "Child Lock" },
+      { service: this.ledService, name: "LED Night Mode" },
+      { service: this.modeService, name: "Mode AUTO/NIGHT" },
+      { service: this.filterService, name: "Filter Life" },
+    ];
+
+    for (const { service, name } of namedServices) {
+      service.setCharacteristic(this.api.hap.Characteristic.Name, name);
+      const configuredName = Reflect.get(
+        this.api.hap.Characteristic as object,
+        "ConfiguredName",
+      );
+      if (configuredName) {
+        service.setCharacteristic(configuredName as never, name);
+      }
+    }
   }
 
   public getServices(): Service[] {

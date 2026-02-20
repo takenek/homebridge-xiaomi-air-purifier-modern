@@ -19,6 +19,8 @@ class FakeService {
   public readonly UUID: string;
   public readonly subtype: string | undefined;
   public updates: Array<{ characteristic: string; value: unknown }> = [];
+  public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
+    [];
   private readonly characteristics = new Map<string, FakeCharacteristic>();
 
   public constructor(
@@ -30,9 +32,10 @@ class FakeService {
   }
 
   public setCharacteristic(
-    _characteristic: { UUID: string },
-    _value: unknown,
+    characteristic: { UUID: string },
+    value: unknown,
   ): this {
+    this.setCalls.push({ characteristic: characteristic.UUID, value });
     return this;
   }
 
@@ -57,7 +60,7 @@ class FakeService {
   }
 }
 
-const makeApi = () => {
+const makeApi = (withConfiguredName = true) => {
   const events = new Map<string, Array<() => void>>();
   const api = {
     hap: {
@@ -97,6 +100,9 @@ const makeApi = () => {
         Manufacturer: { UUID: "manufacturer" },
         Model: { UUID: "model" },
         Name: { UUID: "name" },
+        ...(withConfiguredName
+          ? { ConfiguredName: { UUID: "configuredName" } }
+          : {}),
         SerialNumber: { UUID: "serial" },
         On: { UUID: "on" },
         AirQuality: { UUID: "airQuality" },
@@ -206,6 +212,19 @@ describe("AirPurifierAccessory switch contract", () => {
       "Switch:LED Night Mode",
       "Switch:Mode AUTO/NIGHT",
     ]);
+
+    for (const service of accessory.getServices()) {
+      const typed = service as unknown as FakeService;
+      if (!typed.name.startsWith("Switch:")) {
+        continue;
+      }
+      expect(
+        typed.setCalls.some((call) => call.characteristic === "name"),
+      ).toBe(true);
+      expect(
+        typed.setCalls.some((call) => call.characteristic === "configuredName"),
+      ).toBe(true);
+    }
 
     const modeService = accessory
       .getServices()
@@ -319,6 +338,41 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(modeService.updates.some((update) => update.value === false)).toBe(
       true,
     );
+  });
+
+  it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {
+    const api = makeApi(false);
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    const switchServices = accessory
+      .getServices()
+      .filter((service) =>
+        (service as unknown as FakeService).name.startsWith("Switch:"),
+      ) as unknown as FakeService[];
+
+    expect(
+      switchServices.every((service) =>
+        service.setCalls.some((call) => call.characteristic === "name"),
+      ),
+    ).toBe(true);
+    expect(
+      switchServices.some((service) =>
+        service.setCalls.some(
+          (call) => call.characteristic === "configuredName",
+        ),
+      ),
+    ).toBe(false);
   });
 
   it("logs initial connect failure", async () => {
