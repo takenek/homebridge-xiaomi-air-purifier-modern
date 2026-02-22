@@ -199,24 +199,3 @@ This codebase was created entirely with the help of AI.
 ## License
 
 MIT
-
-
-## Test matrix (network + status resilience)
-
-Automated Vitest scenarios cover:
-
-1. Purifier restart detection + state refresh without Homebridge restart.
-2. Router/Wi-Fi restart + reconnect and state resync.
-3. Packet loss/timeouts + retry/backoff without crashes/flapping.
-4. Homebridge restart bootstrap (initial state and switch set consistency).
-5. Plugin hot reload (shutdown/init lifecycle without timer leaks/duplicates).
-6. Short Wi-Fi outage (5-30s equivalent) with quick state restore.
-7. Long Wi-Fi outage (retries exhausted, process stable, full resync after return).
-8. Filter level drops to `4%` and `FilterChangeIndication` switches to `CHANGE_FILTER`.
-9. Filter replacement (`4% -> 100%`) and `FilterChangeIndication` returns to `FILTER_OK`.
-
-Run tests:
-
-```bash
-env -u npm_config_http_proxy -u npm_config_https_proxy npm test
-```
