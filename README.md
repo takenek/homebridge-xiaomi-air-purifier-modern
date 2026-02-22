@@ -136,7 +136,7 @@ Common methods:
 ### Filter life mapping
 
 - `FilterLifeLevel` = `filter1_life`
-- `FilterChangeIndication` = `CHANGE_FILTER` when `< 10%`, otherwise `FILTER_OK`
+- `FilterChangeIndication` = `CHANGE_FILTER` when `< filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
 
 ---
 
@@ -181,11 +181,11 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 
 ```bash
 export NODE_OPTIONS="--unhandled-rejections=strict --trace-warnings --trace-uncaught --throw-deprecation --pending-deprecation --trace-deprecation"
-npm ci
-npm run lint
-npm run typecheck
-npm test
-npm run build
+env -u npm_config_http_proxy -u npm_config_https_proxy npm ci
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck
+env -u npm_config_http_proxy -u npm_config_https_proxy npm test
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run build
 ```
 
 ---
@@ -212,9 +212,11 @@ Automated Vitest scenarios cover:
 5. Plugin hot reload (shutdown/init lifecycle without timer leaks/duplicates).
 6. Short Wi-Fi outage (5-30s equivalent) with quick state restore.
 7. Long Wi-Fi outage (retries exhausted, process stable, full resync after return).
+8. Filter level drops to `4%` and `FilterChangeIndication` switches to `CHANGE_FILTER`.
+9. Filter replacement (`4% -> 100%`) and `FilterChangeIndication` returns to `FILTER_OK`.
 
 Run tests:
 
 ```bash
-npm test
+env -u npm_config_http_proxy -u npm_config_https_proxy npm test
 ```

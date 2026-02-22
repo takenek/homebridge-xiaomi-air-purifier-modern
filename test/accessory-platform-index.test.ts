@@ -475,6 +475,46 @@ describe("AirPurifierAccessory switch contract", () => {
     ).toBe(true);
   });
 
+  it("toggles FilterChangeIndication when filter life crosses threshold", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    const filterService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "Filter:Filter Life",
+      ) as unknown as FakeService;
+
+    client.state = { ...baseState, filter1_life: 4 };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+
+    client.state = { ...baseState, filter1_life: 100 };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+
+    const indicationUpdates = filterService.updates.filter(
+      (update) => update.characteristic === "filterIndication",
+    );
+
+    expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
+  });
+
   it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {
     const api = makeApi(false);
     const logger = makeLogger();
@@ -603,6 +643,13 @@ describe("platform and index", () => {
     }).not.toThrow();
 
     expect(plugin?.getServices()).toBeInstanceOf(Array);
+    expect(
+      (
+        plugin as unknown as {
+          delegate: { filterChangeThreshold: number };
+        }
+      ).delegate.filterChangeThreshold,
+    ).toBe(10);
 
     expect(
       () =>
