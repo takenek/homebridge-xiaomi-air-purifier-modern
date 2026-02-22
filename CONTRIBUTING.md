@@ -7,10 +7,10 @@ Use Conventional Commits, e.g.:
 
 ## Local checks
 ```bash
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck
-env -u npm_config_http_proxy -u npm_config_https_proxy npm test
-env -u npm_config_http_proxy -u npm_config_https_proxy npm run build
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 ## PR process
