@@ -22,6 +22,7 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   operationTimeoutMs?: number;
   reconnectDelayMs?: number;
   keepAliveIntervalMs?: number;
+  exposeFilterReplaceAlertSensor?: boolean;
 };
 
 const assertString = (value: unknown, field: string): string => {
@@ -59,6 +60,14 @@ const normalizeTimeout = (
   return Math.max(minMs, Math.round(value));
 };
 
+const normalizeBoolean = (value: unknown, fallback: boolean): boolean => {
+  if (typeof value !== "boolean") {
+    return fallback;
+  }
+
+  return value;
+};
+
 export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
   private readonly delegate: AirPurifierAccessory;
 
@@ -92,6 +101,10 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       60_000,
       1_000,
     );
+    const exposeFilterReplaceAlertSensor = normalizeBoolean(
+      typedConfig.exposeFilterReplaceAlertSensor,
+      false,
+    );
 
     const transport = new ModernMiioTransport({
       address,
@@ -115,6 +128,7 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       client,
       model,
       filterChangeThreshold,
+      exposeFilterReplaceAlertSensor,
     );
   }
 

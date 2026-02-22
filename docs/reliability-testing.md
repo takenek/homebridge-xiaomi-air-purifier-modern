@@ -65,7 +65,7 @@ All scenarios below are covered by automated Vitest tests in `test/network-scena
 
 ## HomeKit filter visibility decision
 
-Tester feedback indicated that `FilterMaintenance` alone may not be visible in some Home app layouts for this accessory type. We implemented a second, explicit HomeKit signal:
+Tester feedback indicated that `FilterMaintenance` alone may not be visible in some Home app layouts for this accessory type. The plugin now offers an optional second, explicit HomeKit signal (disabled by default to avoid duplicate warning indicators in Homebridge UI):
 
 - `Filter Replace Alert` (`ContactSensor` service)
   - `CONTACT_DETECTED` when `filter1_life <= filterChangeThreshold`
@@ -74,4 +74,4 @@ Tester feedback indicated that `FilterMaintenance` alone may not be visible in s
 Alternative options considered:
 1. Keep only `FilterMaintenance` (cleanest model, but some Home app views hide it).
 2. Add a dedicated warning switch (always visible, but semantically wrong and can be user-toggled).
-3. Add a contact sensor (selected): always visible signal in HomeKit, read-only semantics, and no command path race risk.
+3. Add a contact sensor (implemented as optional): visible HomeKit signal, read-only semantics, and no command path race risk.

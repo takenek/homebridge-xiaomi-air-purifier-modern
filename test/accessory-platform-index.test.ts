@@ -498,6 +498,7 @@ describe("AirPurifierAccessory switch contract", () => {
       client as never,
       "zhimi.airpurifier.3h",
       10,
+      true,
     );
 
     const filterService = accessory
@@ -569,6 +570,7 @@ describe("AirPurifierAccessory switch contract", () => {
       client as never,
       "zhimi.airpurifier.3h",
       10,
+      true,
     );
 
     const filterService = accessory
@@ -631,6 +633,7 @@ describe("AirPurifierAccessory switch contract", () => {
       client as never,
       "zhimi.airpurifier.3h",
       10,
+      true,
     );
 
     const filterService = accessory
@@ -787,12 +790,42 @@ describe("platform and index", () => {
 
     expect(plugin?.getServices()).toBeInstanceOf(Array);
     expect(
+      plugin
+        ?.getServices()
+        .some(
+          (service) =>
+            (service as unknown as { name?: string }).name ===
+            "Contact:Filter Replace Alert",
+        ),
+    ).toBe(false);
+    expect(
       (
         plugin as unknown as {
           delegate: { filterChangeThreshold: number };
         }
       ).delegate.filterChangeThreshold,
     ).toBe(10);
+
+    const pluginWithAlert = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "AlertEnabled",
+        address: "1.1.1.4",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.3h",
+        exposeFilterReplaceAlertSensor: true,
+      } as never,
+      api as never,
+    );
+    expect(
+      pluginWithAlert
+        .getServices()
+        .some(
+          (service) =>
+            (service as unknown as { name?: string }).name ===
+            "Contact:Filter Replace Alert",
+        ),
+    ).toBe(true);
 
     expect(
       (
