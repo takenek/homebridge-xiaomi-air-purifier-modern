@@ -98,12 +98,22 @@
         "default": 60000,
         "minimum": 1000,
         "description": "Background keep-alive poll interval."
+      },
+      "exposeFilterReplaceAlertSensor": {
+        "title": "Expose Filter Replace Alert Sensor",
+        "type": "boolean",
+        "default": false,
+        "description": "Adds an extra Contact Sensor service for filter replacement warning. Keep disabled to avoid duplicate warning tiles in Homebridge UI."
       }
     }
   },
   "layout": [
-    { "key": "name" },
-    { "key": "model" },
+    {
+      "key": "name"
+    },
+    {
+      "key": "model"
+    },
     {
       "type": "flex",
       "flex-flow": "row wrap",
@@ -119,9 +129,15 @@
       "expandable": true,
       "expanded": true,
       "items": [
-        { "key": "enableAirQuality" },
-        { "key": "enableTemperature" },
-        { "key": "enableHumidity" }
+        {
+          "key": "enableAirQuality"
+        },
+        {
+          "key": "enableTemperature"
+        },
+        {
+          "key": "enableHumidity"
+        }
       ]
     },
     {
@@ -130,13 +146,30 @@
       "expandable": true,
       "expanded": false,
       "items": [
-        { "key": "filterChangeThreshold" },
-        { "key": "enableFanSpeedControl" },
-        { "key": "enableChildLockControl" },
-        { "key": "connectTimeoutMs" },
-        { "key": "operationTimeoutMs" },
-        { "key": "reconnectDelayMs" },
-        { "key": "keepAliveIntervalMs" }
+        {
+          "key": "filterChangeThreshold"
+        },
+        {
+          "key": "exposeFilterReplaceAlertSensor"
+        },
+        {
+          "key": "enableFanSpeedControl"
+        },
+        {
+          "key": "enableChildLockControl"
+        },
+        {
+          "key": "connectTimeoutMs"
+        },
+        {
+          "key": "operationTimeoutMs"
+        },
+        {
+          "key": "reconnectDelayMs"
+        },
+        {
+          "key": "keepAliveIntervalMs"
+        }
       ]
     }
   ]

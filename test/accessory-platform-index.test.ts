@@ -121,6 +121,11 @@ const makeApi = (withConfiguredName = true) => {
             super(`Filter:${name}`);
           }
         },
+        ContactSensor: class extends FakeService {
+          public constructor(name: string, subtype?: string) {
+            super(`Contact:${name}`, subtype);
+          }
+        },
       },
       Characteristic: {
         Manufacturer: { UUID: "manufacturer" },
@@ -139,6 +144,11 @@ const makeApi = (withConfiguredName = true) => {
           UUID: "filterIndication",
           CHANGE_FILTER: 1,
           FILTER_OK: 0,
+        },
+        ContactSensorState: {
+          UUID: "contactState",
+          CONTACT_NOT_DETECTED: 0,
+          CONTACT_DETECTED: 1,
         },
       },
     },
@@ -488,6 +498,7 @@ describe("AirPurifierAccessory switch contract", () => {
       client as never,
       "zhimi.airpurifier.3h",
       10,
+      true,
     );
 
     const filterService = accessory
@@ -510,9 +521,93 @@ describe("AirPurifierAccessory switch contract", () => {
     const indicationUpdates = filterService.updates.filter(
       (update) => update.characteristic === "filterIndication",
     );
+    const alertService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Contact:Filter Replace Alert",
+      ) as unknown as FakeService;
+    const contactUpdates = alertService.updates.filter(
+      (update) => update.characteristic === "contactState",
+    );
 
     expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
     expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
+  });
+
+  it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
+    const api = makeApi();
+    const filterCharacteristic = (
+      api as unknown as {
+        hap: {
+          Characteristic: { FilterChangeIndication: Record<string, unknown> };
+        };
+      }
+    ).hap.Characteristic.FilterChangeIndication;
+    delete filterCharacteristic.CHANGE_FILTER;
+    delete filterCharacteristic.FILTER_OK;
+    const contactCharacteristic = (
+      api as unknown as {
+        hap: {
+          Characteristic: { ContactSensorState: Record<string, unknown> };
+        };
+      }
+    ).hap.Characteristic.ContactSensorState;
+    delete contactCharacteristic.CONTACT_DETECTED;
+    delete contactCharacteristic.CONTACT_NOT_DETECTED;
+
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      true,
+    );
+
+    const filterService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "Filter:Filter Life",
+      ) as unknown as FakeService;
+
+    client.state = { ...baseState, filter1_life: 5 };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+
+    client.state = { ...baseState, filter1_life: 100 };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+
+    const indicationUpdates = filterService.updates.filter(
+      (update) => update.characteristic === "filterIndication",
+    );
+    const alertService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Contact:Filter Replace Alert",
+      ) as unknown as FakeService;
+    const contactUpdates = alertService.updates.filter(
+      (update) => update.characteristic === "contactState",
+    );
+
+    expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
   it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
@@ -538,56 +633,7 @@ describe("AirPurifierAccessory switch contract", () => {
       client as never,
       "zhimi.airpurifier.3h",
       10,
-    );
-
-    const filterService = accessory
-      .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Filter:Filter Life",
-      ) as unknown as FakeService;
-
-    client.state = { ...baseState, filter1_life: 5 };
-    for (const listener of client.listeners) {
-      listener(client.state);
-    }
-
-    client.state = { ...baseState, filter1_life: 100 };
-    for (const listener of client.listeners) {
-      listener(client.state);
-    }
-
-    const indicationUpdates = filterService.updates.filter(
-      (update) => update.characteristic === "filterIndication",
-    );
-
-    expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
-    expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
-  });
-
-  it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
-    const api = makeApi();
-    const filterCharacteristic = (
-      api as unknown as {
-        hap: {
-          Characteristic: { FilterChangeIndication: Record<string, unknown> };
-        };
-      }
-    ).hap.Characteristic.FilterChangeIndication;
-    delete filterCharacteristic.CHANGE_FILTER;
-    delete filterCharacteristic.FILTER_OK;
-
-    const logger = makeLogger();
-    const client = new FakeClient();
-
-    const accessory = new AirPurifierAccessory(
-      api as never,
-      logger as never,
-      "Office",
-      "10.0.0.1",
-      client as never,
-      "zhimi.airpurifier.3h",
-      10,
+      true,
     );
 
     const filterService = accessory
@@ -744,12 +790,42 @@ describe("platform and index", () => {
 
     expect(plugin?.getServices()).toBeInstanceOf(Array);
     expect(
+      plugin
+        ?.getServices()
+        .some(
+          (service) =>
+            (service as unknown as { name?: string }).name ===
+            "Contact:Filter Replace Alert",
+        ),
+    ).toBe(false);
+    expect(
       (
         plugin as unknown as {
           delegate: { filterChangeThreshold: number };
         }
       ).delegate.filterChangeThreshold,
     ).toBe(10);
+
+    const pluginWithAlert = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "AlertEnabled",
+        address: "1.1.1.4",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.3h",
+        exposeFilterReplaceAlertSensor: true,
+      } as never,
+      api as never,
+    );
+    expect(
+      pluginWithAlert
+        .getServices()
+        .some(
+          (service) =>
+            (service as unknown as { name?: string }).name ===
+            "Contact:Filter Replace Alert",
+        ),
+    ).toBe(true);
 
     expect(
       (

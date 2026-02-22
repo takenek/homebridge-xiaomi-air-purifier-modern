@@ -25,6 +25,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly modeAutoService: Service;
   private readonly modeNightService: Service;
   private readonly filterService: Service;
+  private readonly filterAlertService: Service | null;
   private readonly characteristicCache = new Map<string, CharacteristicValue>();
 
   public constructor(
@@ -35,6 +36,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly client: DeviceClient,
     model: string,
     private readonly filterChangeThreshold: number,
+    private readonly exposeFilterReplaceAlertSensor = false,
   ) {
     this.informationService = new this.api.hap.Service.AccessoryInformation()
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Xiaomi")
@@ -68,6 +70,12 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     this.filterService = new this.api.hap.Service.FilterMaintenance(
       "Filter Life",
     );
+    this.filterAlertService = this.exposeFilterReplaceAlertSensor
+      ? new this.api.hap.Service.ContactSensor(
+          "Filter Replace Alert",
+          "filter_replace_alert",
+        )
+      : null;
 
     this.applyServiceNames();
 
@@ -102,6 +110,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       { service: this.modeAutoService, name: "Mode AUTO ON/OFF" },
       { service: this.modeNightService, name: "Mode NIGHT ON/OFF" },
       { service: this.filterService, name: "Filter Life" },
+      ...(this.filterAlertService
+        ? [{ service: this.filterAlertService, name: "Filter Replace Alert" }]
+        : []),
     ];
 
     for (const { service, name } of namedServices) {
@@ -128,6 +139,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.modeAutoService,
       this.modeNightService,
       this.filterService,
+      ...(this.filterAlertService ? [this.filterAlertService] : []),
     ];
   }
 
@@ -259,6 +271,29 @@ export class AirPurifierAccessory implements AccessoryPlugin {
           ? filterOkIndication
           : 0,
     );
+
+    if (this.filterAlertService) {
+      const contactDetected = Reflect.get(
+        this.api.hap.Characteristic.ContactSensorState as object,
+        "CONTACT_DETECTED",
+      );
+      const contactNotDetected = Reflect.get(
+        this.api.hap.Characteristic.ContactSensorState as object,
+        "CONTACT_NOT_DETECTED",
+      );
+
+      this.updateCharacteristicIfNeeded(
+        this.filterAlertService,
+        this.api.hap.Characteristic.ContactSensorState,
+        state.filter1_life <= this.filterChangeThreshold
+          ? typeof contactDetected === "number"
+            ? contactDetected
+            : 1
+          : typeof contactNotDetected === "number"
+            ? contactNotDetected
+            : 0,
+      );
+    }
   }
 
   private logConnectionEvent(event: ConnectionStateEvent): void {

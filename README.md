@@ -84,6 +84,7 @@ Each purifier is configured as a separate accessory entry:
 | `token` | string | Yes | 32-character hex token |
 | `model` | string | Yes | Xiaomi model identifier |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
+| `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
 | `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
 | `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
@@ -130,7 +131,7 @@ Common methods:
 
 ### Mode switch (AUTO/NIGHT)
 
-- One switch only: `ON => auto`, `OFF => sleep`.
+- Separate switches are exposed: `Mode AUTO ON/OFF` and `Mode NIGHT ON/OFF`.
 - When `Power` is OFF, mode writes are intentionally rejected by plugin logic (`onSet` ignored and switch state refreshed from device); in HomeKit this behaves as non-accepting/unavailable control.
 - Polling and write-after-read sync keep HomeKit, plugin state, and device state consistent.
 
@@ -138,8 +139,9 @@ Common methods:
 
 - `FilterLifeLevel` = `filter1_life`
 - `FilterChangeIndication` = `CHANGE_FILTER` when `<= filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
+- Optional: `ContactSensorState` on `Filter Replace Alert` = `CONTACT_DETECTED` when replacement is needed, otherwise `CONTACT_NOT_DETECTED` (only when `exposeFilterReplaceAlertSensor: true`)
 
-Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
+Default behavior keeps only `FilterMaintenance` to avoid duplicate warning presentation in Homebridge. Enable `exposeFilterReplaceAlertSensor` only if your Home app does not surface filter maintenance status.
 
 Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
 
