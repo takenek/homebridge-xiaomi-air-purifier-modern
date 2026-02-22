@@ -34,7 +34,7 @@ const assertString = (value: unknown, field: string): string => {
 
 const normalizeThreshold = (value: unknown): number => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return 5;
+    return 10;
   }
 
   return Math.max(0, Math.min(100, Math.round(value)));
