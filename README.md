@@ -61,6 +61,10 @@ Each purifier is configured as a separate accessory entry:
     "address": "10.10.1.17",
     "token": "00112233445566778899aabbccddeeff",
     "model": "zhimi.airpurifier.3h",
+    "connectTimeoutMs": 15000,
+    "operationTimeoutMs": 15000,
+    "reconnectDelayMs": 15000,
+    "keepAliveIntervalMs": 60000,
     "_bridge": {
       "name": "Xiaomi Mi Air Purifier HUB",
       "username": "11:22:33:44:55:66",
@@ -79,6 +83,10 @@ Each purifier is configured as a separate accessory entry:
 | `address` | string | Yes | LAN IP address |
 | `token` | string | Yes | 32-character hex token |
 | `model` | string | Yes | Xiaomi model identifier |
+| `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
+| `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
+| `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
+| `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`) |
 | `_bridge` | object | No | Optional child bridge configuration |
 
 ### Known model strings
@@ -139,10 +147,12 @@ Common methods:
 - Exponential backoff with jitter on reconnect attempts
 - Timers are cleaned on Homebridge shutdown
 
-The accessory also logs successful first connection per device, for example:
+The accessory logs connection lifecycle events per device:
 
 ```text
 [Office Purifier] Connected to "Office Purifier" @ 10.10.1.17!
+[Office Purifier] Disconnected from "Office Purifier" @ 10.10.1.17 (code ETIMEDOUT): MIIO timeout after 15000ms
+[Office Purifier] Reconnected to "Office Purifier" @ 10.10.1.17.
 ```
 
 ---
@@ -206,5 +216,5 @@ Automated Vitest scenarios cover:
 Run tests:
 
 ```bash
-./node_modules/.bin/vitest run --coverage
+npm test
 ```

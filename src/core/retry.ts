@@ -25,6 +25,7 @@ export const computeBackoffDelay = (
 };
 
 export const RETRYABLE_ERROR_CODES = new Set<string>([
+  "EDEVICEUNAVAILABLE",
   "ETIMEDOUT",
   "ESOCKETTIMEDOUT",
   "ECONNRESET",

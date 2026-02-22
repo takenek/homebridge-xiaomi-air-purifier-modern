@@ -107,10 +107,13 @@ describe("device client uncovered branches", () => {
     });
 
     const listener = vi.fn();
+    const connectionListener = vi.fn();
     client.onStateUpdate(listener);
+    client.onConnectionEvent(connectionListener);
 
     await client.init();
     expect(listener).toHaveBeenCalledWith(state);
+    expect(connectionListener).toHaveBeenCalledWith({ state: "connected" });
 
     await client.shutdown();
   });
@@ -225,6 +228,48 @@ describe("device client uncovered branches", () => {
       expect.stringContaining("[operation] poll failed: poll-error"),
     );
 
+    await client.shutdown();
+  });
+
+  it("emits reconnect and protects connection listeners", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+      retryPolicy: {
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+        maxRetries: 3,
+        jitterFactor: 0,
+      },
+    });
+
+    const events: string[] = [];
+    client.onConnectionEvent((event) => {
+      events.push(event.state);
+    });
+    client.onConnectionEvent(() => {
+      throw new Error("connection-listener-broke");
+    });
+    client.onConnectionEvent(() => {
+      throw "connection-listener-raw";
+    });
+
+    await client.init();
+    transport.retryableFailuresRemaining = 1;
+
+    const setPromise = client.setPower(true);
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(setPromise).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Connection listener failed: connection-listener-broke",
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Connection listener failed: Unknown connection listener error",
+    );
+    expect(events).toEqual(["connected", "disconnected", "reconnected"]);
     await client.shutdown();
   });
 

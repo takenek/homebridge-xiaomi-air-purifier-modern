@@ -189,9 +189,19 @@ const baseState = {
 class FakeClient {
   public state: typeof baseState | null = { ...baseState };
   public readonly listeners: Array<(state: typeof baseState) => void> = [];
+  public readonly connectionListeners: Array<
+    (event: { state: "connected" | "disconnected" | "reconnected" }) => void
+  > = [];
   public readonly calls: string[] = [];
   public onStateUpdate(listener: (state: typeof baseState) => void): void {
     this.listeners.push(listener);
+  }
+  public onConnectionEvent(
+    listener: (event: {
+      state: "connected" | "disconnected" | "reconnected";
+    }) => void,
+  ): void {
+    this.connectionListeners.push(listener);
   }
   public async init(): Promise<void> {}
   public async shutdown(): Promise<void> {
@@ -401,6 +411,9 @@ describe("AirPurifierAccessory switch contract", () => {
     }
 
     client.state = { ...baseState, power: true, mode: "auto" };
+    for (const listener of client.connectionListeners) {
+      listener({ state: "connected" });
+    }
     for (const listener of client.listeners) {
       listener(client.state);
     }
@@ -425,6 +438,20 @@ describe("AirPurifierAccessory switch contract", () => {
 
     expect(logger.info).toHaveBeenCalledWith(
       'Connected to "Office" @ 10.0.0.1!',
+    );
+
+    for (const listener of client.connectionListeners) {
+      listener({ state: "disconnected" });
+    }
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Disconnected from "Office" @ 10.0.0.1 (code UNKNOWN): Unknown error',
+    );
+
+    for (const listener of client.connectionListeners) {
+      listener({ state: "reconnected" });
+    }
+    expect(logger.info).toHaveBeenCalledWith(
+      'Reconnected to "Office" @ 10.0.0.1.',
     );
 
     expect(
@@ -587,6 +614,10 @@ describe("platform and index", () => {
             token: "00112233445566778899aabbccddeeff",
             model: "zhimi.airpurifier.3h",
             filterChangeThreshold: 42.4,
+            connectTimeoutMs: 50.4,
+            operationTimeoutMs: 80.2,
+            reconnectDelayMs: 99.9,
+            keepAliveIntervalMs: 500,
           } as never,
           api as never,
         ),

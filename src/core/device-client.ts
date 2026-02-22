@@ -21,23 +21,36 @@ export interface Logger {
 export interface DeviceClientOptions {
   operationPollIntervalMs?: number;
   sensorPollIntervalMs?: number;
+  keepAliveIntervalMs?: number;
   retryPolicy?: RetryPolicy;
   randomFn?: () => number;
 }
 
+export type ConnectionStateEvent = {
+  state: "connected" | "disconnected" | "reconnected";
+  code?: string;
+  message?: string;
+};
+
 export class DeviceClient {
   private readonly operationPollIntervalMs: number;
   private readonly sensorPollIntervalMs: number;
+  private readonly keepAliveIntervalMs: number;
   private readonly retryPolicy: RetryPolicy;
   private readonly randomFn: () => number;
   private operationTimer: NodeJS.Timeout | undefined;
   private sensorTimer: NodeJS.Timeout | undefined;
+  private keepAliveTimer: NodeJS.Timeout | undefined;
   private retryTimer: NodeJS.Timeout | undefined;
   private retryDelayResolve: (() => void) | undefined;
   private destroyed = false;
   private currentState: DeviceState | null = null;
   private listeners: Array<(state: DeviceState) => void> = [];
+  private connectionListeners: Array<(event: ConnectionStateEvent) => void> =
+    [];
   private operationQueue: Promise<void> = Promise.resolve();
+  private hasConnected = false;
+  private disconnected = false;
 
   private logSuppressedQueueError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
@@ -53,6 +66,7 @@ export class DeviceClient {
   ) {
     this.operationPollIntervalMs = options.operationPollIntervalMs ?? 10_000;
     this.sensorPollIntervalMs = options.sensorPollIntervalMs ?? 30_000;
+    this.keepAliveIntervalMs = options.keepAliveIntervalMs ?? 60_000;
     this.retryPolicy = options.retryPolicy ?? DEFAULT_RETRY_POLICY;
     this.randomFn = options.randomFn ?? Math.random;
   }
@@ -63,6 +77,12 @@ export class DeviceClient {
 
   public onStateUpdate(listener: (state: DeviceState) => void): void {
     this.listeners.push(listener);
+  }
+
+  public onConnectionEvent(
+    listener: (event: ConnectionStateEvent) => void,
+  ): void {
+    this.connectionListeners.push(listener);
   }
 
   public async init(): Promise<void> {
@@ -124,9 +144,13 @@ export class DeviceClient {
     this.sensorTimer = setInterval(() => {
       this.safePoll("sensor");
     }, this.sensorPollIntervalMs);
+
+    this.keepAliveTimer = setInterval(() => {
+      this.safePoll("keepalive");
+    }, this.keepAliveIntervalMs);
   }
 
-  private safePoll(channel: "operation" | "sensor"): void {
+  private safePoll(channel: "operation" | "sensor" | "keepalive"): void {
     void this.enqueueOperation(async () => {
       await this.pollWithRetry();
     }).catch((error: unknown) => {
@@ -178,6 +202,16 @@ export class DeviceClient {
             `Recovered device connection after ${attempt} retries.`,
           );
         }
+
+        if (!this.hasConnected) {
+          this.hasConnected = true;
+          this.disconnected = false;
+          this.emitConnectionEvent({ state: "connected" });
+        } else if (this.disconnected) {
+          this.disconnected = false;
+          this.emitConnectionEvent({ state: "reconnected" });
+        }
+
         return;
       } catch (error: unknown) {
         attempt += 1;
@@ -190,6 +224,11 @@ export class DeviceClient {
         this.logger.warn(
           `Device read failed (attempt ${attempt}, code ${code}): ${message}`,
         );
+
+        if (this.hasConnected && !this.disconnected) {
+          this.disconnected = true;
+          this.emitConnectionEvent({ state: "disconnected", code, message });
+        }
 
         if (!isRetryableError(error) || attempt > this.retryPolicy.maxRetries) {
           throw error;
@@ -230,6 +269,10 @@ export class DeviceClient {
       clearInterval(this.sensorTimer);
     }
 
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+    }
+
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = undefined;
@@ -239,6 +282,20 @@ export class DeviceClient {
       const resolve = this.retryDelayResolve;
       this.retryDelayResolve = undefined;
       resolve();
+    }
+  }
+
+  private emitConnectionEvent(event: ConnectionStateEvent): void {
+    for (const listener of this.connectionListeners) {
+      try {
+        listener(event);
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unknown connection listener error";
+        this.logger.warn(`Connection listener failed: ${message}`);
+      }
     }
   }
 }
