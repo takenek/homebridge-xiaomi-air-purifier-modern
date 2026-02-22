@@ -239,12 +239,25 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.api.hap.Characteristic.FilterLifeLevel,
       state.filter1_life,
     );
+    const filterChangeIndication = Reflect.get(
+      this.api.hap.Characteristic.FilterChangeIndication as object,
+      "CHANGE_FILTER",
+    );
+    const filterOkIndication = Reflect.get(
+      this.api.hap.Characteristic.FilterChangeIndication as object,
+      "FILTER_OK",
+    );
+
     this.updateCharacteristicIfNeeded(
       this.filterService,
       this.api.hap.Characteristic.FilterChangeIndication,
       state.filter1_life < this.filterChangeThreshold
-        ? this.api.hap.Characteristic.FilterChangeIndication.CHANGE_FILTER
-        : this.api.hap.Characteristic.FilterChangeIndication.FILTER_OK,
+        ? typeof filterChangeIndication === "number"
+          ? filterChangeIndication
+          : 1
+        : typeof filterOkIndication === "number"
+          ? filterOkIndication
+          : 0,
     );
   }
 
