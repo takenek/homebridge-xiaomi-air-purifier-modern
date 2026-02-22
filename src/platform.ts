@@ -33,11 +33,18 @@ const assertString = (value: unknown, field: string): string => {
 };
 
 const normalizeThreshold = (value: unknown): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
     return 10;
   }
 
-  return Math.max(0, Math.min(100, Math.round(value)));
+  return Math.max(0, Math.min(100, Math.round(numericValue)));
 };
 
 const normalizeTimeout = (
