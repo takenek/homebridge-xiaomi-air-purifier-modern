@@ -54,10 +54,10 @@
       "filterChangeThreshold": {
         "title": "Filter Change Warning Threshold",
         "type": "integer",
-        "default": 5,
+        "default": 10,
         "minimum": 0,
         "maximum": 100,
-        "description": "Show <b>Change Filter</b> warning once Filter Life reaches this value."
+        "description": "Show <b>Change Filter</b> warning when Filter Life drops below this value."
       },
       "enableFanSpeedControl": {
         "title": "Fan Speed",
