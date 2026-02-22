@@ -181,11 +181,11 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 
 ```bash
 export NODE_OPTIONS="--unhandled-rejections=strict --trace-warnings --trace-uncaught --throw-deprecation --pending-deprecation --trace-deprecation"
-npm ci
-npm run lint
-npm run typecheck
-npm test
-npm run build
+env -u npm_config_http_proxy -u npm_config_https_proxy npm ci
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck
+env -u npm_config_http_proxy -u npm_config_https_proxy npm test
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run build
 ```
 
 ---
