@@ -30,7 +30,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 50,
+      connectTimeoutMs: 50,
+      operationTimeoutMs: 50,
     });
 
     const retryableError = Object.assign(new Error("network timeout"), {
@@ -66,7 +67,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 50,
+      connectTimeoutMs: 50,
+      operationTimeoutMs: 50,
     });
 
     await expect(transport.close()).resolves.toBeUndefined();
@@ -78,7 +80,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 50,
+      connectTimeoutMs: 50,
+      operationTimeoutMs: 50,
     });
 
     const retryableError = Object.assign(new Error("temporary wifi loss"), {
@@ -112,7 +115,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 50,
+      connectTimeoutMs: 50,
+      operationTimeoutMs: 50,
     });
 
     const retryableError = Object.assign(new Error("router restart"), {
@@ -154,7 +158,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 5_000,
+      connectTimeoutMs: 5_000,
+      operationTimeoutMs: 5_000,
     });
 
     const fakeSocket = new FakeSocket();
@@ -209,7 +214,8 @@ describe("ModernMiioTransport reliability", () => {
       address: "127.0.0.1",
       token: "00112233445566778899aabbccddeeff",
       model: "zhimi.airpurifier.ma4",
-      timeoutMs: 50,
+      connectTimeoutMs: 50,
+      operationTimeoutMs: 50,
     });
     const transportInternals = transport as unknown as {
       call: (method: string, params: readonly unknown[]) => Promise<unknown>;
@@ -245,7 +251,8 @@ it("uses MIOT batch read to minimize round-trips", async () => {
     address: "127.0.0.1",
     token: "00112233445566778899aabbccddeeff",
     model: "zhimi.airpurifier.pro",
-    timeoutMs: 50,
+    connectTimeoutMs: 50,
+    operationTimeoutMs: 50,
   });
 
   const transportInternals = transport as unknown as {
@@ -324,7 +331,8 @@ it("falls back to per-property MIOT reads when batch query is unsupported", asyn
     address: "127.0.0.1",
     token: "00112233445566778899aabbccddeeff",
     model: "zhimi.airpurifier.pro",
-    timeoutMs: 50,
+    connectTimeoutMs: 50,
+    operationTimeoutMs: 50,
   });
 
   const transportInternals = transport as unknown as {

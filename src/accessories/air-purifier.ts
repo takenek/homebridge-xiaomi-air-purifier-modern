@@ -5,7 +5,7 @@ import type {
   Logging,
   Service,
 } from "homebridge";
-import type { DeviceClient } from "../core/device-client";
+import type { ConnectionStateEvent, DeviceClient } from "../core/device-client";
 import { aqiToHomeKitAirQuality } from "../core/mappers";
 import {
   isAutoModeSwitchOn,
@@ -26,7 +26,6 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly modeNightService: Service;
   private readonly filterService: Service;
   private readonly characteristicCache = new Map<string, CharacteristicValue>();
-  private connectedLogged = false;
 
   public constructor(
     private readonly api: API,
@@ -74,6 +73,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
 
     this.bindHandlers();
     this.client.onStateUpdate(() => this.refreshCharacteristics());
+    this.client.onConnectionEvent((event) => this.logConnectionEvent(event));
     void this.client
       .init()
       .then(() => this.refreshCharacteristics())
@@ -191,11 +191,6 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       return;
     }
 
-    if (!this.connectedLogged) {
-      this.connectedLogged = true;
-      this.log.info(`Connected to "${this.name}" @ ${this.address}!`);
-    }
-
     this.updateCharacteristicIfNeeded(
       this.powerService,
       this.api.hap.Characteristic.On,
@@ -250,6 +245,22 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       state.filter1_life < this.filterChangeThreshold
         ? this.api.hap.Characteristic.FilterChangeIndication.CHANGE_FILTER
         : this.api.hap.Characteristic.FilterChangeIndication.FILTER_OK,
+    );
+  }
+
+  private logConnectionEvent(event: ConnectionStateEvent): void {
+    if (event.state === "connected") {
+      this.log.info(`Connected to "${this.name}" @ ${this.address}!`);
+      return;
+    }
+
+    if (event.state === "reconnected") {
+      this.log.info(`Reconnected to "${this.name}" @ ${this.address}.`);
+      return;
+    }
+
+    this.log.warn(
+      `Disconnected from "${this.name}" @ ${this.address} (code ${event.code ?? "UNKNOWN"}): ${event.message ?? "Unknown error"}`,
     );
   }
 

@@ -70,6 +70,34 @@
         "type": "boolean",
         "default": false,
         "description": "Allows you to lock/unlock the physical control."
+      },
+      "connectTimeoutMs": {
+        "title": "Connect Timeout (ms)",
+        "type": "integer",
+        "default": 15000,
+        "minimum": 100,
+        "description": "Timeout for MIIO handshake/connect operations."
+      },
+      "operationTimeoutMs": {
+        "title": "Operation Timeout (ms)",
+        "type": "integer",
+        "default": 15000,
+        "minimum": 100,
+        "description": "Timeout for read/write operations after connection."
+      },
+      "reconnectDelayMs": {
+        "title": "Reconnect Delay (ms)",
+        "type": "integer",
+        "default": 15000,
+        "minimum": 100,
+        "description": "Base delay used by reconnect backoff policy."
+      },
+      "keepAliveIntervalMs": {
+        "title": "Keep Alive Interval (ms)",
+        "type": "integer",
+        "default": 60000,
+        "minimum": 1000,
+        "description": "Background keep-alive poll interval."
       }
     }
   },
@@ -104,7 +132,11 @@
       "items": [
         { "key": "filterChangeThreshold" },
         { "key": "enableFanSpeedControl" },
-        { "key": "enableChildLockControl" }
+        { "key": "enableChildLockControl" },
+        { "key": "connectTimeoutMs" },
+        { "key": "operationTimeoutMs" },
+        { "key": "reconnectDelayMs" },
+        { "key": "keepAliveIntervalMs" }
       ]
     }
   ]

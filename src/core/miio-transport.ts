@@ -7,7 +7,8 @@ export interface MiioTransportOptions {
   address: string;
   token: string;
   model: string;
-  timeoutMs?: number;
+  connectTimeoutMs?: number;
+  operationTimeoutMs?: number;
 }
 
 interface MiioSession {
@@ -139,8 +140,17 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   purify_volume: ["purify_volume"],
 };
 
+const corePropertiesUnavailableError = (): Error => {
+  const error = new Error(
+    "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
+  );
+  Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
+  return error;
+};
+
 export class ModernMiioTransport implements MiioTransport {
-  private readonly timeoutMs: number;
+  private readonly connectTimeoutMs: number;
+  private readonly operationTimeoutMs: number;
   private readonly token: Buffer;
   private readonly key: Buffer;
   private readonly iv: Buffer;
@@ -162,7 +172,8 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   public constructor(private readonly options: MiioTransportOptions) {
-    this.timeoutMs = options.timeoutMs ?? 5_000;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? 15_000;
+    this.operationTimeoutMs = options.operationTimeoutMs ?? 15_000;
     this.token = Buffer.from(options.token, "hex");
     if (this.token.length !== 16) {
       throw new Error("Token must be a 32-char hex string.");
@@ -393,9 +404,7 @@ export class ModernMiioTransport implements MiioTransport {
       fanLevelRaw === undefined &&
       modeRaw === undefined
     ) {
-      throw new Error(
-        "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
-      );
+      throw corePropertiesUnavailableError();
     }
 
     return {
@@ -567,7 +576,9 @@ export class ModernMiioTransport implements MiioTransport {
     packet.writeUInt16BE(MIIO_MAGIC, 0);
     packet.writeUInt16BE(32, 2);
 
-    const response = await this.sendAndReceive(packet, false);
+    const response = await this.sendAndReceive(packet, false, undefined, {
+      timeoutMs: this.connectTimeoutMs,
+    });
     if (response.length < 32) {
       throw new Error("Invalid handshake response from device.");
     }
@@ -617,6 +628,7 @@ export class ModernMiioTransport implements MiioTransport {
       Buffer.concat([header, encrypted]),
       true,
       requestId,
+      { timeoutMs: this.operationTimeoutMs },
     );
     if (response.length < 32) {
       throw new Error("Invalid MIIO command response.");
@@ -656,6 +668,7 @@ export class ModernMiioTransport implements MiioTransport {
     packet: Buffer,
     expectEncrypted: boolean,
     expectedResponseId?: number,
+    options: { timeoutMs: number } = { timeoutMs: this.operationTimeoutMs },
   ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       const cleanup = () => {
@@ -666,10 +679,10 @@ export class ModernMiioTransport implements MiioTransport {
 
       const timeout = setTimeout(() => {
         cleanup();
-        const error = new Error(`MIIO timeout after ${this.timeoutMs}ms`);
+        const error = new Error(`MIIO timeout after ${options.timeoutMs}ms`);
         Reflect.set(error, "code", "ETIMEDOUT");
         reject(error);
-      }, this.timeoutMs);
+      }, options.timeoutMs);
 
       const onMessage = (message: Buffer) => {
         if (message.length < 16) {

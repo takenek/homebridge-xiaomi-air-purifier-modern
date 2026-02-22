@@ -7,6 +7,7 @@ import type {
 import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
+import { DEFAULT_RETRY_POLICY } from "./core/retry";
 import type { AirPurifierModel } from "./core/types";
 
 export const ACCESSORY_NAME = "XiaomiMiAirPurifier";
@@ -17,6 +18,10 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   token?: string;
   model?: AirPurifierModel;
   filterChangeThreshold?: number;
+  connectTimeoutMs?: number;
+  operationTimeoutMs?: number;
+  reconnectDelayMs?: number;
+  keepAliveIntervalMs?: number;
 };
 
 const assertString = (value: unknown, field: string): string => {
@@ -35,6 +40,18 @@ const normalizeThreshold = (value: unknown): number => {
   return Math.max(0, Math.min(100, Math.round(value)));
 };
 
+const normalizeTimeout = (
+  value: unknown,
+  fallbackMs: number,
+  minMs = 100,
+): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallbackMs;
+  }
+
+  return Math.max(minMs, Math.round(value));
+};
+
 export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
   private readonly delegate: AirPurifierAccessory;
 
@@ -51,13 +68,38 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const filterChangeThreshold = normalizeThreshold(
       typedConfig.filterChangeThreshold,
     );
+    const connectTimeoutMs = normalizeTimeout(
+      typedConfig.connectTimeoutMs,
+      15_000,
+    );
+    const operationTimeoutMs = normalizeTimeout(
+      typedConfig.operationTimeoutMs,
+      15_000,
+    );
+    const reconnectDelayMs = normalizeTimeout(
+      typedConfig.reconnectDelayMs,
+      15_000,
+    );
+    const keepAliveIntervalMs = normalizeTimeout(
+      typedConfig.keepAliveIntervalMs,
+      60_000,
+      1_000,
+    );
 
     const transport = new ModernMiioTransport({
       address,
       token,
       model,
+      connectTimeoutMs,
+      operationTimeoutMs,
     });
-    const client = new DeviceClient(transport, this.log);
+    const client = new DeviceClient(transport, this.log, {
+      keepAliveIntervalMs,
+      retryPolicy: {
+        ...DEFAULT_RETRY_POLICY,
+        baseDelayMs: reconnectDelayMs,
+      },
+    });
     this.delegate = new AirPurifierAccessory(
       this.api,
       this.log,
