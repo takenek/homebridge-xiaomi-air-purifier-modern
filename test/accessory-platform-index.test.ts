@@ -121,6 +121,11 @@ const makeApi = (withConfiguredName = true) => {
             super(`Filter:${name}`);
           }
         },
+        ContactSensor: class extends FakeService {
+          public constructor(name: string, subtype?: string) {
+            super(`Contact:${name}`, subtype);
+          }
+        },
       },
       Characteristic: {
         Manufacturer: { UUID: "manufacturer" },
@@ -139,6 +144,11 @@ const makeApi = (withConfiguredName = true) => {
           UUID: "filterIndication",
           CHANGE_FILTER: 1,
           FILTER_OK: 0,
+        },
+        ContactSensorState: {
+          UUID: "contactState",
+          CONTACT_NOT_DETECTED: 0,
+          CONTACT_DETECTED: 1,
         },
       },
     },
@@ -510,9 +520,21 @@ describe("AirPurifierAccessory switch contract", () => {
     const indicationUpdates = filterService.updates.filter(
       (update) => update.characteristic === "filterIndication",
     );
+    const alertService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Contact:Filter Replace Alert",
+      ) as unknown as FakeService;
+    const contactUpdates = alertService.updates.filter(
+      (update) => update.characteristic === "contactState",
+    );
 
     expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
     expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
   it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
@@ -526,6 +548,15 @@ describe("AirPurifierAccessory switch contract", () => {
     ).hap.Characteristic.FilterChangeIndication;
     delete filterCharacteristic.CHANGE_FILTER;
     delete filterCharacteristic.FILTER_OK;
+    const contactCharacteristic = (
+      api as unknown as {
+        hap: {
+          Characteristic: { ContactSensorState: Record<string, unknown> };
+        };
+      }
+    ).hap.Characteristic.ContactSensorState;
+    delete contactCharacteristic.CONTACT_DETECTED;
+    delete contactCharacteristic.CONTACT_NOT_DETECTED;
 
     const logger = makeLogger();
     const client = new FakeClient();
@@ -560,9 +591,21 @@ describe("AirPurifierAccessory switch contract", () => {
     const indicationUpdates = filterService.updates.filter(
       (update) => update.characteristic === "filterIndication",
     );
+    const alertService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name ===
+          "Contact:Filter Replace Alert",
+      ) as unknown as FakeService;
+    const contactUpdates = alertService.updates.filter(
+      (update) => update.characteristic === "contactState",
+    );
 
     expect(indicationUpdates.some((update) => update.value === 1)).toBe(true);
     expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 1)).toBe(true);
+    expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
   it("uses numeric fallbacks for FilterChangeIndication enum values", () => {

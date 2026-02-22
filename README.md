@@ -130,7 +130,7 @@ Common methods:
 
 ### Mode switch (AUTO/NIGHT)
 
-- One switch only: `ON => auto`, `OFF => sleep`.
+- Separate switches are exposed: `Mode AUTO ON/OFF` and `Mode NIGHT ON/OFF`.
 - When `Power` is OFF, mode writes are intentionally rejected by plugin logic (`onSet` ignored and switch state refreshed from device); in HomeKit this behaves as non-accepting/unavailable control.
 - Polling and write-after-read sync keep HomeKit, plugin state, and device state consistent.
 
@@ -138,8 +138,9 @@ Common methods:
 
 - `FilterLifeLevel` = `filter1_life`
 - `FilterChangeIndication` = `CHANGE_FILTER` when `<= filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
+- `ContactSensorState` on `Filter Replace Alert` = `CONTACT_DETECTED` when replacement is needed (Home app visible alert), otherwise `CONTACT_NOT_DETECTED`
 
-Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
+If your Home app does not show `FilterMaintenance` details for this accessory layout, use `Filter Replace Alert` as the canonical HomeKit-visible warning.
 
 Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
 
