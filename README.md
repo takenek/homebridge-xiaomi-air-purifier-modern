@@ -141,6 +141,8 @@ Common methods:
 
 Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
 
+Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
+
 ---
 
 ## Polling and reconnect
