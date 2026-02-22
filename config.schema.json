@@ -57,7 +57,7 @@
         "default": 10,
         "minimum": 0,
         "maximum": 100,
-        "description": "Show <b>Change Filter</b> warning when Filter Life drops below this value."
+        "description": "Show <b>Change Filter</b> warning when Filter Life reaches or drops below this value."
       },
       "enableFanSpeedControl": {
         "title": "Fan Speed",

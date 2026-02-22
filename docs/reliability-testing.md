@@ -54,7 +54,7 @@ All scenarios below are covered by automated Vitest tests in `test/network-scena
    - **Then** process remains stable, warnings are emitted, and later writes/polls succeed.
 
 8. **Filter life reaches 4%**
-   - **Given** `filter1_life` drops below threshold.
+   - **Given** `filter1_life` reaches or drops below threshold.
    - **When** characteristic refresh runs.
    - **Then** `FilterChangeIndication` is set to `CHANGE_FILTER` (1).
 

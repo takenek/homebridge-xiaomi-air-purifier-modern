@@ -83,7 +83,7 @@ Each purifier is configured as a separate accessory entry:
 | `address` | string | Yes | LAN IP address |
 | `token` | string | Yes | 32-character hex token |
 | `model` | string | Yes | Xiaomi model identifier |
-| `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is below threshold (default `10`) |
+| `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
 | `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
 | `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
@@ -137,7 +137,9 @@ Common methods:
 ### Filter life mapping
 
 - `FilterLifeLevel` = `filter1_life`
-- `FilterChangeIndication` = `CHANGE_FILTER` when `< filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
+- `FilterChangeIndication` = `CHANGE_FILTER` when `<= filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
+
+Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
 
 Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
 

@@ -251,7 +251,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     this.updateCharacteristicIfNeeded(
       this.filterService,
       this.api.hap.Characteristic.FilterChangeIndication,
-      state.filter1_life < this.filterChangeThreshold
+      state.filter1_life <= this.filterChangeThreshold
         ? typeof filterChangeIndication === "number"
           ? filterChangeIndication
           : 1
