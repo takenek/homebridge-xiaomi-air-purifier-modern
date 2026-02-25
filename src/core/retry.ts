@@ -24,6 +24,9 @@ export const computeBackoffDelay = (
   return Math.max(0, Math.round(capped + jitter));
 };
 
+// Network/device errors that are transient and worth retrying.
+// Local socket binding errors (EADDRINUSE, EADDRNOTAVAIL) are intentionally
+// excluded – they indicate a local misconfiguration and retrying won't help.
 export const RETRYABLE_ERROR_CODES = new Set<string>([
   "EDEVICEUNAVAILABLE",
   "ETIMEDOUT",
@@ -41,8 +44,6 @@ export const RETRYABLE_ERROR_CODES = new Set<string>([
   "ENETRESET",
   "EAI_AGAIN",
   "ENOTFOUND",
-  "EADDRINUSE",
-  "EADDRNOTAVAIL",
   "ERR_NETWORK_CHANGED",
 ]);
 

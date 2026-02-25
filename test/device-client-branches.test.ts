@@ -61,10 +61,7 @@ class BranchTransport implements MiioTransport {
     return state;
   }
 
-  public async setProperty(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
+  public async setProperty(method: string, params: readonly unknown[]): Promise<void> {
     this.setCalls.push({ method, params });
   }
 
@@ -197,9 +194,7 @@ describe("device client uncovered branches", () => {
     await vi.advanceTimersByTimeAsync(10);
     await vi.runOnlyPendingTimersAsync();
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Unknown poll error"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Unknown poll error"));
 
     await client.shutdown();
   });
@@ -302,9 +297,7 @@ describe("device client uncovered branches", () => {
     });
 
     await expect(client.init()).rejects.toBeInstanceOf(Error);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("code UNKNOWN"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("code UNKNOWN"));
 
     await client.shutdown();
   });
@@ -353,9 +346,7 @@ describe("device client uncovered branches", () => {
     await vi.advanceTimersByTimeAsync(10);
     await initPromise;
 
-    expect(logger.info).toHaveBeenCalledWith(
-      "Recovered device connection after 1 retries.",
-    );
+    expect(logger.info).toHaveBeenCalledWith("Recovered device connection after 1 retries.");
     await client.shutdown();
   });
 
@@ -400,9 +391,7 @@ describe("device client uncovered branches", () => {
     });
 
     await client.shutdown();
-    await (client as unknown as { delay(ms: number): Promise<void> }).delay(
-      5_000,
-    );
+    await (client as unknown as { delay(ms: number): Promise<void> }).delay(5_000);
 
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -474,8 +463,9 @@ describe("device client uncovered branches", () => {
     });
 
     await client.init();
-    (client as unknown as { operationQueue: Promise<void> }).operationQueue =
-      Promise.reject(new Error("pre-rejected"));
+    (client as unknown as { operationQueue: Promise<void> }).operationQueue = Promise.reject(
+      new Error("pre-rejected"),
+    );
 
     await expect(client.setLed(true)).resolves.toBeUndefined();
     await client.shutdown();

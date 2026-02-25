@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
 import { ModernMiioTransport } from "../src/core/miio-transport";
-import {
-  ACCESSORY_NAME,
-  PLUGIN_NAME,
-  XiaomiAirPurifierAccessoryPlugin,
-} from "../src/platform";
+import { ACCESSORY_NAME, PLUGIN_NAME, XiaomiAirPurifierAccessoryPlugin } from "../src/platform";
 
 beforeEach(() => {
   vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
@@ -45,8 +41,7 @@ class FakeService {
   public readonly UUID: string;
   public readonly subtype: string | undefined;
   public updates: Array<{ characteristic: string; value: unknown }> = [];
-  public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
-    [];
+  public readonly setCalls: Array<{ characteristic: string; value: unknown }> = [];
   private readonly characteristics = new Map<string, FakeCharacteristic>();
 
   public constructor(
@@ -57,17 +52,12 @@ class FakeService {
     this.subtype = subtype;
   }
 
-  public setCharacteristic(
-    characteristic: { UUID: string },
-    value: unknown,
-  ): this {
+  public setCharacteristic(characteristic: { UUID: string }, value: unknown): this {
     this.setCalls.push({ characteristic: characteristic.UUID, value });
     return this;
   }
 
-  public getCharacteristic(characteristic: {
-    UUID: string;
-  }): FakeCharacteristic {
+  public getCharacteristic(characteristic: { UUID: string }): FakeCharacteristic {
     const existing = this.characteristics.get(characteristic.UUID);
     if (existing) {
       return existing;
@@ -77,10 +67,7 @@ class FakeService {
     return created;
   }
 
-  public updateCharacteristic(
-    characteristic: { UUID: string },
-    value: unknown,
-  ): this {
+  public updateCharacteristic(characteristic: { UUID: string }, value: unknown): this {
     this.updates.push({ characteristic: characteristic.UUID, value });
     return this;
   }
@@ -131,9 +118,7 @@ const makeApi = (withConfiguredName = true) => {
         Manufacturer: { UUID: "manufacturer" },
         Model: { UUID: "model" },
         Name: { UUID: "name" },
-        ...(withConfiguredName
-          ? { ConfiguredName: { UUID: "configuredName" } }
-          : {}),
+        ...(withConfiguredName ? { ConfiguredName: { UUID: "configuredName" } } : {}),
         SerialNumber: { UUID: "serial" },
         On: { UUID: "on" },
         AirQuality: { UUID: "airQuality" },
@@ -207,9 +192,7 @@ class FakeClient {
     this.listeners.push(listener);
   }
   public onConnectionEvent(
-    listener: (event: {
-      state: "connected" | "disconnected" | "reconnected";
-    }) => void,
+    listener: (event: { state: "connected" | "disconnected" | "reconnected" }) => void,
   ): void {
     this.connectionListeners.push(listener);
   }
@@ -265,27 +248,19 @@ describe("AirPurifierAccessory switch contract", () => {
       if (!typed.name.startsWith("Switch:")) {
         continue;
       }
-      expect(
-        typed.setCalls.some((call) => call.characteristic === "name"),
-      ).toBe(true);
-      expect(
-        typed.setCalls.some((call) => call.characteristic === "configuredName"),
-      ).toBe(true);
+      expect(typed.setCalls.some((call) => call.characteristic === "name")).toBe(true);
+      expect(typed.setCalls.some((call) => call.characteristic === "configuredName")).toBe(true);
     }
 
     const modeAutoService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Switch:Mode AUTO ON/OFF",
+        (service) => (service as unknown as FakeService).name === "Switch:Mode AUTO ON/OFF",
       ) as unknown as FakeService;
     const modeNightService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Switch:Mode NIGHT ON/OFF",
+        (service) => (service as unknown as FakeService).name === "Switch:Mode NIGHT ON/OFF",
       ) as unknown as FakeService;
     const modeAutoSetter = modeAutoService.getCharacteristic(
       api.hap.Characteristic.On,
@@ -297,54 +272,35 @@ describe("AirPurifierAccessory switch contract", () => {
     const powerService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:Power",
+        (service) => (service as unknown as FakeService).name === "Switch:Power",
       ) as unknown as FakeService;
     const childService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:Child Lock",
+        (service) => (service as unknown as FakeService).name === "Switch:Child Lock",
       ) as unknown as FakeService;
     const ledService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:LED Night Mode",
+        (service) => (service as unknown as FakeService).name === "Switch:LED Night Mode",
       ) as unknown as FakeService;
 
-    await powerService
-      .getCharacteristic(api.hap.Characteristic.On)
-      .onSetHandler?.(false);
-    await childService
-      .getCharacteristic(api.hap.Characteristic.On)
-      .onSetHandler?.(true);
-    await ledService
-      .getCharacteristic(api.hap.Characteristic.On)
-      .onSetHandler?.(false);
+    await powerService.getCharacteristic(api.hap.Characteristic.On).onSetHandler?.(false);
+    await childService.getCharacteristic(api.hap.Characteristic.On).onSetHandler?.(true);
+    await ledService.getCharacteristic(api.hap.Characteristic.On).onSetHandler?.(false);
     await modeAutoSetter?.(true);
     await modeAutoSetter?.(false);
     await modeNightSetter?.(true);
     await modeNightSetter?.(false);
     expect(client.calls).toEqual(
-      expect.arrayContaining([
-        "power:false",
-        "child:true",
-        "led:false",
-        "mode:auto",
-        "mode:sleep",
-      ]),
+      expect.arrayContaining(["power:false", "child:true", "led:false", "mode:auto", "mode:sleep"]),
     );
 
     client.state = { ...baseState, power: false, mode: "sleep" };
     await modeAutoSetter?.(false);
     await modeNightSetter?.(true);
-    expect(
-      client.calls.filter((entry) => entry.startsWith("mode:")),
-    ).toHaveLength(4);
-    expect(logger.debug).toHaveBeenCalledWith(
-      "Ignoring mode change while device power is OFF.",
-    );
+    expect(client.calls.filter((entry) => entry.startsWith("mode:"))).toHaveLength(4);
+    expect(logger.debug).toHaveBeenCalledWith("Ignoring mode change while device power is OFF.");
 
     api.emit("shutdown");
     expect(client.calls).toContain("shutdown");
@@ -395,9 +351,7 @@ describe("AirPurifierAccessory switch contract", () => {
     api.emit("shutdown");
     await Promise.resolve();
     await Promise.resolve();
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Shutdown error: raw-shutdown-error",
-    );
+    expect(logger.warn).toHaveBeenCalledWith("Shutdown error: raw-shutdown-error");
   });
 
   it("updates AUTO and NIGHT mode switches based on current state and avoids duplicate pushes", () => {
@@ -434,21 +388,15 @@ describe("AirPurifierAccessory switch contract", () => {
     const modeAutoService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Switch:Mode AUTO ON/OFF",
+        (service) => (service as unknown as FakeService).name === "Switch:Mode AUTO ON/OFF",
       ) as unknown as FakeService;
     const modeNightService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Switch:Mode NIGHT ON/OFF",
+        (service) => (service as unknown as FakeService).name === "Switch:Mode NIGHT ON/OFF",
       ) as unknown as FakeService;
 
-    expect(logger.info).toHaveBeenCalledWith(
-      'Connected to "Office" @ 10.0.0.1!',
-    );
+    expect(logger.info).toHaveBeenCalledWith('Connected to "Office" @ 10.0.0.1!');
 
     for (const listener of client.connectionListeners) {
       listener({ state: "disconnected" });
@@ -460,29 +408,17 @@ describe("AirPurifierAccessory switch contract", () => {
     for (const listener of client.connectionListeners) {
       listener({ state: "reconnected" });
     }
-    expect(logger.info).toHaveBeenCalledWith(
-      'Reconnected to "Office" @ 10.0.0.1.',
-    );
+    expect(logger.info).toHaveBeenCalledWith('Reconnected to "Office" @ 10.0.0.1.');
 
-    expect(
-      modeAutoService.updates.every((update) => update.characteristic === "on"),
-    ).toBe(true);
-    expect(
-      modeNightService.updates.every(
-        (update) => update.characteristic === "on",
-      ),
-    ).toBe(true);
+    expect(modeAutoService.updates.every((update) => update.characteristic === "on")).toBe(true);
+    expect(modeNightService.updates.every((update) => update.characteristic === "on")).toBe(true);
 
     client.state = { ...baseState, power: false, mode: "sleep" };
     for (const listener of client.listeners) {
       listener(client.state);
     }
-    expect(
-      modeAutoService.updates.some((update) => update.value === false),
-    ).toBe(true);
-    expect(
-      modeNightService.updates.some((update) => update.value === true),
-    ).toBe(true);
+    expect(modeAutoService.updates.some((update) => update.value === false)).toBe(true);
+    expect(modeNightService.updates.some((update) => update.value === true)).toBe(true);
   });
 
   it("toggles FilterChangeIndication when filter life crosses threshold", () => {
@@ -504,8 +440,7 @@ describe("AirPurifierAccessory switch contract", () => {
     const filterService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Filter:Filter Life",
+        (service) => (service as unknown as FakeService).name === "Filter:Filter Life",
       ) as unknown as FakeService;
 
     client.state = { ...baseState, filter1_life: 5 };
@@ -524,9 +459,7 @@ describe("AirPurifierAccessory switch contract", () => {
     const alertService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Contact:Filter Replace Alert",
+        (service) => (service as unknown as FakeService).name === "Contact:Filter Replace Alert",
       ) as unknown as FakeService;
     const contactUpdates = alertService.updates.filter(
       (update) => update.characteristic === "contactState",
@@ -576,8 +509,7 @@ describe("AirPurifierAccessory switch contract", () => {
     const filterService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Filter:Filter Life",
+        (service) => (service as unknown as FakeService).name === "Filter:Filter Life",
       ) as unknown as FakeService;
 
     client.state = { ...baseState, filter1_life: 5 };
@@ -596,9 +528,7 @@ describe("AirPurifierAccessory switch contract", () => {
     const alertService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name ===
-          "Contact:Filter Replace Alert",
+        (service) => (service as unknown as FakeService).name === "Contact:Filter Replace Alert",
       ) as unknown as FakeService;
     const contactUpdates = alertService.updates.filter(
       (update) => update.characteristic === "contactState",
@@ -639,8 +569,7 @@ describe("AirPurifierAccessory switch contract", () => {
     const filterService = accessory
       .getServices()
       .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Filter:Filter Life",
+        (service) => (service as unknown as FakeService).name === "Filter:Filter Life",
       ) as unknown as FakeService;
 
     client.state = { ...baseState, filter1_life: 4 };
@@ -689,9 +618,7 @@ describe("AirPurifierAccessory switch contract", () => {
     ).toBe(true);
     expect(
       switchServices.some((service) =>
-        service.setCalls.some(
-          (call) => call.characteristic === "configuredName",
-        ),
+        service.setCalls.some((call) => call.characteristic === "configuredName"),
       ),
     ).toBe(false);
   });
@@ -714,9 +641,7 @@ describe("AirPurifierAccessory switch contract", () => {
 
     await Promise.resolve();
     await Promise.resolve();
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Initial device connection failed: offline",
-    );
+    expect(logger.warn).toHaveBeenCalledWith("Initial device connection failed: offline");
   });
 });
 
@@ -738,9 +663,7 @@ it("handles non-Error init rejection and internal cache key edge", async () => {
 
   await Promise.resolve();
   await Promise.resolve();
-  expect(logger.warn).toHaveBeenCalledWith(
-    "Initial device connection failed: raw-error",
-  );
+  expect(logger.warn).toHaveBeenCalledWith("Initial device connection failed: raw-error");
 
   (
     accessory as unknown as {
@@ -794,8 +717,7 @@ describe("platform and index", () => {
         ?.getServices()
         .some(
           (service) =>
-            (service as unknown as { name?: string }).name ===
-            "Contact:Filter Replace Alert",
+            (service as unknown as { name?: string }).name === "Contact:Filter Replace Alert",
         ),
     ).toBe(false);
     expect(
@@ -822,8 +744,7 @@ describe("platform and index", () => {
         .getServices()
         .some(
           (service) =>
-            (service as unknown as { name?: string }).name ===
-            "Contact:Filter Replace Alert",
+            (service as unknown as { name?: string }).name === "Contact:Filter Replace Alert",
         ),
     ).toBe(true);
 
@@ -911,6 +832,20 @@ describe("platform and index", () => {
           api as never,
         ),
     ).toThrow("Invalid or missing config field: name");
+
+    expect(
+      () =>
+        new XiaomiAirPurifierAccessoryPlugin(
+          logger as never,
+          {
+            name: "Bad Token",
+            address: "1.1.1.1",
+            token: "not-a-hex-token!!!",
+            model: "zhimi.airpurifier.3h",
+          } as never,
+          api as never,
+        ),
+    ).toThrow("Config field 'token' must be a 32-character hexadecimal string");
 
     const warnLogger = makeLogger();
     new XiaomiAirPurifierAccessoryPlugin(

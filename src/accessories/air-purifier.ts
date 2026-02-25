@@ -1,10 +1,4 @@
-import type {
-  AccessoryPlugin,
-  API,
-  CharacteristicValue,
-  Logging,
-  Service,
-} from "homebridge";
+import type { AccessoryPlugin, API, CharacteristicValue, Logging, Service } from "homebridge";
 import type { ConnectionStateEvent, DeviceClient } from "../core/device-client";
 import { aqiToHomeKitAirQuality } from "../core/mappers";
 import {
@@ -45,36 +39,16 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       .setCharacteristic(this.api.hap.Characteristic.SerialNumber, "unknown");
 
     this.powerService = new this.api.hap.Service.Switch("Power", "power");
-    this.airQualityService = new this.api.hap.Service.AirQualitySensor(
-      `${name} Air Quality`,
-    );
-    this.temperatureService = new this.api.hap.Service.TemperatureSensor(
-      `${name} Temperature`,
-    );
-    this.humidityService = new this.api.hap.Service.HumiditySensor(
-      `${name} Humidity`,
-    );
-    this.childLockService = new this.api.hap.Service.Switch(
-      "Child Lock",
-      "child_lock",
-    );
+    this.airQualityService = new this.api.hap.Service.AirQualitySensor(`${name} Air Quality`);
+    this.temperatureService = new this.api.hap.Service.TemperatureSensor(`${name} Temperature`);
+    this.humidityService = new this.api.hap.Service.HumiditySensor(`${name} Humidity`);
+    this.childLockService = new this.api.hap.Service.Switch("Child Lock", "child_lock");
     this.ledService = new this.api.hap.Service.Switch("LED Night Mode", "led");
-    this.modeAutoService = new this.api.hap.Service.Switch(
-      "Mode AUTO ON/OFF",
-      "mode_auto",
-    );
-    this.modeNightService = new this.api.hap.Service.Switch(
-      "Mode NIGHT ON/OFF",
-      "mode_night",
-    );
-    this.filterService = new this.api.hap.Service.FilterMaintenance(
-      "Filter Life",
-    );
+    this.modeAutoService = new this.api.hap.Service.Switch("Mode AUTO ON/OFF", "mode_auto");
+    this.modeNightService = new this.api.hap.Service.Switch("Mode NIGHT ON/OFF", "mode_night");
+    this.filterService = new this.api.hap.Service.FilterMaintenance("Filter Life");
     this.filterAlertService = this.exposeFilterReplaceAlertSensor
-      ? new this.api.hap.Service.ContactSensor(
-          "Filter Replace Alert",
-          "filter_replace_alert",
-        )
+      ? new this.api.hap.Service.ContactSensor("Filter Replace Alert", "filter_replace_alert")
       : null;
 
     this.applyServiceNames();
@@ -117,10 +91,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
 
     for (const { service, name } of namedServices) {
       service.setCharacteristic(this.api.hap.Characteristic.Name, name);
-      const configuredName = Reflect.get(
-        this.api.hap.Characteristic as object,
-        "ConfiguredName",
-      );
+      const configuredName = Reflect.get(this.api.hap.Characteristic as object, "ConfiguredName");
       if (configuredName) {
         service.setCharacteristic(configuredName as never, name);
       }
@@ -146,30 +117,21 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private bindHandlers(): void {
     this.powerService
       .getCharacteristic(this.api.hap.Characteristic.On)
-      .onSet(async (value: CharacteristicValue) =>
-        this.client.setPower(Boolean(value)),
-      );
+      .onSet(async (value: CharacteristicValue) => this.client.setPower(Boolean(value)));
 
     this.childLockService
       .getCharacteristic(this.api.hap.Characteristic.On)
-      .onSet(async (value: CharacteristicValue) =>
-        this.client.setChildLock(Boolean(value)),
-      );
+      .onSet(async (value: CharacteristicValue) => this.client.setChildLock(Boolean(value)));
 
     this.ledService
       .getCharacteristic(this.api.hap.Characteristic.On)
-      .onSet(async (value: CharacteristicValue) =>
-        this.client.setLed(Boolean(value)),
-      );
+      .onSet(async (value: CharacteristicValue) => this.client.setLed(Boolean(value)));
 
     this.modeAutoService
       .getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) => {
         const state = this.client.state;
-        const mode = resolveModeFromAutoSwitch(
-          Boolean(value),
-          Boolean(state?.power),
-        );
+        const mode = resolveModeFromAutoSwitch(Boolean(value), Boolean(state?.power));
         await this.handleModeSwitch(mode);
       });
 
@@ -177,17 +139,12 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       .getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) => {
         const state = this.client.state;
-        const mode = resolveModeFromNightSwitch(
-          Boolean(value),
-          Boolean(state?.power),
-        );
+        const mode = resolveModeFromNightSwitch(Boolean(value), Boolean(state?.power));
         await this.handleModeSwitch(mode);
       });
   }
 
-  private async handleModeSwitch(
-    nextMode: "auto" | "sleep" | null,
-  ): Promise<void> {
+  private async handleModeSwitch(nextMode: "auto" | "sleep" | null): Promise<void> {
     if (!nextMode) {
       this.log.debug("Ignoring mode change while device power is OFF.");
       this.refreshCharacteristics();
@@ -230,11 +187,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.api.hap.Characteristic.On,
       state.child_lock,
     );
-    this.updateCharacteristicIfNeeded(
-      this.ledService,
-      this.api.hap.Characteristic.On,
-      state.led,
-    );
+    this.updateCharacteristicIfNeeded(this.ledService, this.api.hap.Characteristic.On, state.led);
     this.updateCharacteristicIfNeeded(
       this.modeAutoService,
       this.api.hap.Characteristic.On,
@@ -317,9 +270,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     characteristic: unknown,
     value: CharacteristicValue,
   ): void {
-    const characteristicUuid = String(
-      Reflect.get(characteristic as object, "UUID") ?? "",
-    );
+    const characteristicUuid = String(Reflect.get(characteristic as object, "UUID") ?? "");
     const key = `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`;
     if (this.characteristicCache.get(key) === value) {
       return;

@@ -11,6 +11,10 @@ export interface MiioTransportOptions {
   operationTimeoutMs?: number;
 }
 
+export interface MiioTransportLogger {
+  debug(message: string): void;
+}
+
 interface MiioSession {
   deviceId: number;
   deviceStamp: number;
@@ -62,8 +66,7 @@ const toMd5 = (...chunks: Buffer[]): Buffer => {
   return hash.digest();
 };
 
-const toBoolean = (value: unknown): boolean =>
-  value === "on" || value === true || value === 1;
+const toBoolean = (value: unknown): boolean => value === "on" || value === true || value === 1;
 const toNumber = (value: unknown): number => {
   if (typeof value === "number") {
     return value;
@@ -78,12 +81,7 @@ const toNumber = (value: unknown): number => {
 };
 
 const toMode = (value: unknown): DeviceState["mode"] => {
-  if (
-    value === "auto" ||
-    value === "sleep" ||
-    value === "idle" ||
-    value === "favorite"
-  ) {
+  if (value === "auto" || value === "sleep" || value === "idle" || value === "favorite") {
     return value;
   }
 
@@ -162,16 +160,20 @@ export class ModernMiioTransport implements MiioTransport {
 
   private reportSuppressedError(context: string, error: unknown): void {
     const code =
-      error instanceof Error
-        ? String(Reflect.get(error, "code") ?? "UNKNOWN")
-        : "UNKNOWN";
+      error instanceof Error ? String(Reflect.get(error, "code") ?? "UNKNOWN") : "UNKNOWN";
     const message = error instanceof Error ? error.message : String(error);
-    process.emitWarning(
-      `[miio-transport:${context}] suppressed error (code=${code}): ${message}`,
-    );
+    const text = `[miio-transport:${context}] suppressed error (code=${code}): ${message}`;
+    if (this.logger) {
+      this.logger.debug(text);
+    } else {
+      process.emitWarning(text);
+    }
   }
 
-  public constructor(private readonly options: MiioTransportOptions) {
+  public constructor(
+    private readonly options: MiioTransportOptions,
+    private readonly logger?: MiioTransportLogger,
+  ) {
     this.connectTimeoutMs = options.connectTimeoutMs ?? 15_000;
     this.operationTimeoutMs = options.operationTimeoutMs ?? 15_000;
     this.token = Buffer.from(options.token, "hex");
@@ -186,9 +188,7 @@ export class ModernMiioTransport implements MiioTransport {
     });
   }
 
-  public async getProperties(
-    _props: readonly ReadProperty[],
-  ): Promise<DeviceState> {
+  public async getProperties(_props: readonly ReadProperty[]): Promise<DeviceState> {
     if (this.protocolMode === "unknown") {
       this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
     }
@@ -204,11 +204,7 @@ export class ModernMiioTransport implements MiioTransport {
           })
         : await this.readViaLegacy();
 
-    if (
-      state.power === false &&
-      state.fan_level === 0 &&
-      state.mode === "idle"
-    ) {
+    if (state.power === false && state.fan_level === 0 && state.mode === "idle") {
       // If all core fields are empty and we used legacy, retry MIOT once.
       if (this.protocolMode === "legacy") {
         const miotState = await this.readViaMiot().catch((error: unknown) => {
@@ -228,10 +224,7 @@ export class ModernMiioTransport implements MiioTransport {
     return state;
   }
 
-  public async setProperty(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
+  public async setProperty(method: string, params: readonly unknown[]): Promise<void> {
     if (this.protocolMode === "unknown") {
       this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
     }
@@ -259,10 +252,7 @@ export class ModernMiioTransport implements MiioTransport {
           resolve();
         });
       } catch (error: unknown) {
-        const code =
-          error instanceof Error
-            ? String(Reflect.get(error, "code") ?? "")
-            : "";
+        const code = error instanceof Error ? String(Reflect.get(error, "code") ?? "") : "";
         if (code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
           this.socketClosed = true;
           resolve();
@@ -304,11 +294,7 @@ export class ModernMiioTransport implements MiioTransport {
     const powerRaw = valueByKey.get("power");
     const fanLevelRaw = valueByKey.get("fan_level");
     const modeRaw = valueByKey.get("mode");
-    if (
-      powerRaw === undefined &&
-      fanLevelRaw === undefined &&
-      modeRaw === undefined
-    ) {
+    if (powerRaw === undefined && fanLevelRaw === undefined && modeRaw === undefined) {
       throw new Error("MIOT core properties unavailable");
     }
 
@@ -351,11 +337,7 @@ export class ModernMiioTransport implements MiioTransport {
       const valueBySignature = new Map<string, unknown>();
       for (const item of response) {
         const payload = item as MiotValueResult;
-        if (
-          payload.did === undefined ||
-          payload.siid === undefined ||
-          payload.piid === undefined
-        ) {
+        if (payload.did === undefined || payload.siid === undefined || payload.piid === undefined) {
           continue;
         }
 
@@ -399,11 +381,7 @@ export class ModernMiioTransport implements MiioTransport {
     const fanLevelRaw = await this.readLegacyOne(LEGACY_MAP.fan_level ?? []);
     const modeRaw = await this.readLegacyOne(LEGACY_MAP.mode ?? []);
 
-    if (
-      powerRaw === undefined &&
-      fanLevelRaw === undefined &&
-      modeRaw === undefined
-    ) {
+    if (powerRaw === undefined && fanLevelRaw === undefined && modeRaw === undefined) {
       throw corePropertiesUnavailableError();
     }
 
@@ -411,34 +389,20 @@ export class ModernMiioTransport implements MiioTransport {
       power: toBoolean(powerRaw),
       fan_level: toNumber(fanLevelRaw),
       mode: toMode(modeRaw),
-      temperature: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.temperature ?? []),
-      ),
+      temperature: toNumber(await this.readLegacyOne(LEGACY_MAP.temperature ?? [])),
       humidity: toNumber(await this.readLegacyOne(LEGACY_MAP.humidity ?? [])),
       aqi: toNumber(await this.readLegacyOne(LEGACY_MAP.aqi ?? [])),
-      filter1_life: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.filter1_life ?? []),
-      ),
-      child_lock: toBoolean(
-        await this.readLegacyOne(LEGACY_MAP.child_lock ?? []),
-      ),
+      filter1_life: toNumber(await this.readLegacyOne(LEGACY_MAP.filter1_life ?? [])),
+      child_lock: toBoolean(await this.readLegacyOne(LEGACY_MAP.child_lock ?? [])),
       led: toBoolean(await this.readLegacyOne(LEGACY_MAP.led ?? [])),
-      buzzer_volume: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.buzzer_volume ?? []),
-      ),
-      motor1_speed: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.motor1_speed ?? []),
-      ),
+      buzzer_volume: toNumber(await this.readLegacyOne(LEGACY_MAP.buzzer_volume ?? [])),
+      motor1_speed: toNumber(await this.readLegacyOne(LEGACY_MAP.motor1_speed ?? [])),
       use_time: toNumber(await this.readLegacyOne(LEGACY_MAP.use_time ?? [])),
-      purify_volume: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.purify_volume ?? []),
-      ),
+      purify_volume: toNumber(await this.readLegacyOne(LEGACY_MAP.purify_volume ?? [])),
     };
   }
 
-  private async readMiotOne(
-    candidates: readonly MiotProperty[],
-  ): Promise<unknown> {
+  private async readMiotOne(candidates: readonly MiotProperty[]): Promise<unknown> {
     for (const candidate of candidates) {
       try {
         const result = await this.call("get_properties", [candidate]);
@@ -479,15 +443,10 @@ export class ModernMiioTransport implements MiioTransport {
     return undefined;
   }
 
-  private async trySetViaMiot(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<boolean> {
+  private async trySetViaMiot(method: string, params: readonly unknown[]): Promise<boolean> {
     const did = MIOT_DID;
 
-    const send = async (
-      items: readonly MiotValueResult[],
-    ): Promise<boolean> => {
+    const send = async (items: readonly MiotValueResult[]): Promise<boolean> => {
       const result = await this.call("set_properties", items);
       if (!Array.isArray(result)) {
         return false;
@@ -505,14 +464,7 @@ export class ModernMiioTransport implements MiioTransport {
 
     if (method === "set_mode") {
       const mode = params[0];
-      const value =
-        mode === "auto"
-          ? 0
-          : mode === "sleep"
-            ? 1
-            : mode === "favorite"
-              ? 2
-              : 3;
+      const value = mode === "auto" ? 0 : mode === "sleep" ? 1 : mode === "favorite" ? 2 : 3;
       return send([{ did, siid: 2, piid: 5, value }]);
     }
 
@@ -521,9 +473,7 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (method === "set_led") {
-      return send([
-        { did, siid: 6, piid: 1, value: params[0] === "on" ? 0 : 2 },
-      ]);
+      return send([{ did, siid: 6, piid: 1, value: params[0] === "on" ? 0 : 2 }]);
     }
 
     if (method === "set_buzzer_volume") {
@@ -541,10 +491,7 @@ export class ModernMiioTransport implements MiioTransport {
     return false;
   }
 
-  private async call(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<unknown> {
+  private async call(method: string, params: readonly unknown[]): Promise<unknown> {
     if (!this.session) {
       await this.handshake();
     }
@@ -592,10 +539,7 @@ export class ModernMiioTransport implements MiioTransport {
     };
   }
 
-  private async sendCommand(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<unknown> {
+  private async sendCommand(method: string, params: readonly unknown[]): Promise<unknown> {
     const session = this.session;
     if (!session) {
       throw new Error("MIIO session not initialized.");
@@ -614,10 +558,7 @@ export class ModernMiioTransport implements MiioTransport {
     header.writeUInt16BE(32 + encrypted.length, 2);
     header.writeUInt32BE(session.deviceId, 8);
 
-    const elapsed = Math.max(
-      0,
-      Math.floor(Date.now() / 1000) - session.handshakeAtEpochSec,
-    );
+    const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - session.handshakeAtEpochSec);
     const stamp = session.deviceStamp + elapsed;
     header.writeUInt32BE(stamp, 12);
 
@@ -705,9 +646,7 @@ export class ModernMiioTransport implements MiioTransport {
           const encryptedPayload = message.subarray(32);
           try {
             const decrypted = this.decrypt(encryptedPayload);
-            const parsed = JSON.parse(
-              decrypted.toString("utf8"),
-            ) as MiioResponsePayload;
+            const parsed = JSON.parse(decrypted.toString("utf8")) as MiioResponsePayload;
             if (parsed.id !== expectedResponseId) {
               return;
             }

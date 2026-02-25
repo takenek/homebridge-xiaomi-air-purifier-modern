@@ -1,9 +1,4 @@
-import type {
-  AccessoryConfig,
-  AccessoryPlugin,
-  API,
-  Logging,
-} from "homebridge";
+import type { AccessoryConfig, AccessoryPlugin, API, Logging } from "homebridge";
 import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
@@ -41,13 +36,19 @@ const assertString = (value: unknown, field: string): string => {
   return value;
 };
 
+const assertHexToken = (value: string): string => {
+  if (!/^[0-9a-fA-F]{32}$/.test(value)) {
+    throw new Error(
+      "Config field 'token' must be a 32-character hexadecimal string (e.g. 00112233445566778899aabbccddeeff).",
+    );
+  }
+
+  return value;
+};
+
 const normalizeThreshold = (value: unknown): number => {
   const numericValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : Number.NaN;
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
 
   if (!Number.isFinite(numericValue)) {
     return 10;
@@ -56,11 +57,7 @@ const normalizeThreshold = (value: unknown): number => {
   return Math.max(0, Math.min(100, Math.round(numericValue)));
 };
 
-const normalizeTimeout = (
-  value: unknown,
-  fallbackMs: number,
-  minMs = 100,
-): number => {
+const normalizeTimeout = (value: unknown, fallbackMs: number, minMs = 100): number => {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallbackMs;
   }
@@ -87,45 +84,27 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const typedConfig = config as XiaomiAccessoryConfig;
     const name = assertString(typedConfig.name, "name");
     const address = assertString(typedConfig.address, "address");
-    const token = assertString(typedConfig.token, "token");
+    const token = assertHexToken(assertString(typedConfig.token, "token"));
     const model = assertString(typedConfig.model, "model") as AirPurifierModel;
     if (!VALID_MODELS.includes(model)) {
       log.warn(
         `Unrecognized model "${model}". Supported models: ${VALID_MODELS.join(", ")}. Proceeding anyway — protocol auto-detection will be used.`,
       );
     }
-    const filterChangeThreshold = normalizeThreshold(
-      typedConfig.filterChangeThreshold,
-    );
-    const connectTimeoutMs = normalizeTimeout(
-      typedConfig.connectTimeoutMs,
-      15_000,
-    );
-    const operationTimeoutMs = normalizeTimeout(
-      typedConfig.operationTimeoutMs,
-      15_000,
-    );
-    const reconnectDelayMs = normalizeTimeout(
-      typedConfig.reconnectDelayMs,
-      15_000,
-    );
-    const keepAliveIntervalMs = normalizeTimeout(
-      typedConfig.keepAliveIntervalMs,
-      60_000,
-      1_000,
-    );
+    const filterChangeThreshold = normalizeThreshold(typedConfig.filterChangeThreshold);
+    const connectTimeoutMs = normalizeTimeout(typedConfig.connectTimeoutMs, 15_000);
+    const operationTimeoutMs = normalizeTimeout(typedConfig.operationTimeoutMs, 15_000);
+    const reconnectDelayMs = normalizeTimeout(typedConfig.reconnectDelayMs, 15_000);
+    const keepAliveIntervalMs = normalizeTimeout(typedConfig.keepAliveIntervalMs, 60_000, 1_000);
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
       typedConfig.exposeFilterReplaceAlertSensor,
       false,
     );
 
-    const transport = new ModernMiioTransport({
-      address,
-      token,
-      model,
-      connectTimeoutMs,
-      operationTimeoutMs,
-    });
+    const transport = new ModernMiioTransport(
+      { address, token, model, connectTimeoutMs, operationTimeoutMs },
+      this.log,
+    );
     const client = new DeviceClient(transport, this.log, {
       keepAliveIntervalMs,
       retryPolicy: {
