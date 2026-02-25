@@ -33,10 +33,7 @@ class ScriptedTransport implements MiioTransport {
     return next;
   }
 
-  public async setProperty(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
+  public async setProperty(method: string, params: readonly unknown[]): Promise<void> {
     this.writeCalls.push({ method, params });
   }
 
@@ -59,10 +56,7 @@ afterEach(() => {
 describe("network/status scenarios", () => {
   it("[S1] Given purifier restart, When it comes back, Then plugin refreshes without HB restart", async () => {
     const transport = new ScriptedTransport();
-    transport.reads = [
-      "ECONNRESET",
-      makeState({ power: false, mode: "sleep" }),
-    ];
+    transport.reads = ["ECONNRESET", makeState({ power: false, mode: "sleep" })];
     const logger = makeLogger();
     const client = new DeviceClient(transport, logger, {
       retryPolicy: {
@@ -83,20 +77,13 @@ describe("network/status scenarios", () => {
     await initPromise;
 
     expect(updates.at(-1)?.power).toBe(false);
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("Recovered"),
-    );
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Recovered"));
     await client.shutdown();
   });
 
   it("[S2] Given router restart, When network returns, Then reconnect and sync state", async () => {
     const transport = new ScriptedTransport();
-    transport.reads = [
-      makeState(),
-      "ENETDOWN",
-      "ENETUNREACH",
-      makeState({ mode: "sleep" }),
-    ];
+    transport.reads = [makeState(), "ENETDOWN", "ENETUNREACH", makeState({ mode: "sleep" })];
     const logger = makeLogger();
     const client = new DeviceClient(transport, logger, {
       retryPolicy: {
@@ -114,9 +101,7 @@ describe("network/status scenarios", () => {
     await vi.advanceTimersByTimeAsync(20);
     await changePromise;
     expect(client.state?.mode).toBe("sleep");
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("ENETDOWN"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("ENETDOWN"));
     await client.shutdown();
   });
 
@@ -174,11 +159,7 @@ describe("network/status scenarios", () => {
 
   it("[S6] Given short Wi-Fi outage, When connectivity returns quickly, Then state is restored", async () => {
     const transport = new ScriptedTransport();
-    transport.reads = [
-      makeState(),
-      "EAI_AGAIN",
-      makeState({ child_lock: true }),
-    ];
+    transport.reads = [makeState(), "EAI_AGAIN", makeState({ child_lock: true })];
     const client = new DeviceClient(transport, makeLogger(), {
       retryPolicy: {
         baseDelayMs: 1,
@@ -200,13 +181,7 @@ describe("network/status scenarios", () => {
 
   it("[S7] Given long Wi-Fi outage, When retries are exhausted and later recovered, Then process remains stable", async () => {
     const transport = new ScriptedTransport();
-    transport.reads = [
-      makeState(),
-      "ENETDOWN",
-      "ENETDOWN",
-      "ENETDOWN",
-      makeState({ led: false }),
-    ];
+    transport.reads = [makeState(), "ENETDOWN", "ENETDOWN", "ENETDOWN", makeState({ led: false })];
     const logger = makeLogger();
     const client = new DeviceClient(transport, logger, {
       retryPolicy: {
@@ -222,9 +197,7 @@ describe("network/status scenarios", () => {
     await client.init();
     await vi.advanceTimersByTimeAsync(120);
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("poll failed"),
-    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("poll failed"));
     await client.setLed(false);
     expect(transport.writeCalls.at(-1)).toEqual({
       method: "set_led",

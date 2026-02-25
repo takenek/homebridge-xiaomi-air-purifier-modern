@@ -22,7 +22,8 @@
         "title": "Token",
         "type": "string",
         "required": true,
-        "pattern": "^\\w{32}$"
+        "pattern": "^[0-9a-fA-F]{32}$",
+        "description": "32-character hexadecimal token for LAN control. See README for extraction methods."
       },
       "model": {
         "title": "Model",
@@ -43,6 +44,12 @@
         "minimum": 0,
         "maximum": 100,
         "description": "Show <b>Change Filter</b> warning when Filter Life reaches or drops below this value."
+      },
+      "exposeFilterReplaceAlertSensor": {
+        "title": "Expose Filter Replace Alert Sensor",
+        "type": "boolean",
+        "default": false,
+        "description": "Adds an extra Contact Sensor service for filter replacement warning. Keep disabled to avoid duplicate warning tiles in Homebridge UI."
       },
       "connectTimeoutMs": {
         "title": "Connect Timeout (ms)",
@@ -71,12 +78,6 @@
         "default": 60000,
         "minimum": 1000,
         "description": "Background keep-alive poll interval."
-      },
-      "exposeFilterReplaceAlertSensor": {
-        "title": "Expose Filter Replace Alert Sensor",
-        "type": "boolean",
-        "default": false,
-        "description": "Adds an extra Contact Sensor service for filter replacement warning. Keep disabled to avoid duplicate warning tiles in Homebridge UI."
       }
     }
   },
@@ -98,10 +99,17 @@
     },
     {
       "type": "section",
-      "title": "Sensors",
+      "title": "Sensors & Alerts",
       "expandable": true,
       "expanded": true,
-      "items": []
+      "items": [
+        {
+          "key": "filterChangeThreshold"
+        },
+        {
+          "key": "exposeFilterReplaceAlertSensor"
+        }
+      ]
     },
     {
       "type": "section",
@@ -109,12 +117,6 @@
       "expandable": true,
       "expanded": false,
       "items": [
-        {
-          "key": "filterChangeThreshold"
-        },
-        {
-          "key": "exposeFilterReplaceAlertSensor"
-        },
         {
           "key": "connectTimeoutMs"
         },

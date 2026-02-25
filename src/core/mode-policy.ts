@@ -1,10 +1,8 @@
 import type { DeviceMode } from "./types";
 
-export const isAutoModeSwitchOn = (mode: DeviceMode): boolean =>
-  mode === "auto";
+export const isAutoModeSwitchOn = (mode: DeviceMode): boolean => mode === "auto";
 
-export const isNightModeSwitchOn = (mode: DeviceMode): boolean =>
-  mode === "sleep";
+export const isNightModeSwitchOn = (mode: DeviceMode): boolean => mode === "sleep";
 
 export const resolveModeFromAutoSwitch = (
   enabled: boolean,

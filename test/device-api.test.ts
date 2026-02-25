@@ -23,10 +23,7 @@ class FakeTransport implements MiioTransport {
   public async getProperties(): Promise<DeviceState> {
     return baseState;
   }
-  public async setProperty(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
+  public async setProperty(method: string, params: readonly unknown[]): Promise<void> {
     this.methods.push({ method, params });
   }
   public async close(): Promise<void> {}

@@ -94,12 +94,8 @@ describe("ModernMiioTransport reliability", () => {
       readViaLegacy: () => Promise<DeviceState>;
     };
 
-    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue(
-      "miot",
-    );
-    vi.spyOn(transportInternals, "readViaMiot").mockRejectedValue(
-      retryableError,
-    );
+    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue("miot");
+    vi.spyOn(transportInternals, "readViaMiot").mockRejectedValue(retryableError);
     const readViaLegacy = vi
       .spyOn(transportInternals, "readViaLegacy")
       .mockResolvedValue(legacyEmptyState);
@@ -128,9 +124,7 @@ describe("ModernMiioTransport reliability", () => {
       call: (method: string, params: readonly unknown[]) => Promise<unknown>;
     };
 
-    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue(
-      "legacy",
-    );
+    vi.spyOn(transportInternals, "detectProtocolMode").mockResolvedValue("legacy");
     vi.spyOn(transportInternals, "call").mockRejectedValue(retryableError);
 
     await expect(transport.getProperties([])).rejects.toBe(retryableError);
@@ -186,9 +180,7 @@ describe("ModernMiioTransport reliability", () => {
   });
 
   it("emits diagnostics for suppressed socket and detection errors", async () => {
-    const emitWarning = vi
-      .spyOn(process, "emitWarning")
-      .mockImplementation(() => undefined);
+    const emitWarning = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
 
     class FakeSocket extends EventEmitter {
       public send(
@@ -206,9 +198,7 @@ describe("ModernMiioTransport reliability", () => {
     }
 
     const fakeSocket = new FakeSocket();
-    vi.spyOn(dgram, "createSocket").mockReturnValue(
-      fakeSocket as unknown as dgram.Socket,
-    );
+    vi.spyOn(dgram, "createSocket").mockReturnValue(fakeSocket as unknown as dgram.Socket);
 
     const transport = new ModernMiioTransport({
       address: "127.0.0.1",
@@ -222,19 +212,14 @@ describe("ModernMiioTransport reliability", () => {
       detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
     };
 
-    fakeSocket.emit(
-      "error",
-      Object.assign(new Error("wifi blip"), { code: "ENETDOWN" }),
-    );
+    fakeSocket.emit("error", Object.assign(new Error("wifi blip"), { code: "ENETDOWN" }));
 
     vi.spyOn(transportInternals, "call").mockRejectedValue(
       Object.assign(new Error("router unavailable"), { code: "EHOSTUNREACH" }),
     );
     await expect(transportInternals.detectProtocolMode()).resolves.toBeNull();
 
-    expect(emitWarning).toHaveBeenCalledWith(
-      expect.stringContaining("[miio-transport:socket]"),
-    );
+    expect(emitWarning).toHaveBeenCalledWith(expect.stringContaining("[miio-transport:socket]"));
     expect(emitWarning).toHaveBeenCalledWith(
       expect.stringContaining("[miio-transport:detect-miot]"),
     );
@@ -260,49 +245,47 @@ it("uses MIOT batch read to minimize round-trips", async () => {
     readViaMiot: () => Promise<DeviceState>;
   };
 
-  const call = vi
-    .spyOn(transportInternals, "call")
-    .mockImplementation(async (_method, params) => {
-      const items = params as Array<{
-        did: string;
-        siid: number;
-        piid: number;
-      }>;
-      return items.map((item) => ({
-        did: item.did,
-        siid: item.siid,
-        piid: item.piid,
-        code: 0,
-        value:
-          item.siid === 2 && item.piid === 2
-            ? true
-            : item.siid === 10 && item.piid === 10
-              ? 9
-              : item.siid === 2 && item.piid === 5
-                ? 0
-                : item.siid === 3 && item.piid === 8
-                  ? 24
-                  : item.siid === 3 && item.piid === 7
-                    ? 41
-                    : item.siid === 3 && item.piid === 6
-                      ? 12
-                      : item.siid === 4 && item.piid === 3
-                        ? 70
-                        : item.siid === 7 && item.piid === 1
-                          ? false
-                          : item.siid === 6 && item.piid === 1
-                            ? 0
-                            : item.siid === 5 && item.piid === 1
-                              ? 50
-                              : item.siid === 10 && item.piid === 8
-                                ? 1200
-                                : item.siid === 4 && item.piid === 2
-                                  ? 30
-                                  : item.siid === 4 && item.piid === 1
-                                    ? 400
-                                    : 0,
-      }));
-    });
+  const call = vi.spyOn(transportInternals, "call").mockImplementation(async (_method, params) => {
+    const items = params as Array<{
+      did: string;
+      siid: number;
+      piid: number;
+    }>;
+    return items.map((item) => ({
+      did: item.did,
+      siid: item.siid,
+      piid: item.piid,
+      code: 0,
+      value:
+        item.siid === 2 && item.piid === 2
+          ? true
+          : item.siid === 10 && item.piid === 10
+            ? 9
+            : item.siid === 2 && item.piid === 5
+              ? 0
+              : item.siid === 3 && item.piid === 8
+                ? 24
+                : item.siid === 3 && item.piid === 7
+                  ? 41
+                  : item.siid === 3 && item.piid === 6
+                    ? 12
+                    : item.siid === 4 && item.piid === 3
+                      ? 70
+                      : item.siid === 7 && item.piid === 1
+                        ? false
+                        : item.siid === 6 && item.piid === 1
+                          ? 0
+                          : item.siid === 5 && item.piid === 1
+                            ? 50
+                            : item.siid === 10 && item.piid === 8
+                              ? 1200
+                              : item.siid === 4 && item.piid === 2
+                                ? 30
+                                : item.siid === 4 && item.piid === 1
+                                  ? 400
+                                  : 0,
+    }));
+  });
 
   const state = await transportInternals.readViaMiot();
 
@@ -340,38 +323,36 @@ it("falls back to per-property MIOT reads when batch query is unsupported", asyn
     readViaMiot: () => Promise<DeviceState>;
   };
 
-  const call = vi
-    .spyOn(transportInternals, "call")
-    .mockImplementation(async (_method, params) => {
-      const items = params as Array<{
-        did: string;
-        siid: number;
-        piid: number;
-      }>;
-      if (items.length > 1) {
-        throw new Error("unsupported batch get_properties");
-      }
+  const call = vi.spyOn(transportInternals, "call").mockImplementation(async (_method, params) => {
+    const items = params as Array<{
+      did: string;
+      siid: number;
+      piid: number;
+    }>;
+    if (items.length > 1) {
+      throw new Error("unsupported batch get_properties");
+    }
 
-      const [item] = items;
-      const value =
-        item.siid === 2 && item.piid === 2
-          ? true
-          : item.siid === 10 && item.piid === 10
-            ? 7
-            : item.siid === 2 && item.piid === 5
-              ? 1
-              : 0;
+    const [item] = items;
+    const value =
+      item.siid === 2 && item.piid === 2
+        ? true
+        : item.siid === 10 && item.piid === 10
+          ? 7
+          : item.siid === 2 && item.piid === 5
+            ? 1
+            : 0;
 
-      return [
-        {
-          did: item.did,
-          siid: item.siid,
-          piid: item.piid,
-          code: 0,
-          value,
-        },
-      ];
-    });
+    return [
+      {
+        did: item.did,
+        siid: item.siid,
+        piid: item.piid,
+        code: 0,
+        value,
+      },
+    ];
+  });
 
   const state = await transportInternals.readViaMiot();
 

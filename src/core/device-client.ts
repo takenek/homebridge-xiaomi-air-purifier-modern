@@ -4,12 +4,7 @@ import {
   isRetryableError,
   type RetryPolicy,
 } from "./retry";
-import {
-  type DeviceMode,
-  type DeviceState,
-  type MiioTransport,
-  READ_PROPERTIES,
-} from "./types";
+import { type DeviceMode, type DeviceState, type MiioTransport, READ_PROPERTIES } from "./types";
 
 export interface Logger {
   debug(message: string): void;
@@ -46,17 +41,14 @@ export class DeviceClient {
   private destroyed = false;
   private currentState: DeviceState | null = null;
   private listeners: Array<(state: DeviceState) => void> = [];
-  private connectionListeners: Array<(event: ConnectionStateEvent) => void> =
-    [];
+  private connectionListeners: Array<(event: ConnectionStateEvent) => void> = [];
   private operationQueue: Promise<void> = Promise.resolve();
   private hasConnected = false;
   private disconnected = false;
 
   private logSuppressedQueueError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
-    this.logger.debug(
-      `Suppressed previous queued operation error to keep queue alive: ${message}`,
-    );
+    this.logger.debug(`Suppressed previous queued operation error to keep queue alive: ${message}`);
   }
 
   public constructor(
@@ -79,9 +71,7 @@ export class DeviceClient {
     this.listeners.push(listener);
   }
 
-  public onConnectionEvent(
-    listener: (event: ConnectionStateEvent) => void,
-  ): void {
+  public onConnectionEvent(listener: (event: ConnectionStateEvent) => void): void {
     this.connectionListeners.push(listener);
   }
 
@@ -126,10 +116,7 @@ export class DeviceClient {
     await this.enqueueSetAndSync("set_buzzer_volume", [volume]);
   }
 
-  private async enqueueSetAndSync(
-    method: string,
-    params: readonly unknown[],
-  ): Promise<void> {
+  private async enqueueSetAndSync(method: string, params: readonly unknown[]): Promise<void> {
     await this.enqueueOperation(async () => {
       await this.transport.setProperty(method, params);
       await this.pollWithRetry();
@@ -154,8 +141,7 @@ export class DeviceClient {
     void this.enqueueOperation(async () => {
       await this.pollWithRetry();
     }).catch((error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : "Unknown poll error";
+      const message = error instanceof Error ? error.message : "Unknown poll error";
       this.logger.warn(`[${channel}] poll failed: ${message}`);
     });
   }
@@ -192,15 +178,12 @@ export class DeviceClient {
           try {
             listener(state);
           } catch (error: unknown) {
-            const message =
-              error instanceof Error ? error.message : "Unknown listener error";
+            const message = error instanceof Error ? error.message : "Unknown listener error";
             this.logger.warn(`State listener failed: ${message}`);
           }
         }
         if (attempt > 0) {
-          this.logger.info(
-            `Recovered device connection after ${attempt} retries.`,
-          );
+          this.logger.info(`Recovered device connection after ${attempt} retries.`);
         }
 
         if (!this.hasConnected) {
@@ -216,14 +199,9 @@ export class DeviceClient {
       } catch (error: unknown) {
         attempt += 1;
         const code =
-          error instanceof Error
-            ? String(Reflect.get(error, "code") ?? "UNKNOWN")
-            : "UNKNOWN";
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        this.logger.warn(
-          `Device read failed (attempt ${attempt}, code ${code}): ${message}`,
-        );
+          error instanceof Error ? String(Reflect.get(error, "code") ?? "UNKNOWN") : "UNKNOWN";
+        const message = error instanceof Error ? error.message : "Unknown error";
+        this.logger.warn(`Device read failed (attempt ${attempt}, code ${code}): ${message}`);
 
         if (this.hasConnected && !this.disconnected) {
           this.disconnected = true;
@@ -234,11 +212,7 @@ export class DeviceClient {
           throw error;
         }
 
-        const delay = computeBackoffDelay(
-          attempt,
-          this.retryPolicy,
-          this.randomFn,
-        );
+        const delay = computeBackoffDelay(attempt, this.retryPolicy, this.randomFn);
         await this.delay(delay);
       }
     }
@@ -291,9 +265,7 @@ export class DeviceClient {
         listener(event);
       } catch (error: unknown) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Unknown connection listener error";
+          error instanceof Error ? error.message : "Unknown connection listener error";
         this.logger.warn(`Connection listener failed: ${message}`);
       }
     }

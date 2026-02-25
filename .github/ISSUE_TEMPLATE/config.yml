@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: README & Troubleshooting
+    url: https://github.com/takenek/xiaomi-mi-air-purifier-ng#troubleshooting
+    about: Check the README before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/takenek/xiaomi-mi-air-purifier-ng/security/advisories/new
+    about: Report security issues privately.

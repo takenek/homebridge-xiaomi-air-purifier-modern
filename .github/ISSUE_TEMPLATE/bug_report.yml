@@ -1,0 +1,75 @@
+name: Bug Report
+description: Report a problem with the plugin
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Please fill in as many fields as possible.
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: homebridge-version
+    attributes:
+      label: Homebridge version
+      placeholder: "e.g. 1.11.1"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: "e.g. 20.12.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device-model
+    attributes:
+      label: Device model
+      options:
+        - zhimi.airpurifier.2h
+        - zhimi.airpurifier.3
+        - zhimi.airpurifier.3h
+        - zhimi.airpurifier.4
+        - zhimi.airpurifier.pro
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure accessory with ...
+        2. Open Home app ...
+        3. See error
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Homebridge logs
+      description: Paste relevant log lines (redact your token and IP address).
+      render: text

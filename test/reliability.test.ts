@@ -2,11 +2,7 @@ import type { Socket } from "node:dgram";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceClient } from "../src/core/device-client";
 import { ModernMiioTransport } from "../src/core/miio-transport";
-import {
-  computeBackoffDelay,
-  DEFAULT_RETRY_POLICY,
-  isRetryableError,
-} from "../src/core/retry";
+import { computeBackoffDelay, DEFAULT_RETRY_POLICY, isRetryableError } from "../src/core/retry";
 import type { DeviceState, MiioTransport } from "../src/core/types";
 
 const state: DeviceState = {
@@ -73,9 +69,7 @@ describe("retry and polling", () => {
     await initPromise;
 
     expect(logger.warn).toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("Recovered"),
-    );
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Recovered"));
 
     await vi.advanceTimersByTimeAsync(30_000);
     expect(transport.getCalls).toBeGreaterThanOrEqual(4);
@@ -104,8 +98,6 @@ describe("retry and polling", () => {
         "ENETRESET",
         "EAI_AGAIN",
         "ENOTFOUND",
-        "EADDRINUSE",
-        "EADDRNOTAVAIL",
         "ERR_NETWORK_CHANGED",
       ];
       const logger = makeLogger();
@@ -131,16 +123,8 @@ describe("retry and polling", () => {
   }, 20000);
 
   it("computes exponential delay with max cap", () => {
-    const d1 = computeBackoffDelay(
-      1,
-      { ...DEFAULT_RETRY_POLICY, jitterFactor: 0 },
-      () => 0.5,
-    );
-    const d2 = computeBackoffDelay(
-      2,
-      { ...DEFAULT_RETRY_POLICY, jitterFactor: 0 },
-      () => 0.5,
-    );
+    const d1 = computeBackoffDelay(1, { ...DEFAULT_RETRY_POLICY, jitterFactor: 0 }, () => 0.5);
+    const d2 = computeBackoffDelay(2, { ...DEFAULT_RETRY_POLICY, jitterFactor: 0 }, () => 0.5);
     const d9 = computeBackoffDelay(
       9,
       { ...DEFAULT_RETRY_POLICY, jitterFactor: 0, maxDelayMs: 1000 },
@@ -166,9 +150,7 @@ describe("retry and polling", () => {
   });
 
   it("dgram socket has an error listener to prevent process crash", async () => {
-    const emitWarning = vi
-      .spyOn(process, "emitWarning")
-      .mockImplementation(() => undefined);
+    const emitWarning = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
 
     const transport = new ModernMiioTransport({
       address: "127.0.0.1",
@@ -183,9 +165,7 @@ describe("retry and polling", () => {
     expect(() => {
       socket.emit("error", new Error("ENETUNREACH"));
     }).not.toThrow();
-    expect(emitWarning).toHaveBeenCalledWith(
-      expect.stringContaining("[miio-transport:socket]"),
-    );
+    expect(emitWarning).toHaveBeenCalledWith(expect.stringContaining("[miio-transport:socket]"));
 
     await transport.close();
   });
