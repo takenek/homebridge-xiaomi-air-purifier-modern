@@ -640,9 +640,12 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     const decrypted = this.decrypt(encryptedPayload);
-    const parsed = JSON.parse(
-      decrypted.toString("utf8"),
-    ) as MiioResponsePayload;
+    let parsed: MiioResponsePayload;
+    try {
+      parsed = JSON.parse(decrypted.toString("utf8")) as MiioResponsePayload;
+    } catch {
+      throw new Error("Invalid JSON in MIIO response payload");
+    }
 
     if (parsed.error) {
       throw new MiioCommandError(

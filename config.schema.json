@@ -36,21 +36,6 @@
           "zhimi.airpurifier.pro"
         ]
       },
-      "enableAirQuality": {
-        "title": "Air Quality",
-        "type": "boolean",
-        "default": true
-      },
-      "enableTemperature": {
-        "title": "Temperature",
-        "type": "boolean",
-        "default": true
-      },
-      "enableHumidity": {
-        "title": "Humidity",
-        "type": "boolean",
-        "default": true
-      },
       "filterChangeThreshold": {
         "title": "Filter Change Warning Threshold",
         "type": "integer",
@@ -58,18 +43,6 @@
         "minimum": 0,
         "maximum": 100,
         "description": "Show <b>Change Filter</b> warning when Filter Life reaches or drops below this value."
-      },
-      "enableFanSpeedControl": {
-        "title": "Fan Speed",
-        "type": "boolean",
-        "default": false,
-        "description": "Allows you to see control the fan speed."
-      },
-      "enableChildLockControl": {
-        "title": "Child Lock",
-        "type": "boolean",
-        "default": false,
-        "description": "Allows you to lock/unlock the physical control."
       },
       "connectTimeoutMs": {
         "title": "Connect Timeout (ms)",
@@ -117,7 +90,10 @@
     {
       "type": "flex",
       "flex-flow": "row wrap",
-      "items": ["address", "token"]
+      "items": [
+        "address",
+        "token"
+      ]
     },
     {
       "type": "help",
@@ -128,17 +104,7 @@
       "title": "Sensors",
       "expandable": true,
       "expanded": true,
-      "items": [
-        {
-          "key": "enableAirQuality"
-        },
-        {
-          "key": "enableTemperature"
-        },
-        {
-          "key": "enableHumidity"
-        }
-      ]
+      "items": []
     },
     {
       "type": "section",
@@ -151,12 +117,6 @@
         },
         {
           "key": "exposeFilterReplaceAlertSensor"
-        },
-        {
-          "key": "enableFanSpeedControl"
-        },
-        {
-          "key": "enableChildLockControl"
         },
         {
           "key": "connectTimeoutMs"
