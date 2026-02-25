@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
+import { toBoolean, toMode, toNumber } from "./miio-converters";
 import { isRetryableError } from "./retry";
 import type { DeviceState, MiioTransport, ReadProperty } from "./types";
 
@@ -42,6 +43,8 @@ interface MiotValueResult {
 }
 
 class MiioCommandError extends Error {
+  public readonly code: string | undefined;
+
   public constructor(
     public readonly miioCode: number | null,
     message: string,
@@ -49,7 +52,7 @@ class MiioCommandError extends Error {
     super(message);
     this.name = "MiioCommandError";
     if (miioCode !== null) {
-      Reflect.set(this, "code", String(miioCode));
+      this.code = String(miioCode);
     }
   }
 }
@@ -64,40 +67,6 @@ const toMd5 = (...chunks: Buffer[]): Buffer => {
   }
 
   return hash.digest();
-};
-
-const toBoolean = (value: unknown): boolean => value === "on" || value === true || value === 1;
-const toNumber = (value: unknown): number => {
-  if (typeof value === "number") {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-};
-
-const toMode = (value: unknown): DeviceState["mode"] => {
-  if (value === "auto" || value === "sleep" || value === "idle" || value === "favorite") {
-    return value;
-  }
-
-  if (value === 0) {
-    return "auto";
-  }
-
-  if (value === 1) {
-    return "sleep";
-  }
-
-  if (value === 2) {
-    return "favorite";
-  }
-
-  return "idle";
 };
 
 const MIOT_DID = "0";
@@ -138,11 +107,11 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   purify_volume: ["purify_volume"],
 };
 
-const corePropertiesUnavailableError = (): Error => {
+const corePropertiesUnavailableError = (): Error & { code: string } => {
   const error = new Error(
     "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
-  );
-  Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
+  ) as Error & { code: string };
+  error.code = "EDEVICEUNAVAILABLE";
   return error;
 };
 
@@ -159,9 +128,9 @@ export class ModernMiioTransport implements MiioTransport {
   private socketClosed = false;
 
   private reportSuppressedError(context: string, error: unknown): void {
-    const code =
-      error instanceof Error ? String(Reflect.get(error, "code") ?? "UNKNOWN") : "UNKNOWN";
-    const message = error instanceof Error ? error.message : String(error);
+    const errorObj = error instanceof Error ? (error as Error & { code?: string }) : null;
+    const code = errorObj?.code ?? "UNKNOWN";
+    const message = errorObj?.message ?? String(error);
     const text = `[miio-transport:${context}] suppressed error (code=${code}): ${message}`;
     if (this.logger) {
       this.logger.debug(text);
@@ -252,8 +221,8 @@ export class ModernMiioTransport implements MiioTransport {
           resolve();
         });
       } catch (error: unknown) {
-        const code = error instanceof Error ? String(Reflect.get(error, "code") ?? "") : "";
-        if (code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
+        const errObj = error instanceof Error ? (error as Error & { code?: string }) : null;
+        if (errObj?.code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
           this.socketClosed = true;
           resolve();
           return;
@@ -514,8 +483,7 @@ export class ModernMiioTransport implements MiioTransport {
       return false;
     }
 
-    const code = Reflect.get(error, "code");
-    return typeof code === "string";
+    return typeof (error as Error & { code?: unknown }).code === "string";
   }
 
   private async handshake(): Promise<void> {
@@ -545,7 +513,8 @@ export class ModernMiioTransport implements MiioTransport {
       throw new Error("MIIO session not initialized.");
     }
 
-    const requestId = this.nextMessageId++;
+    const requestId = this.nextMessageId;
+    this.nextMessageId = (this.nextMessageId % 0x7fffffff) + 1;
     const payload = JSON.stringify({
       id: requestId,
       method,
@@ -623,8 +592,10 @@ export class ModernMiioTransport implements MiioTransport {
 
       const timeout = setTimeout(() => {
         cleanup();
-        const error = new Error(`MIIO timeout after ${options.timeoutMs}ms`);
-        Reflect.set(error, "code", "ETIMEDOUT");
+        const error = new Error(`MIIO timeout after ${options.timeoutMs}ms`) as Error & {
+          code: string;
+        };
+        error.code = "ETIMEDOUT";
         reject(error);
       }, options.timeoutMs);
 

@@ -30,7 +30,12 @@ afterEach(() => {
 
 class FakeCharacteristic {
   public onSetHandler: ((value: unknown) => Promise<void> | void) | null = null;
+  public onGetHandler: (() => unknown) | null = null;
   public constructor(public readonly UUID: string) {}
+  public onGet(handler: () => unknown): this {
+    this.onGetHandler = handler;
+    return this;
+  }
   public onSet(handler: (value: unknown) => Promise<void> | void): this {
     this.onSetHandler = handler;
     return this;
@@ -621,6 +626,80 @@ describe("AirPurifierAccessory switch contract", () => {
         service.setCalls.some((call) => call.characteristic === "configuredName"),
       ),
     ).toBe(false);
+  });
+
+  it("onGet handlers return current state values", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+    client.state = { ...baseState, power: true, mode: "sleep", filter1_life: 5 };
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      true,
+    );
+
+    const Char = (api as unknown as { hap: { Characteristic: Record<string, { UUID: string }> } })
+      .hap.Characteristic;
+
+    const findService = (name: string) =>
+      accessory
+        .getServices()
+        .find((s) => (s as unknown as FakeService).name === name) as unknown as FakeService;
+
+    const getHandler = (service: FakeService, char: { UUID: string }) =>
+      service.getCharacteristic(char).onGetHandler;
+
+    const powerService = findService("Switch:Power");
+    expect(getHandler(powerService, Char.On)?.()).toBe(true);
+
+    const airQualityService = findService("AirQuality:Office Air Quality");
+    expect(getHandler(airQualityService, Char.AirQuality)?.()).toBe(1);
+
+    const tempService = findService("Temp:Office Temperature");
+    expect(getHandler(tempService, Char.CurrentTemperature)?.()).toBe(21);
+
+    const humidityService = findService("Humidity:Office Humidity");
+    expect(getHandler(humidityService, Char.CurrentRelativeHumidity)?.()).toBe(38);
+
+    const childLockService = findService("Switch:Child Lock");
+    expect(getHandler(childLockService, Char.On)?.()).toBe(false);
+
+    const ledService = findService("Switch:LED Night Mode");
+    expect(getHandler(ledService, Char.On)?.()).toBe(true);
+
+    const modeAutoService = findService("Switch:Mode AUTO ON/OFF");
+    expect(getHandler(modeAutoService, Char.On)?.()).toBe(false);
+
+    const modeNightService = findService("Switch:Mode NIGHT ON/OFF");
+    expect(getHandler(modeNightService, Char.On)?.()).toBe(true);
+
+    const filterService = findService("Filter:Filter Life");
+    expect(getHandler(filterService, Char.FilterLifeLevel)?.()).toBe(5);
+    expect(getHandler(filterService, Char.FilterChangeIndication)?.()).toBe(1);
+
+    const alertService = findService("Contact:Filter Replace Alert");
+    expect(getHandler(alertService, Char.ContactSensorState)?.()).toBe(1);
+
+    // Test fallback values when state is null
+    client.state = null;
+    expect(getHandler(powerService, Char.On)?.()).toBe(false);
+    expect(getHandler(airQualityService, Char.AirQuality)?.()).toBe(1);
+    expect(getHandler(tempService, Char.CurrentTemperature)?.()).toBe(0);
+    expect(getHandler(humidityService, Char.CurrentRelativeHumidity)?.()).toBe(0);
+    expect(getHandler(childLockService, Char.On)?.()).toBe(false);
+    expect(getHandler(ledService, Char.On)?.()).toBe(false);
+    expect(getHandler(modeAutoService, Char.On)?.()).toBe(false);
+    expect(getHandler(modeNightService, Char.On)?.()).toBe(false);
+    expect(getHandler(filterService, Char.FilterLifeLevel)?.()).toBe(0);
+    expect(getHandler(filterService, Char.FilterChangeIndication)?.()).toBe(0);
+    expect(getHandler(alertService, Char.ContactSensorState)?.()).toBe(0);
   });
 
   it("logs initial connect failure", async () => {

@@ -52,10 +52,6 @@ export const isRetryableError = (error: unknown): boolean => {
     return false;
   }
 
-  const code = Reflect.get(error, "code");
-  if (typeof code === "string") {
-    return RETRYABLE_ERROR_CODES.has(code);
-  }
-
-  return false;
+  const code = (error as Error & { code?: unknown }).code;
+  return typeof code === "string" && RETRYABLE_ERROR_CODES.has(code);
 };

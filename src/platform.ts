@@ -25,6 +25,8 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   operationTimeoutMs?: number;
   reconnectDelayMs?: number;
   keepAliveIntervalMs?: number;
+  operationPollIntervalMs?: number;
+  sensorPollIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
 };
 
@@ -96,6 +98,12 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const operationTimeoutMs = normalizeTimeout(typedConfig.operationTimeoutMs, 15_000);
     const reconnectDelayMs = normalizeTimeout(typedConfig.reconnectDelayMs, 15_000);
     const keepAliveIntervalMs = normalizeTimeout(typedConfig.keepAliveIntervalMs, 60_000, 1_000);
+    const operationPollIntervalMs = normalizeTimeout(
+      typedConfig.operationPollIntervalMs,
+      10_000,
+      1_000,
+    );
+    const sensorPollIntervalMs = normalizeTimeout(typedConfig.sensorPollIntervalMs, 30_000, 1_000);
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
       typedConfig.exposeFilterReplaceAlertSensor,
       false,
@@ -107,6 +115,8 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     );
     const client = new DeviceClient(transport, this.log, {
       keepAliveIntervalMs,
+      operationPollIntervalMs,
+      sensorPollIntervalMs,
       retryPolicy: {
         ...DEFAULT_RETRY_POLICY,
         baseDelayMs: reconnectDelayMs,
