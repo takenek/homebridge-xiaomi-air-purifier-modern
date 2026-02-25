@@ -11,6 +11,14 @@ import { DEFAULT_RETRY_POLICY } from "./core/retry";
 import type { AirPurifierModel } from "./core/types";
 
 export const ACCESSORY_NAME = "XiaomiMiAirPurifier";
+
+const VALID_MODELS: readonly AirPurifierModel[] = [
+  "zhimi.airpurifier.2h",
+  "zhimi.airpurifier.3",
+  "zhimi.airpurifier.3h",
+  "zhimi.airpurifier.4",
+  "zhimi.airpurifier.pro",
+];
 export const PLUGIN_NAME = "homebridge-xiaomi-air-purifier-modern";
 
 type XiaomiAccessoryConfig = AccessoryConfig & {
@@ -81,6 +89,11 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const address = assertString(typedConfig.address, "address");
     const token = assertString(typedConfig.token, "token");
     const model = assertString(typedConfig.model, "model") as AirPurifierModel;
+    if (!VALID_MODELS.includes(model)) {
+      log.warn(
+        `Unrecognized model "${model}". Supported models: ${VALID_MODELS.join(", ")}. Proceeding anyway — protocol auto-detection will be used.`,
+      );
+    }
     const filterChangeThreshold = normalizeThreshold(
       typedConfig.filterChangeThreshold,
     );

@@ -610,7 +610,7 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
-  it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
+  it("uses numeric fallbacks for FilterChangeIndication when ContactSensor alert is enabled", () => {
     const api = makeApi();
     const filterCharacteristic = (
       api as unknown as {
@@ -911,5 +911,20 @@ describe("platform and index", () => {
           api as never,
         ),
     ).toThrow("Invalid or missing config field: name");
+
+    const warnLogger = makeLogger();
+    new XiaomiAirPurifierAccessoryPlugin(
+      warnLogger as never,
+      {
+        name: "Unknown Model",
+        address: "1.1.1.9",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.unknown",
+      } as never,
+      api as never,
+    );
+    expect(warnLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Unrecognized model "zhimi.airpurifier.unknown"'),
+    );
   });
 });

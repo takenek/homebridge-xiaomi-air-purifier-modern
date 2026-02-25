@@ -2,7 +2,7 @@
 
 - [ ] Pull latest `main`
 - [ ] Run lint/typecheck/test/build locally
-- [ ] Verify coverage thresholds (lines >= 80%, branches >= 70%)
+- [ ] Verify all coverage thresholds pass (100% lines/branches/functions/statements; miio-transport.ts is excluded)
 - [ ] Update CHANGELOG.md
 - [ ] Run `npm run release`
 - [ ] Push commit + tag

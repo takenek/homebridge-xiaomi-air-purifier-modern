@@ -30,7 +30,7 @@
     "README.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    "RELEASE_CHECKLIST.md"
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -49,6 +49,7 @@
     "@biomejs/biome": "^2.4.3",
     "@types/node": "^25.3.0",
     "@vitest/coverage-v8": "^4.0.0",
+    "homebridge": "^1.11.1",
     "typescript": "^5.8.2",
     "vitest": "^4.0.0"
   },
