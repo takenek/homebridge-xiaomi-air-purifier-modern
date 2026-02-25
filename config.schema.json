@@ -90,10 +90,7 @@
     {
       "type": "flex",
       "flex-flow": "row wrap",
-      "items": [
-        "address",
-        "token"
-      ]
+      "items": ["address", "token"]
     },
     {
       "type": "help",
