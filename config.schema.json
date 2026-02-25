@@ -78,6 +78,20 @@
         "default": 60000,
         "minimum": 1000,
         "description": "Background keep-alive poll interval."
+      },
+      "operationPollIntervalMs": {
+        "title": "Operation Poll Interval (ms)",
+        "type": "integer",
+        "default": 10000,
+        "minimum": 1000,
+        "description": "How often power, mode, child lock, LED and fan level are polled."
+      },
+      "sensorPollIntervalMs": {
+        "title": "Sensor Poll Interval (ms)",
+        "type": "integer",
+        "default": 30000,
+        "minimum": 1000,
+        "description": "How often temperature, humidity and AQI are polled."
       }
     }
   },
@@ -128,6 +142,12 @@
         },
         {
           "key": "keepAliveIntervalMs"
+        },
+        {
+          "key": "operationPollIntervalMs"
+        },
+        {
+          "key": "sensorPollIntervalMs"
         }
       ]
     }

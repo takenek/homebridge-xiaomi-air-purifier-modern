@@ -127,14 +127,17 @@ export class DeviceClient {
     this.operationTimer = setInterval(() => {
       this.safePoll("operation");
     }, this.operationPollIntervalMs);
+    this.operationTimer.unref();
 
     this.sensorTimer = setInterval(() => {
       this.safePoll("sensor");
     }, this.sensorPollIntervalMs);
+    this.sensorTimer.unref();
 
     this.keepAliveTimer = setInterval(() => {
       this.safePoll("keepalive");
     }, this.keepAliveIntervalMs);
+    this.keepAliveTimer.unref();
   }
 
   private safePoll(channel: "operation" | "sensor" | "keepalive"): void {
@@ -198,8 +201,8 @@ export class DeviceClient {
         return;
       } catch (error: unknown) {
         attempt += 1;
-        const code =
-          error instanceof Error ? String(Reflect.get(error, "code") ?? "UNKNOWN") : "UNKNOWN";
+        const errorObj = error instanceof Error ? (error as Error & { code?: string }) : null;
+        const code = errorObj?.code ?? "UNKNOWN";
         const message = error instanceof Error ? error.message : "Unknown error";
         this.logger.warn(`Device read failed (attempt ${attempt}, code ${code}): ${message}`);
 

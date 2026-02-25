@@ -8,6 +8,13 @@ import {
   resolveModeFromNightSwitch,
 } from "../core/mode-policy";
 
+type CharacteristicLike = { UUID: string } & Record<string, unknown>;
+
+const getEnumValue = (obj: CharacteristicLike, key: string, fallback: number): number => {
+  const value = key in obj ? obj[key] : undefined;
+  return typeof value === "number" ? value : fallback;
+};
+
 export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly informationService: Service;
   private readonly powerService: Service;
@@ -89,9 +96,11 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         : []),
     ];
 
+    const charObj = this.api.hap.Characteristic as unknown as Record<string, unknown>;
+    const configuredName = "ConfiguredName" in charObj ? charObj.ConfiguredName : undefined;
+
     for (const { service, name } of namedServices) {
       service.setCharacteristic(this.api.hap.Characteristic.Name, name);
-      const configuredName = Reflect.get(this.api.hap.Characteristic as object, "ConfiguredName");
       if (configuredName) {
         service.setCharacteristic(configuredName as never, name);
       }
@@ -115,20 +124,38 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   }
 
   private bindHandlers(): void {
+    const Char = this.api.hap.Characteristic;
+
     this.powerService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      .getCharacteristic(Char.On)
+      .onGet(() => this.client.state?.power ?? false)
       .onSet(async (value: CharacteristicValue) => this.client.setPower(Boolean(value)));
 
+    this.airQualityService
+      .getCharacteristic(Char.AirQuality)
+      .onGet(() => aqiToHomeKitAirQuality(this.client.state?.aqi ?? 0));
+
+    this.temperatureService
+      .getCharacteristic(Char.CurrentTemperature)
+      .onGet(() => this.client.state?.temperature ?? 0);
+
+    this.humidityService
+      .getCharacteristic(Char.CurrentRelativeHumidity)
+      .onGet(() => this.client.state?.humidity ?? 0);
+
     this.childLockService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      .getCharacteristic(Char.On)
+      .onGet(() => this.client.state?.child_lock ?? false)
       .onSet(async (value: CharacteristicValue) => this.client.setChildLock(Boolean(value)));
 
     this.ledService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      .getCharacteristic(Char.On)
+      .onGet(() => this.client.state?.led ?? false)
       .onSet(async (value: CharacteristicValue) => this.client.setLed(Boolean(value)));
 
     this.modeAutoService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      .getCharacteristic(Char.On)
+      .onGet(() => isAutoModeSwitchOn(this.client.state?.mode ?? "idle"))
       .onSet(async (value: CharacteristicValue) => {
         const state = this.client.state;
         const mode = resolveModeFromAutoSwitch(Boolean(value), Boolean(state?.power));
@@ -136,12 +163,27 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       });
 
     this.modeNightService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      .getCharacteristic(Char.On)
+      .onGet(() => isNightModeSwitchOn(this.client.state?.mode ?? "idle"))
       .onSet(async (value: CharacteristicValue) => {
         const state = this.client.state;
         const mode = resolveModeFromNightSwitch(Boolean(value), Boolean(state?.power));
         await this.handleModeSwitch(mode);
       });
+
+    this.filterService
+      .getCharacteristic(Char.FilterLifeLevel)
+      .onGet(() => this.client.state?.filter1_life ?? 0);
+
+    this.filterService
+      .getCharacteristic(Char.FilterChangeIndication)
+      .onGet(() => this.getFilterChangeIndication());
+
+    if (this.filterAlertService) {
+      this.filterAlertService
+        .getCharacteristic(Char.ContactSensorState)
+        .onGet(() => this.getContactSensorState());
+    }
   }
 
   private async handleModeSwitch(nextMode: "auto" | "sleep" | null): Promise<void> {
@@ -152,6 +194,23 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     }
 
     await this.client.setMode(nextMode);
+  }
+
+  private getFilterChangeIndication(): number {
+    const filterLife = this.client.state?.filter1_life ?? 100;
+    const indication = this.api.hap.Characteristic
+      .FilterChangeIndication as unknown as CharacteristicLike;
+    return filterLife <= this.filterChangeThreshold
+      ? getEnumValue(indication, "CHANGE_FILTER", 1)
+      : getEnumValue(indication, "FILTER_OK", 0);
+  }
+
+  private getContactSensorState(): number {
+    const filterLife = this.client.state?.filter1_life ?? 100;
+    const contact = this.api.hap.Characteristic.ContactSensorState as unknown as CharacteristicLike;
+    return filterLife <= this.filterChangeThreshold
+      ? getEnumValue(contact, "CONTACT_DETECTED", 1)
+      : getEnumValue(contact, "CONTACT_NOT_DETECTED", 0);
   }
 
   private refreshCharacteristics(): void {
@@ -204,47 +263,17 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.api.hap.Characteristic.FilterLifeLevel,
       state.filter1_life,
     );
-    const filterChangeIndication = Reflect.get(
-      this.api.hap.Characteristic.FilterChangeIndication as object,
-      "CHANGE_FILTER",
-    );
-    const filterOkIndication = Reflect.get(
-      this.api.hap.Characteristic.FilterChangeIndication as object,
-      "FILTER_OK",
-    );
-
     this.updateCharacteristicIfNeeded(
       this.filterService,
       this.api.hap.Characteristic.FilterChangeIndication,
-      state.filter1_life <= this.filterChangeThreshold
-        ? typeof filterChangeIndication === "number"
-          ? filterChangeIndication
-          : 1
-        : typeof filterOkIndication === "number"
-          ? filterOkIndication
-          : 0,
+      this.getFilterChangeIndication(),
     );
 
     if (this.filterAlertService) {
-      const contactDetected = Reflect.get(
-        this.api.hap.Characteristic.ContactSensorState as object,
-        "CONTACT_DETECTED",
-      );
-      const contactNotDetected = Reflect.get(
-        this.api.hap.Characteristic.ContactSensorState as object,
-        "CONTACT_NOT_DETECTED",
-      );
-
       this.updateCharacteristicIfNeeded(
         this.filterAlertService,
         this.api.hap.Characteristic.ContactSensorState,
-        state.filter1_life <= this.filterChangeThreshold
-          ? typeof contactDetected === "number"
-            ? contactDetected
-            : 1
-          : typeof contactNotDetected === "number"
-            ? contactNotDetected
-            : 0,
+        this.getContactSensorState(),
       );
     }
   }
@@ -270,8 +299,10 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     characteristic: unknown,
     value: CharacteristicValue,
   ): void {
-    const characteristicUuid = String(Reflect.get(characteristic as object, "UUID") ?? "");
-    const key = `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`;
+    const charLike = characteristic as CharacteristicLike;
+    const characteristicUuid = "UUID" in charLike ? String(charLike.UUID) : "";
+    const serviceLike = service as Service & { subtype?: string };
+    const key = `${service.UUID}:${serviceLike.subtype ?? ""}:${characteristicUuid}`;
     if (this.characteristicCache.get(key) === value) {
       return;
     }
