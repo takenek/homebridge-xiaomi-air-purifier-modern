@@ -137,8 +137,8 @@ const makeApi = (withConfiguredName = true) => {
         },
         ContactSensorState: {
           UUID: "contactState",
-          CONTACT_NOT_DETECTED: 0,
-          CONTACT_DETECTED: 1,
+          CONTACT_DETECTED: 0, // matches real HAP value
+          CONTACT_NOT_DETECTED: 1, // matches real HAP value
         },
       },
     },

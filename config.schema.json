@@ -66,11 +66,11 @@
         "description": "Timeout for read/write operations after connection."
       },
       "reconnectDelayMs": {
-        "title": "Reconnect Delay (ms)",
+        "title": "Max Reconnect Delay (ms)",
         "type": "integer",
         "default": 15000,
         "minimum": 100,
-        "description": "Base delay used by reconnect backoff policy."
+        "description": "Maximum delay cap between reconnection attempts. The plugin uses exponential backoff starting at 400 ms and growing up to this value. 15 000 ms (15 s) is suitable for most home networks."
       },
       "keepAliveIntervalMs": {
         "title": "Keep Alive Interval (ms)",

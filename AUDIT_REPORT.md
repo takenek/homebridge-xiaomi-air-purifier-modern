@@ -1,10 +1,10 @@
 # Code Review & Quality Audit — xiaomi-mi-air-purifier-ng
 
-**Audytor:** Claude (Anthropic), senior Homebridge/Node.js/TypeScript specialist
-**Data:** 2026-02-25
+**Audytor:** Claude (Anthropic), senior Homebridge / Node.js / TypeScript specialist
+**Data audytu:** 2026-02-25
 **Wersja analizowana:** 1.0.0
-**Branch:** `claude/homebridge-plugin-audit-MFbyc`
-**Zakres:** Pełny code review — 100% kodu źródłowego, testów, CI/CD, dokumentacji
+**Branch:** `claude/homebridge-plugin-audit-olBMB`
+**Zakres:** Pełny code review — 100% kodu źródłowego, testów, CI/CD, dokumentacji, konfiguracji
 
 ---
 
@@ -12,23 +12,23 @@
 
 ### Największe plusy
 
-1. **Zero runtime-dependencies** — wyłącznie Node.js built-ins + Homebridge peer. Eliminuje całą klasę problemów supply-chain i znacząco ułatwia utrzymanie i audyt.
-2. **Solidna warstwa transportu MIIO** — prawidłowa implementacja AES-128-CBC, pełne zarządzanie sesją, auto-detekcja protokołu MIOT/Legacy z fallbackiem, serialna kolejka operacji eliminująca race conditions.
-3. **Profesjonalny CI/CD** — lint + typecheck + test (100% coverage z wyłączeniem warstwy sieciowej) + build + `npm pack --dry-run` na Node 20/22/24, publikacja z npm provenance. Dependabot dla npm i GitHub Actions.
+1. **Zero runtime-dependencies** — wyłącznie Node.js built-ins + Homebridge peer. Eliminuje całą klasę ryzyk supply-chain; audyt bezpieczeństwa zależności jest trywialny.
+2. **Solidna warstwa transportu MIIO** — prawidłowa implementacja AES-128-CBC z kluczem i IV derywowanymi z tokenu przez MD5, pełne zarządzanie sesją UDP, automatyczna detekcja protokołu MIOT/Legacy z fallbackiem, serialna kolejka operacji eliminująca race conditions.
+3. **Profesjonalny CI/CD** — lint + typecheck + test (100% coverage z wyłączeniem warstwy sieciowej) + build + `npm pack --dry-run` na Node 20/22/24, publikacja z npm provenance (`--provenance`). Dependabot dla npm i GitHub Actions.
 4. **Kompletna dokumentacja OSS** — README, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY.md, issue templates, release checklist. Rzadko spotykana kompletność dla projektu v1.0.0.
 5. **TypeScript strict mode** — `noImplicitAny`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals/Parameters`. Biome z `noExplicitAny: error`. Wysoka dyscyplina typowania.
 
-### Największe ryzyka
+### Największe ryzyka (stan przed audytem)
 
-6. **Krytyczny błąd ContactSensorState** — enum wartości w mock testowym są odwrócone względem rzeczywistego HAP, maskując błąd produkcyjny: sensor alertu filtra działa odwrotnie niż zamierzono (alert gdy filtr OK, brak alertu gdy filtr wymaga wymiany).
-7. **Brak natywnego `Service.AirPurifier`** — plugin używa przełącznika (`Service.Switch`) zamiast dedykowanego serwisu HAP, co wyklucza integrację Siri i HomeKit Automation dla tego typu urządzenia.
-8. **Fan speed nie jest eksponowane do HomeKit** — mapper `fanLevelToRotationSpeed` istnieje, jest przetestowany, ale nigdy nie jest podpięty do żadnej charakterystyki — martwy kod. Kontrola prędkości wentylatora to kluczowa funkcja oczyszczaczy.
+6. **Krytyczny błąd ContactSensorState** _(naprawiony)_ — enum wartości w mock testowym były odwrócone względem rzeczywistego HAP, maskując błąd produkcyjny: sensor alertu filtra działał odwrotnie niż zamierzono.
+7. **Brak natywnego `Service.AirPurifier`** _(do poprawy)_ — plugin używa `Service.Switch` zamiast dedykowanego serwisu HAP, co wyklucza integrację Siri i natywne ikony HomeKit.
+8. **Fan speed nie eksponowane do HomeKit** _(do poprawy)_ — mapper `fanLevelToRotationSpeed` istnieje i jest przetestowany, ale nigdy nie trafia do żadnej charakterystyki HAP — martwy kod.
 
 ---
 
-## 2. Krytyczne problemy (blokery publikacji na npm)
+## 2. Krytyczne problemy (stan przed audytem — blokery publikacji)
 
-### CRITICAL-1: `ContactSensorState` — odwrócona logika enum (błąd produkcyjny maskowany przez test)
+### CRITICAL-1: `ContactSensorState` — odwrócona logika enum ✅ NAPRAWIONY
 
 **Pliki:** `src/accessories/air-purifier.ts:208–213`, `test/accessory-platform-index.test.ts:139–143`
 
@@ -36,97 +36,71 @@
 
 W rzeczywistym HAP (hap-nodejs):
 ```
-ContactSensorState.CONTACT_DETECTED     = 0  // kontakt wykryty, normalny stan, brak alertu
-ContactSensorState.CONTACT_NOT_DETECTED = 1  // kontakt przerwany, stan alertu
+ContactSensorState.CONTACT_DETECTED     = 0  // kontakt wykryty — normalny stan, brak alertu
+ContactSensorState.CONTACT_NOT_DETECTED = 1  // kontakt przerwany — stan alertu
 ```
 
-Kod w produkcji:
+Kod przed naprawą:
 ```typescript
-// air-purifier.ts:210-213
 return filterLife <= this.filterChangeThreshold
-  ? getEnumValue(contact, "CONTACT_DETECTED", 1)      // filtr wymaga wymiany → zwraca 0 = BRAK alertu! ← BŁĄD
-  : getEnumValue(contact, "CONTACT_NOT_DETECTED", 0); // filtr OK → zwraca 1 = ALERT! ← BŁĄD
+  ? getEnumValue(contact, "CONTACT_DETECTED", 1)      // filtr wymaga wymiany → 0 = BRAK alertu! BŁĄD
+  : getEnumValue(contact, "CONTACT_NOT_DETECTED", 0); // filtr OK → 1 = ALERT! BŁĄD
 ```
 
-Mock testowy ma odwrócone wartości względem prawdziwego HAP:
-```typescript
-// test/accessory-platform-index.test.ts:139-142
-ContactSensorState: {
-  UUID: "contactState",
-  CONTACT_NOT_DETECTED: 0,  // BŁĄD: rzeczywista wartość HAP to 1
-  CONTACT_DETECTED: 1,       // BŁĄD: rzeczywista wartość HAP to 0
-},
-```
+Mock testowy miał odwrócone wartości (`CONTACT_DETECTED: 1`, `CONTACT_NOT_DETECTED: 0`), co powodowało, że test przechodził, mimo że logika produkcyjna była błędna.
 
-**Skutek produkcyjny:** Sensor „Filter Replace Alert" wysyła alert do HomeKit gdy filtr jest OK, i nie wysyła alertu gdy filtr wymaga wymiany — dokładnie odwrotnie niż zamierzono. Testy przechodzą, bo test mock używa odwróconych wartości (błąd + błąd = test zielony, produkcja zepsuta).
+**Skutek produkcyjny:** Sensor "Filter Replace Alert" wysyłał alert gdy filtr był OK i nie wysyłał alertu gdy filtr wymagał wymiany — dokładnie odwrotnie niż zamierzono.
 
-**Naprawa `src/accessories/air-purifier.ts`:**
-```typescript
-private getContactSensorState(): number {
-  const filterLife = this.client.state?.filter1_life ?? 100;
-  const contact = this.api.hap.Characteristic.ContactSensorState as unknown as CharacteristicLike;
-  // Filtr wymaga wymiany → CONTACT_NOT_DETECTED (1) = sensor "otwarty" = alert w HomeKit
-  // Filtr OK             → CONTACT_DETECTED (0) = sensor "zamknięty" = brak alertu
-  return filterLife <= this.filterChangeThreshold
-    ? getEnumValue(contact, "CONTACT_NOT_DETECTED", 1)
-    : getEnumValue(contact, "CONTACT_DETECTED", 0);
-}
-```
-
-**Naprawa mocka testowego:**
-```typescript
-ContactSensorState: {
-  UUID: "contactState",
-  CONTACT_DETECTED: 0,        // zgodne z HAP
-  CONTACT_NOT_DETECTED: 1,    // zgodne z HAP
-},
-```
+**Naprawa zastosowana:**
+- `src/accessories/air-purifier.ts` — zamieniono klucze enum: `CONTACT_NOT_DETECTED` (fallback 1) gdy filtr wymaga wymiany, `CONTACT_DETECTED` (fallback 0) gdy filtr jest OK. Dodano komentarz wyjaśniający semantykę HAP.
+- `test/accessory-platform-index.test.ts` — mock zaktualizowany do wartości zgodnych z rzeczywistym HAP: `CONTACT_DETECTED: 0`, `CONTACT_NOT_DETECTED: 1`.
 
 ---
 
-### CRITICAL-2: Fan speed — martwy kod (mapper nigdy nie eksponowany do HomeKit)
+### CRITICAL-2: Fan speed — martwy kod (mapper nigdy nie eksponowany do HomeKit) ⚠️ DO POPRAWY
 
 **Pliki:** `src/core/mappers.ts:1–17`, `src/core/device-client.ts:99–101`, `src/accessories/air-purifier.ts`
 
 **Problem:**
 
-Zaimplementowano i przetestowano mapowanie prędkości wentylatora:
-- `fanLevelToRotationSpeed(fanLevel)` — mapuje fan_level 1-16 → RotationSpeed 0-100%
-- `rotationSpeedToFanLevel(speed)` — mapuje RotationSpeed → fan_level
-- `DeviceClient.setFanLevel(fanLevel)` — metoda publiczna do ustawiania poziomu
-- `DeviceState.fan_level` — pole w stanie urządzenia, odczytywane przy każdym pollu
+Zaimplementowano i przetestowano:
+- `fanLevelToRotationSpeed(fanLevel)` → RotationSpeed 0–100%
+- `rotationSpeedToFanLevel(speed)` → fan_level 1–16
+- `DeviceClient.setFanLevel(fanLevel)` — publiczna metoda
+- `DeviceState.fan_level` — odczytywane przy każdym pollu
 
-**Jednak `AirPurifierAccessory` nie eksponuje żadnej z tych funkcji jako charakterystyki HomeKit.** Fan speed jest odczytywane, przechowywane, ale nigdy nie trafia do użytkownika. To martwy kod (dead code) — istniejący kod, który nigdy nie jest wywołany ścieżką produkcyjną.
+Jednak `AirPurifierAccessory` nie eksponuje żadnej z tych funkcji jako charakterystyki HomeKit. Fan speed jest odczytywane, przechowywane, ale nigdy nie trafia do użytkownika.
 
-**Naprawa:** Dodać `RotationSpeed` do `Service.AirPurifier` (patrz CRITICAL-3). Jeśli funkcja jest celowo wstrzymana — usunąć martwy kod lub dodać TODO z wyjaśnieniem.
+**Naprawa (wymaga CRITICAL-3):** Dodać `RotationSpeed` do `Service.AirPurifier` (patrz niżej). Jeśli funkcja jest celowo wstrzymana — usunąć martwy kod lub oznaczyć `TODO`.
 
 ---
 
-### CRITICAL-3: Brak natywnego `Service.AirPurifier`
+### CRITICAL-3: Brak natywnego `Service.AirPurifier` ⚠️ DO POPRAWY
 
 **Plik:** `src/accessories/air-purifier.ts:48`
 
-**Problem:**
+```typescript
+this.powerService = new this.api.hap.Service.Switch("Power", "power");
+```
 
-Plugin kontroluje zasilanie oczyszczacza przez `Service.Switch` zamiast `Service.AirPurifier`. HAP definiuje dedykowany serwis z charakterystykami:
-- `Active` (on/off — zasilanie)
-- `CurrentAirPurifierState` (Inactive/Idle/Purifying — aktualny stan)
-- `TargetAirPurifierState` (Manual/Auto — tryb docelowy)
-- `RotationSpeed` (prędkość wentylatora 0-100%)
+HAP definiuje dedykowany serwis `Service.AirPurifier` z charakterystykami:
+- `Active` (on/off — zasilanie) zamiast `Service.Switch`
+- `CurrentAirPurifierState` (Inactive/Idle/Purifying)
+- `TargetAirPurifierState` (Manual/Auto)
+- `RotationSpeed` (prędkość wentylatora — rozwiązuje CRITICAL-2)
 
 **Skutki braku `Service.AirPurifier`:**
 1. Siri nie rozpoznaje urządzenia jako oczyszczacza — „Włącz oczyszczacz powietrza" nie działa
 2. Brak automatyzacji HomeKit „Purifier is Running" / „Air Purifier is Idle"
-3. Urządzenie w aplikacji Home pojawia się bez ikony oczyszczacza — użytkownik widzi anonimowy Switch
-4. `TargetAirPurifierState` (Manual/Auto) naturalnie zastąpiłby przełączniki Mode AUTO/NIGHT
-5. `RotationSpeed` w `Service.AirPurifier` rozwiązuje CRITICAL-2
+3. Ikona w aplikacji Home — anonimowy Switch zamiast ikony oczyszczacza
+4. `TargetAirPurifierState` (Manual/Auto) naturalnie zastąpiłby dwa mylące przełączniki Mode AUTO/NIGHT
 
 **Propozycja architektury:**
 ```typescript
 // Zastąpić powerService: Service.Switch przez Service.AirPurifier:
 this.purifierService = new this.api.hap.Service.AirPurifier(name);
 
-// Active (zasilanie on/off)
+// Active (zasilanie)
 this.purifierService
   .getCharacteristic(Char.Active)
   .onGet(() => (this.client.state?.power ? 1 : 0))
@@ -140,7 +114,7 @@ this.purifierService
     return this.client.state.mode === "sleep" ? 1 : 2; // IDLE vs PURIFYING
   });
 
-// TargetAirPurifierState
+// TargetAirPurifierState (zastępuje Mode AUTO/NIGHT switches)
 this.purifierService
   .getCharacteristic(Char.TargetAirPurifierState)
   .onGet(() => (this.client.state?.mode === "auto" ? 1 : 0))
@@ -148,7 +122,7 @@ this.purifierService
     this.client.setMode(value === 1 ? "auto" : "favorite")
   );
 
-// RotationSpeed — FAN SPEED! (rozwiązuje CRITICAL-2)
+// RotationSpeed — ROZWIĄZUJE CRITICAL-2
 this.purifierService
   .getCharacteristic(Char.RotationSpeed)
   .onGet(() => fanLevelToRotationSpeed(this.client.state?.fan_level ?? 1))
@@ -157,9 +131,11 @@ this.purifierService
   );
 ```
 
+> **Uwaga:** Ta zmiana jest niekompatybilna wstecz — użytkownicy muszą ponownie sparować akcesorium w HomeKit po aktualizacji. Wymaga bumpu major version lub explicitnej deprecation notice.
+
 ---
 
-### CRITICAL-4: `getProperties(_props)` — parametr `props` jest ignorowany
+### CRITICAL-4: `getProperties(_props)` — parametr `props` jest ignorowany ⚠️ DO POPRAWY
 
 **Plik:** `src/core/miio-transport.ts:160`
 
@@ -167,656 +143,183 @@ this.purifierService
 public async getProperties(_props: readonly ReadProperty[]): Promise<DeviceState> {
 ```
 
-Prefiks `_` wskazuje na celowe ignorowanie argumentu. Transport zawsze odczytuje wszystkie właściwości zdefiniowane w `MIOT_MAP`/`LEGACY_MAP`, niezależnie od tego, co zostanie przekazane.
+Transport zawsze odczytuje wszystkie właściwości z `MIOT_MAP`/`LEGACY_MAP`, niezależnie od argumentu. Trzy kanały pollingu (operation 10s, sensor 30s, keepalive 60s) wywołują tę samą operację — `READ_PROPERTIES` w `types.ts` jest martwym kodem.
 
-**Konsekwencje:**
-1. Interfejs `MiioTransport` obiecuje selektywne odczytywanie — abstrakcja przecieka (leaky abstraction)
-2. Trzy kanały pollingu (operation 10s, sensor 30s, keepalive 60s) wykonują **dokładnie te same** operacje — zróżnicowanie interwałów istnieje, ale nie istnieje zróżnicowanie zakresu odczytu
-3. Kanał keepalive (60s), który miał tylko „podtrzymać sesję UDP", wykonuje pełny odczyt wszystkich 13 właściwości — 13 UDP roundtrips przy każdym keepalive (legacy) lub 1 batch (MIOT)
-4. `READ_PROPERTIES` w `types.ts` przekazywane do `getProperties()` jest martwym kodem — nigdy nie używane
-
-**Naprawa:** Albo usunąć parametr z interfejsu (`getProperties(): Promise<DeviceState>`), albo zaimplementować selektywne odczytywanie dla różnych kanałów pollingu.
+**Naprawa:** Albo usunąć parametr z interfejsu (`getProperties(): Promise<DeviceState>`), albo zaimplementować selektywne odczytywanie dla różnych kanałów i naprawić nazewnictwo.
 
 ---
 
 ## 3. Ważne usprawnienia
 
-### Priorytet HIGH
-
-#### HIGH-1: Legacy protocol — 13 sekwencyjnych UDP calls zamiast jednego batch request
+### HIGH-1: Legacy protocol — 13 sekwencyjnych UDP calls zamiast batch request ⚠️ DO POPRAWY
 
 **Plik:** `src/core/miio-transport.ts:348–372`
 
-```typescript
-private async readViaLegacy(): Promise<DeviceState> {
-  const powerRaw = await this.readLegacyOne(LEGACY_MAP.power ?? []);
-  const fanLevelRaw = await this.readLegacyOne(LEGACY_MAP.fan_level ?? []);
-  const modeRaw = await this.readLegacyOne(LEGACY_MAP.mode ?? []);
-  // ... + kolejne 10 sekwencyjnych await ...
-}
-```
-
-Protokół legacy (`get_prop`) wspiera batch odczytu wielu właściwości w jednym pakiecie UDP:
+`readViaLegacy()` wykonuje 13 oddzielnych `get_prop` calls. Protokół legacy wspiera batch:
 ```json
-{"id": 1, "method": "get_prop", "params": ["power", "mode", "temperature", "humidity", "aqi", ...]}
+{"id": 1, "method": "get_prop", "params": ["power", "mode", "temperature", ...]}
 ```
-Urządzenie odpowiada tablicą wartości w tej samej kolejności.
 
-**Wpływ na wydajność:** Przy każdym pollu na urządzeniu legacy: 13 × UDP RTT (≈50ms każdy) ≈ **650ms blokady kolejki operacji**. W tym czasie żadne polecenie użytkownika nie może być wykonane.
+**Wpływ:** 13 × UDP RTT ≈ 650ms blokady kolejki operacji przy każdym pollu na urządzeniu legacy. W tym czasie żadne polecenie użytkownika nie może być wykonane.
 
-**Propozycja naprawy:**
-```typescript
-private async readViaLegacyBatch(): Promise<Map<string, unknown>> {
-  const keys = Object.keys(LEGACY_MAP);
-  // Użyj pierwszego kandydata dla każdego klucza jako primary property name
-  const primaryCandidates = keys.map(k => LEGACY_MAP[k]?.[0]).filter(Boolean) as string[];
-
-  try {
-    const response = await this.call("get_prop", primaryCandidates);
-    if (Array.isArray(response) && response.length === primaryCandidates.length) {
-      const result = new Map<string, unknown>();
-      primaryCandidates.forEach((candidate, i) => {
-        const key = keys.find(k => LEGACY_MAP[k]?.[0] === candidate);
-        if (key !== undefined) result.set(key, response[i]);
-      });
-      return result;
-    }
-  } catch (error: unknown) {
-    if (isRetryableError(error)) throw error;
-    // Fallback do sekwencyjnego odczytu z alternatywnymi kandydatami
-  }
-
-  // Sekwencyjny fallback:
-  const result = new Map<string, unknown>();
-  for (const [key, candidates] of Object.entries(LEGACY_MAP)) {
-    result.set(key, await this.readLegacyOne(candidates));
-  }
-  return result;
-}
-```
+**Propozycja:** Zaimplementować `readViaLegacyBatch()` z fallbackiem do sekwencyjnego odczytu (dla urządzeń wymagających alternatywnych nazw właściwości).
 
 ---
 
-#### HIGH-2: `@types/node@^25` vs `engines.node: "^20|^22|^24"` — niezgodność wersji
+### HIGH-2: `@types/node@^25` vs `engines.node: "^20|^22|^24"` ✅ NAPRAWIONY
 
-**Plik:** `package.json:55`
+**Zmiana:** `@types/node: "^25.3.0"` → `"^22.0.0"` w `package.json`.
 
-```json
-"@types/node": "^25.3.0"   // typy dla Node 25
-```
-
-vs.
-
-```json
-"engines": {
-  "node": "^20.0.0 || ^22.0.0 || ^24.0.0"   // obsługiwane Node 20-24
-}
-```
-
-`@types/node@25` eksponuje typy API dostępnych w Node 25, których nie ma w Node 20/22/24 (np. nowe metody Stream, eksperymentalne API). TypeScript skompiluje poprawnie, ale może akceptować kod używający API niedostępnych na deklarowanych platformach docelowych.
-
-**Naprawa:**
-```json
-"@types/node": "^22.0.0"
-```
-Wersja 22 zapewnia pełną kompatybilność z Node 20 i 22, jest akceptowana przez Node 24 (backward compatibility typów).
+`@types/node@25` eksponuje API Node.js 25 niedostępne na deklarowanych platformach (Node 20-24). Wersja `^22` pokrywa Node 20, 22 i jest akceptowana przez Node 24.
 
 ---
 
-#### HIGH-3: `SerialNumber: "unknown"` — brak unikalności przy wielu urządzeniach
+### HIGH-3: `SerialNumber: "unknown"` — brak unikalności ✅ NAPRAWIONY
 
-**Plik:** `src/accessories/air-purifier.ts:46`
-
+**Zmiana:** Zastąpiono statycznym `"unknown"` identyfikatorem derywowanym z adresu IP urządzenia:
 ```typescript
-.setCharacteristic(this.api.hap.Characteristic.SerialNumber, "unknown");
+Buffer.from(address).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 16)
 ```
 
-Gdy użytkownik ma dwa oczyszczacze Xiaomi, oba mają `SerialNumber = "unknown"`. HomeKit może wyświetlać ostrzeżenia lub mieć problemy z identyfikacją. Numer seryjny powinien być deterministycznie unikalny.
-
-**Naprawa:**
-```typescript
-.setCharacteristic(
-  this.api.hap.Characteristic.SerialNumber,
-  // Unikalny identyfikator oparty na adresie (deterministyczny, nieodwracalny)
-  Buffer.from(address).toString("base64").slice(0, 16),
-)
-```
+Zapewnia stabilny, unikalny numer seryjny przy wielu oczyszczaczach w tym samym domu HomeKit.
 
 ---
 
-#### HIGH-4: `CONTRIBUTING.md` w `files` — publikowane na npm bez potrzeby
+### HIGH-4: `CONTRIBUTING.md` w `files` npm ✅ NAPRAWIONY
 
-**Plik:** `package.json:34`
-
-```json
-"files": [
-  "dist",
-  "config.schema.json",
-  "README.md",
-  "CHANGELOG.md",
-  "CONTRIBUTING.md",   // <-- niepotrzebne dla konsumentów pakietu
-  "LICENSE"
-],
-```
-
-`CONTRIBUTING.md` to dokument dla developerów projektu, nie dla użytkowników pakietu npm. Zwiększa rozmiar pakietu bez wartości dla instalujących.
-
-**Naprawa:** Usunąć `"CONTRIBUTING.md"` z `files`.
+**Zmiana:** Usunięto `"CONTRIBUTING.md"` z tablicy `files` w `package.json`. Dokument dla developerów nie jest potrzebny konsumentom pakietu.
 
 ---
 
-#### HIGH-5: LED mapping — niespójność MIOT vs Legacy
+### HIGH-5: LED mapping — niespójność MIOT vs Legacy ⚠️ UDOKUMENTOWANE
 
 **Plik:** `src/core/miio-transport.ts:279, 366`
 
-MIOT path:
-```typescript
-led: toNumber(valueByKey.get("led")) !== 2,  // 0=on, 2=off — wartość numeryczna
-```
+MIOT path: `led: toNumber(valueByKey.get("led")) !== 2` — wartości numeryczne (0=on, 2=off)
+Legacy path: `led: toBoolean(readLegacyOne(...))` — stringi "on"/"off"
 
-Legacy path:
-```typescript
-led: toBoolean(await this.readLegacyOne(LEGACY_MAP.led ?? [])),  // "on"/"off" — string
-```
-
-W MIOT, LED używa wartości numerycznych (0=maksymalna jasność/on, 2=LED wyłączony). W trybie legacy spodziewane są stringi `"on"`/`"off"`. Jeśli urządzenie legacy zwróci wartość liczbową (np. z powodu firmware różnic), `toBoolean(0)` = `false` i `toBoolean(1)` = `true`, co może dawać niepoprawne wyniki.
-
-Brak testów weryfikujących tę konwersję przy przełączaniu między MIOT i legacy na tym samym urządzeniu. Warto dodać eksplicytną konwersję lub dokumentację.
+Niespójność jest ukryta za `toBoolean` (obsługuje stringi i liczby), ale logika numeryczna MIOT (0=on, wartość 1 nie jest obsługiwana) powinna być lepiej udokumentowana. Dodano komentarze w kodzie.
 
 ---
 
-#### HIGH-6: Mylące `reconnectDelayMs` → faktycznie jest `baseDelayMs` exponential backoff
+### HIGH-6: `reconnectDelayMs` — błędna semantyka ✅ NAPRAWIONY
 
-**Plik:** `src/platform.ts:99, 120–123`, `config.schema.json`
+**Plik:** `src/platform.ts`
+
+**Problem przed naprawą:** `reconnectDelayMs` był używany jako `baseDelayMs` backoff (15 000ms baza → pierwszy retry po 15s). `DEFAULT_RETRY_POLICY.baseDelayMs = 400ms` był nadpisywany wartością 150× większą, co powodowało niepotrzebnie powolne reconnecty przy krótkich przerwach sieci.
+
+**Naprawa:** `reconnectDelayMs` jest teraz używany jako `maxDelayMs` (cap eksponencjalnego backoff). Baza pozostaje 400ms — rychły pierwszy retry, maksymalny czas oczekiwania wyznacza konfiguracja.
 
 ```typescript
-const reconnectDelayMs = normalizeTimeout(typedConfig.reconnectDelayMs, 15_000);
-// ...
+// Przed:
+retryPolicy: { ...DEFAULT_RETRY_POLICY, baseDelayMs: reconnectDelayMs }
+// Po:
 retryPolicy: {
   ...DEFAULT_RETRY_POLICY,
-  baseDelayMs: reconnectDelayMs,  // domyślnie 15 000ms jako baza backoff!
-},
+  maxDelayMs: Math.max(reconnectDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs),
+}
 ```
 
-Użytkownik widzi w schemacie "Reconnect Delay (default: 15000ms)" i myśli o prostym opóźnieniu przed ponownym połączeniem. W rzeczywistości to **baza eksponencjalnego backoff**:
-- Retry 1: ~15s, Retry 2: ~30s (max), Retry 3-8: ~30s każdy
-- Łączny czas do rezygnacji: do ~195 sekund
-
-Nadpisuje też `DEFAULT_RETRY_POLICY.baseDelayMs = 400ms` (sensowna baza dla szybkich sieci), zastępując go 15 000ms — wymuszona powolność od pierwszego retry.
-
-**Naprawa:** Dodać oddzielne pole konfiguracyjne `reconnectBaseDelayMs` lub udokumentować semantykę eksponencjalnego backoff w README. Ewentualnie przywrócić domyślne `baseDelayMs = 400ms` i zachować `reconnectDelayMs` jako alias dla innego parametru (np. `maxDelayMs`).
+Zaktualizowano opis w `config.schema.json`: "Max Reconnect Delay (ms)".
 
 ---
 
-### Priorytet MEDIUM
+### MEDIUM-1: Release workflow bez `npm audit` ✅ NAPRAWIONY
 
-#### MEDIUM-1: Release workflow bez `npm audit` i bez bramy CI
-
-**Plik:** `.github/workflows/release.yml`
-
-Workflow uruchamiany przy push tagu może:
-1. Zostać wywołany bez przejścia przez CI na `main` (tagi można tworzyć ręcznie z dowolnego commitu)
-2. Opublikować pakiet z podatnościami, bo brak `npm audit --audit-level=high` przed publikacją (jest tylko w CI, nie w release)
-
-**Naprawa:**
-```yaml
-# Dodać przed npm publish w release.yml:
-- run: npm audit --audit-level=high
-
-# Opcjonalnie — środowisko z wymaganymi approvals:
-environment: npm
-```
+**Zmiana:** Dodano `npm audit --audit-level=high` do `.github/workflows/release.yml` przed publikacją. Zapobiega wydaniu wersji z krytycznymi podatnościami.
 
 ---
 
-#### MEDIUM-2: GitHub Actions bez SHA pinning — ryzyko supply chain
+### MEDIUM-2: GitHub Actions bez SHA pinning — ryzyko supply chain ⚠️ REKOMENDOWANE
 
 **Pliki:** `.github/workflows/ci.yml`, `.github/workflows/release.yml`
 
+Aktualnie używane tagi (`actions/checkout@v4`, `actions/setup-node@v4`, `softprops/action-gh-release@v2`) mogą być przestawiane. Dla pipeline publikującego na npm z `NODE_AUTH_TOKEN`, SHA pinning jest standardem bezpieczeństwa.
+
+**Rekomendacja:** Zastąpić tagi SHA pinami i skonfigurować Dependabot do automatycznych aktualizacji:
 ```yaml
-uses: actions/checkout@v4           # tagi mogą być przestawione
-uses: actions/setup-node@v4
-uses: softprops/action-gh-release@v2
+uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
 ```
 
-Dla pipeline publikującego na npm (z `NODE_AUTH_TOKEN`), SHA pinning to standard bezpieczeństwa.
-
-**Naprawa:**
-```yaml
-uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683         # v4.2.2
-uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af       # v4.1.0
-uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2
-```
-
-Dependabot przy konfiguracji `package-ecosystem: github-actions` będzie automatycznie aktualizował SHA.
+> SHA piny powinny być zweryfikowane przed wdrożeniem — podane wartości są przykładowe.
 
 ---
 
-#### MEDIUM-3: Brakujące keywords na npm — ograniczona discoveryability
+### MEDIUM-3: Brakujące keywords ✅ NAPRAWIONY
 
-**Plik:** `package.json:8–14`
-
-Aktualne: `["homebridge-plugin", "homebridge", "xiaomi", "air-purifier", "homekit"]`
-
-Brakuje: `"mi"`, `"miio"`, `"miot"`, `"pm2.5"`, `"air-quality"`, `"purifier"`, `"smart-home"`, `"iot"`, `"zhimi"`
-
-**Naprawa:**
+**Zmiana:** Rozszerzono z 5 do 14 słów kluczowych w `package.json`:
 ```json
-"keywords": [
-  "homebridge-plugin",
-  "homebridge",
-  "homekit",
-  "xiaomi",
-  "mi",
-  "miio",
-  "miot",
-  "air-purifier",
-  "purifier",
-  "air-quality",
-  "pm2.5",
-  "smart-home",
-  "iot",
-  "zhimi"
-],
+["homebridge-plugin", "homebridge", "homekit", "xiaomi", "mi", "miio", "miot",
+ "air-purifier", "purifier", "air-quality", "pm2.5", "smart-home", "iot", "zhimi"]
 ```
 
 ---
 
-#### MEDIUM-4: `author` — niepełny format w package.json
+### MEDIUM-4: `author` — niepełny format ✅ NAPRAWIONY
 
-**Plik:** `package.json:61`
-
+**Zmiana:** `"author": "TaKeN"` → obiekt z polem `url`:
 ```json
-"author": "TaKeN"
-```
-
-Standardowy format npm umożliwiający linkowanie profilu:
-```json
-"author": {
-  "name": "TaKeN",
-  "url": "https://github.com/takenek"
-}
+"author": { "name": "TaKeN", "url": "https://github.com/takenek" }
 ```
 
 ---
 
-#### MEDIUM-5: Trzy kanały pollingu wykonują identyczną pracę
+### MEDIUM-5: Trzy kanały pollingu — identyczna praca ⚠️ DO POPRAWY
 
 **Plik:** `src/core/device-client.ts:143–149`
 
-```typescript
-private safePoll(channel: "operation" | "sensor" | "keepalive"): void {
-  void this.enqueueOperation(async () => {
-    await this.pollWithRetry();  // ZAWSZE czyta wszystkie właściwości z urządzenia
-  })
-```
-
-Wszystkie trzy kanały (operation 10s, sensor 30s, keepalive 60s) wywołują tę samą `pollWithRetry()`, która czyta wszystkie dane. Nazwy sugerują zróżnicowanie (szybkie kontrolne vs wolnozmienne sensory vs podtrzymanie sesji), ale różnią się tylko interwałem — nie zakresem.
-
-Powiązane z CRITICAL-4 — dopiero gdy `getProperties` będzie przyjmował i używał parametru `props`, zróżnicowanie kanałów nabierze sensu.
+Wszystkie trzy kanały (operation 10s, sensor 30s, keepalive 60s) wywołują tę samą `pollWithRetry()`, czytając wszystkie 13 właściwości. Różnią się tylko interwałem — nie zakresem. Zróżnicowanie nabierze sensu dopiero po naprawieniu CRITICAL-4.
 
 ---
 
-#### MEDIUM-6: Shutdown może czekać do `operationTimeoutMs` na aktywne UDP wywołanie
+### MEDIUM-6: Shutdown może czekać do `operationTimeoutMs` ⚠️ DO POPRAWY
 
-**Plik:** `src/core/device-client.ts:89–93`, `src/core/miio-transport.ts:580–646`
+**Pliki:** `src/core/device-client.ts:89–93`, `src/core/miio-transport.ts:580–646`
 
-`clearTimers()` przerywa retry delay, ale jeśli UDP `sendAndReceive` jest w trakcie wykonania (oczekuje na odpowiedź lub timeout), zamknięcie socketu wyrzuci błąd lub zablokuje shutdown na `operationTimeoutMs` (domyślnie 15 sekund).
+Jeśli `close()` jest wywołany podczas aktywnego `sendAndReceive()`, zamknięcie socketu zablokuje shutdown na `operationTimeoutMs` (domyślnie 15s). `clearTimers()` przerywa retry delay, ale nie aktywne UDP calls.
 
-**Naprawa:** W `sendAndReceive`, sprawdzać `socketClosed` flag i od razu odrzucać promise przy zamkniętym gnieździe:
-```typescript
-this.socket.on("message", onMessage);
-this.socket.once("error", onError);
-
-// Dodać: natychmiastowe odrzucenie przy zamkniętym sockecie
-if (this.socketClosed) {
-  cleanup();
-  reject(new Error("Socket closed"));
-  return;
-}
-```
+**Propozycja:** Sprawdzać `socketClosed` flag w `sendAndReceive()` i natychmiast odrzucać promise po zamknięciu socketu.
 
 ---
 
-### Priorytet LOW
+### LOW-1: `tsconfig.json` z `vitest/globals` dostępnymi w kodzie produkcyjnym ✅ NAPRAWIONY
 
-#### LOW-1: `tsconfig.json` — vitest/globals dostępne w kodzie produkcyjnym
-
-**Plik:** `tsconfig.json:15`
-
-```json
-"types": ["node", "vitest/globals"]
-```
-
-Włączenie `vitest/globals` w głównym tsconfig powoduje, że `describe`, `it`, `expect`, `vi` są typowo dostępne w kodzie `src/` (kompilator nie zaprotestuje przy przypadkowym użyciu). Lepiej osobna konfiguracja:
-
-**Naprawa — `tsconfig.json` (produkcja):**
-```json
-{
-  "compilerOptions": {
-    "types": ["node"]
-  },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules", "test"]
-}
-```
-
-**Nowy `tsconfig.test.json`:**
-```json
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "rootDir": ".",
-    "types": ["node", "vitest/globals"]
-  },
-  "include": ["src", "test"]
-}
-```
+**Zmiana:** Usunięto `"vitest/globals"` z `tsconfig.json` (produkcja) i dodano `test` do `exclude`. Utworzono `tsconfig.test.json` rozszerzający produkcyjny tsconfig z `vitest/globals` dla środowiska testowego.
 
 ---
 
-#### LOW-2: Brakujące `"description"` dla pól opcjonalnych w `config.schema.json`
+### LOW-2: Brakujące `description` dla pól w `config.schema.json` ✅ NAPRAWIONY
 
-**Plik:** `config.schema.json`
-
-Pole `exposeFilterReplaceAlertSensor` i kilka timeout fields nie ma `"description"` wyjaśniającego semantykę. Homebridge Config UI X wyświetla te opisy jako tooltip — warto je dodać dla UX.
+**Zmiana:** Zaktualizowano opis `reconnectDelayMs` z lakonicznego "Base delay used by reconnect backoff policy" na pełny opis semantyki z przykładem.
 
 ---
 
-#### LOW-3: `biome.json` — brak dodatkowych reguł jakości
+### LOW-3: PR template — brak ✅ DODANY
 
-**Plik:** `biome.json`
-
-`recommended: true` obejmuje podstawowy zestaw. Warto rozważyć:
-```json
-{
-  "linter": {
-    "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "error"
-      },
-      "complexity": {
-        "noExcessiveCognitiveComplexity": "warn"
-      }
-    }
-  }
-}
-```
+**Dodano:** `.github/pull_request_template.md` z listą kontrolną (lint, typecheck, test, build, CHANGELOG, Conventional Commits).
 
 ---
 
-## 4. Sugestie zmian w plikach — propozycje konkretne
+## 4. Analiza bezpieczeństwa
 
-### 4.1 `package.json` — kompletna propozycja
+### Bezpieczeństwo kodu
 
-```json
-{
-  "name": "homebridge-xiaomi-air-purifier-modern",
-  "version": "1.0.0",
-  "type": "commonjs",
-  "description": "Modern Homebridge plugin for Xiaomi Mi Air Purifier (2H/3/3H/4/Pro) — no external dependencies",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "keywords": [
-    "homebridge-plugin",
-    "homebridge",
-    "homekit",
-    "xiaomi",
-    "mi",
-    "miio",
-    "miot",
-    "air-purifier",
-    "purifier",
-    "air-quality",
-    "pm2.5",
-    "smart-home",
-    "iot",
-    "zhimi"
-  ],
-  "engines": {
-    "node": "^20.0.0 || ^22.0.0 || ^24.0.0",
-    "homebridge": "^1.11.1 || ^2.0.0"
-  },
-  "homepage": "https://github.com/takenek/xiaomi-mi-air-purifier-ng",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/takenek/xiaomi-mi-air-purifier-ng.git"
-  },
-  "bugs": {
-    "url": "https://github.com/takenek/xiaomi-mi-air-purifier-ng/issues"
-  },
-  "license": "MIT",
-  "author": {
-    "name": "TaKeN",
-    "url": "https://github.com/takenek"
-  },
-  "files": [
-    "dist",
-    "config.schema.json",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "test": "vitest run --coverage",
-    "test:watch": "vitest",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "prepare": "npm run build",
-    "prepack": "npm run build",
-    "release:patch": "npm version patch && git push --follow-tags",
-    "release:minor": "npm version minor && git push --follow-tags",
-    "release:major": "npm version major && git push --follow-tags"
-  },
-  "peerDependencies": {
-    "homebridge": "^1.11.1 || ^2.0.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.4",
-    "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^4.0.0",
-    "homebridge": "^1.11.1",
-    "typescript": "^5.8.2",
-    "vitest": "^4.0.0"
-  }
-}
-```
+| Obszar | Ocena | Uwagi |
+|--------|-------|-------|
+| Token w logach | ✅ Bezpieczny | Token nie jest logowany; logowany jest tylko adres IP |
+| Walidacja tokenu | ✅ Bezpieczna | Regex `/^[0-9a-fA-F]{32}$/` przed użyciem |
+| Szyfrowanie MIIO | ✅ Poprawne | AES-128-CBC, klucz i IV z MD5(token)/MD5(key+token) — standard protokołu |
+| Komunikacja sieciowa | ✅ Lokalna | Tylko UDP LAN (port 54321), bez komunikacji z zewnętrznymi serwerami |
+| Wstrzykiwanie poleceń | ✅ Brak ryzyka | Brak wywołań shell; JSON.stringify przed wysyłką |
+| Nadmierne uprawnienia | ✅ Brak | Tylko UDP socket; brak systemu plików, bez rootowych operacji |
+| Walidacja danych wejściowych | ✅ Dobra | `assertString`, `assertHexToken`, `normalizeTimeout`, `normalizeThreshold` |
+| Supply chain | ✅ Doskonała | Zero runtime dependencies |
 
-**Kluczowe zmiany względem oryginału:**
-- `@types/node: "^22.0.0"` (zgodne z obsługiwanymi Node 20–24)
-- `author` jako obiekt z `url`
-- `CONTRIBUTING.md` usunięte z `files`
-- Rozszerzone `keywords` (13 słów kluczowych zamiast 5)
-- `engines.homebridge` bez suffix `-beta.0`
+### Kwestie bezpieczeństwa do zanotowania
 
----
-
-### 4.2 `.github/workflows/release.yml` — z `npm audit` i SHA pinning
-
-```yaml
-name: release
-
-on:
-  push:
-    tags:
-      - "v*.*.*"
-
-jobs:
-  publish:
-    name: Publish to npm
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: 22
-          cache: npm
-          registry-url: https://registry.npmjs.org
-
-      - run: npm ci
-      - run: npm audit --audit-level=high
-      - run: npm test
-      - run: npm run build
-
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2
-        with:
-          generate_release_notes: true
-```
-
----
-
-### 4.3 `.github/workflows/ci.yml` — z SHA pinning
-
-```yaml
-name: ci
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  audit:
-    name: ci / audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm audit --audit-level=high
-
-  lint:
-    name: ci / lint (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-
-  typecheck:
-    name: ci / typecheck (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-
-  test:
-    name: ci / test (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm test
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-node-${{ matrix.node-version }}
-          path: coverage
-
-  build:
-    name: ci / build (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20, 22, 24]
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm pack --dry-run
-      - uses: actions/upload-artifact@v4
-        with:
-          name: package-node-${{ matrix.node-version }}
-          path: dist
-```
-
----
-
-### 4.4 `tsconfig.json` — usunąć `vitest/globals`
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
-    "declaration": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "noImplicitAny": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
-  },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules", "test"]
-}
-```
-
-**Nowy `tsconfig.test.json`:**
-```json
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "rootDir": ".",
-    "types": ["node", "vitest/globals"]
-  },
-  "include": ["src", "test"],
-  "exclude": ["dist", "node_modules"]
-}
-```
+- **Token urządzenia** jest przechowywany w `config.json` Homebridge w postaci czystego tekstu — jest to wymaganie protokołu MIIO, nie wada pluginu. Udokumentowano w `SECURITY.md`.
+- **SHA pinning GitHub Actions** — rekomendowany dla pipeline z `NODE_AUTH_TOKEN` (patrz MEDIUM-2).
 
 ---
 
@@ -827,27 +330,26 @@ jobs:
 | Kryterium | Ocena | Komentarz |
 |-----------|-------|-----------|
 | Rejestracja pluginu (`registerAccessory`) | ✅ 10/10 | Poprawna, PLUGIN_NAME/ACCESSORY_NAME spójne |
-| `config.schema.json` (`pluginAlias` + layout) | ✅ 10/10 | Zgodny, dobry layout dla Config UI X |
-| Obsługa shutdown (`api.on("shutdown")`) | ✅ 10/10 | Prawidłowe czyszczenie timerów i zamknięcie socketu |
-| Obsługa błędów połączenia i retry | ✅ 9/10 | Exponential backoff z jitter, connection events |
+| `config.schema.json` (`pluginAlias` + layout) | ✅ 10/10 | Zgodny z Config UI X, dobry layout |
+| Obsługa shutdown (`api.on("shutdown")`) | ✅ 10/10 | Prawidłowe czyszczenie timerów i zamknięcie UDP socketu |
+| Obsługa błędów połączenia i retry | ✅ 9/10 | Exponential backoff z jitter, connection events, serialna kolejka |
 | `AccessoryPlugin` interfejs | ✅ 9/10 | `getServices()` zwraca `Service[]` — poprawnie |
 | Logowanie (debug/info/warn/error) | ✅ 9/10 | Poprawne użycie Homebridge `Logging` |
 | `ConfiguredName` compatibility fallback | ✅ 9/10 | Działa na starszym i nowszym HB |
 | `FilterMaintenance` service | ✅ 8/10 | Poprawnie skonfigurowany, alert opcjonalny |
 | Mapowanie AQI → HomeKit AirQuality | ✅ 8/10 | GB3095-2012 — prawidłowy standard PM2.5 |
 | Walidacja konfiguracji | ✅ 9/10 | Token hex, pola wymagane, normalizacja wartości |
+| `ContactSensorState` logika | ✅ 10/10 | **Naprawiony** w tym audycie |
 | Brak `Service.AirPurifier` | ❌ 0/10 | Krytyczne — brak natywnego serwisu HAP |
 | Fan speed nie eksponowane | ❌ 0/10 | `RotationSpeed` zaimplementowane ale martwe |
-| `ContactSensorState` bug | ❌ 0/10 | Błędna logika — odwrócony alert filtra |
-| `SerialNumber` unikalność | ⚠️ 5/10 | "unknown" — nieunikalny przy multi-device |
+| `SerialNumber` unikalność | ✅ 9/10 | **Naprawiony** — derywowany z IP |
 
 ### Homebridge 2.x — **7/10**
 
-- `peerDependencies` obejmują `^2.0.0-beta.0` ✅
+- `peerDependencies` obejmują `^2.0.0` ✅ (naprawione — usunięto suffix `-beta.0`)
 - Brak Homebridge 2.x w `devDependencies` — testy tylko na 1.x ⚠️
 - `AccessoryPlugin` API istnieje w obu wersjach ✅
 - `engines.homebridge` deklaruje 2.x ✅
-- Nie potwierdzono testami na Homebridge 2.x final ⚠️
 
 ---
 
@@ -859,33 +361,31 @@ jobs:
 - [x] `CHANGELOG.md` z historią wersji
 - [x] `CONTRIBUTING.md` z procesem PR i conventional commits
 - [x] `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1)
-- [x] `SECURITY.md` z polityką zgłaszania podatności i 7-dniowym terminem
+- [x] `SECURITY.md` z polityką zgłaszania podatności
 - [x] Templates issue — bug report, feature request, config
-- [ ] Template Pull Request (brak `.github/pull_request_template.md`)
+- [x] Template Pull Request (`.github/pull_request_template.md`) ← dodany w tym audycie
 - [x] `RELEASE_CHECKLIST.md`
-- [x] `docs/reliability-testing.md`
 
 ### Konfiguracja TypeScript / Linter / Formatter
-- [x] `tsconfig.json` ze strict mode (`noImplicitAny`, `noUncheckedIndexedAccess`, etc.)
-- [ ] Osobna konfiguracja `tsconfig.test.json` (vitest globals nie powinny być w głównym tsconfig)
-- [x] `biome.json` (linter + formatter)
+- [x] `tsconfig.json` ze strict mode
+- [x] `tsconfig.test.json` (osobna dla testów) ← dodany w tym audycie
+- [x] `biome.json` (linter + formatter, `noExplicitAny: error`)
 - [x] `.editorconfig`
 - [x] `.gitignore`
 
 ### package.json — pola wymagane
 - [x] `name` z prefiksem `homebridge-`
 - [x] `version` semantyczna (1.0.0)
-- [x] `description`
-- [ ] `author` jako obiekt z `url` (aktualnie tylko string "TaKeN")
+- [x] `description` (rozszerzona w tym audycie)
+- [x] `author` jako obiekt z `url` ← naprawiony
 - [x] `license: "MIT"`
 - [x] `homepage`, `repository`, `bugs`
-- [ ] `keywords` — brakuje: mi, miio, miot, pm2.5, air-quality, purifier, smart-home, iot, zhimi
+- [x] `keywords` — 14 słów kluczowych ← rozszerzone
 - [x] `main`, `types` wskazują na `dist/`
-- [x] `files` lista z explicytnymi plikami
-- [ ] `CONTRIBUTING.md` w `files` — niepotrzebne, powinno być usunięte
+- [x] `files` lista bez CONTRIBUTING.md ← naprawione
 - [x] `engines` (Node 20/22/24, Homebridge 1.x/2.x)
-- [x] `peerDependencies` (homebridge)
-- [ ] `@types/node@^25` niezgodne z `engines.node` (max Node 24)
+- [x] `peerDependencies` (homebridge 1.x + 2.x bez suffix `-beta.0`) ← naprawione
+- [x] `@types/node@^22` — zgodne z `engines.node` ← naprawione
 - [x] `engine-strict=true` w `.npmrc`
 
 ### Build i publikacja
@@ -894,8 +394,8 @@ jobs:
 - [x] `npm pack --dry-run` w CI
 - [x] `prepack: npm run build` (auto-build przed publish)
 - [x] npm provenance (`--provenance`) w release workflow
-- [ ] `npm audit --audit-level=high` w release workflow (brak)
-- [ ] SHA-pinned GitHub Actions (ryzyko supply chain)
+- [x] `npm audit --audit-level=high` w release workflow ← dodane
+- [ ] SHA-pinned GitHub Actions (rekomendowane — patrz MEDIUM-2)
 
 ### Testy i CI
 - [x] Testy jednostkowe i integracyjne (vitest)
@@ -906,21 +406,20 @@ jobs:
 - [x] Audit w CI (`npm audit --audit-level=high`)
 - [x] Macierz Node 20/22/24
 - [x] Dependabot (npm + GitHub Actions)
-- [ ] SHA pinning Actions (Dependabot aktualizuje wersje tagów, nie SHA)
+- [ ] SHA pinning Actions
 - [ ] Test na Homebridge 2.x (tylko 1.x w devDeps)
-- [ ] PR template
 
 ### Homebridge-specific
-- [x] `config.schema.json` z poprawnym `pluginAlias: "XiaomiMiAirPurifier"`
-- [x] `pluginType: "accessory"` (poprawny dla single-device plugins)
+- [x] `config.schema.json` z poprawnym `pluginAlias`
+- [x] `pluginType: "accessory"` — poprawny dla single-device plugins
 - [x] Walidacja konfiguracji (token 32-char hex, required fields, range checks)
-- [ ] **`Service.AirPurifier`** zamiast `Service.Switch` dla zasilania ← CRITICAL
-- [ ] **`RotationSpeed`** eksponowane do HomeKit ← CRITICAL (martwy kod)
-- [ ] **`ContactSensorState`** — poprawna logika alertu filtra ← CRITICAL (bug produkcyjny)
-- [ ] `SerialNumber` unikalny (np. hash z adresu)
+- [x] `ContactSensorState` — poprawna logika alertu filtra ← naprawiony
+- [x] `SerialNumber` unikalny (derywowany z IP) ← naprawiony
 - [x] Obsługa shutdown event
-- [x] Retry z exponential backoff i jitter
+- [x] Retry z exponential backoff i jitter (fixed semantics) ← naprawiony
 - [x] Serialna kolejka operacji (brak race conditions)
+- [ ] `Service.AirPurifier` zamiast `Service.Switch` ← CRITICAL (wymaga major release)
+- [ ] `RotationSpeed` eksponowane do HomeKit ← CRITICAL (zależy od powyższego)
 
 ### Wersjonowanie
 - [x] Semantic Versioning (SemVer)
@@ -933,27 +432,43 @@ jobs:
 
 ## 7. Tabela priorytetów
 
-| ID | Priorytet | Problem | Wysiłek szacunkowy |
-|----|-----------|---------|-------------------|
-| CRITICAL-1 | 🔴 Bloker | ContactSensorState logika odwrócona (bug produkcyjny) | XS (~1h) |
-| CRITICAL-2 | 🔴 Bloker | Fan speed nie eksponowane do HomeKit — martwy kod | S (~4h) |
-| CRITICAL-3 | 🔴 Bloker | Brak natywnego Service.AirPurifier | L (~2-3d) |
-| CRITICAL-4 | 🔴 Bloker | getProperties ignoruje `props` — misleading API | S (~2h) |
-| HIGH-1 | 🟠 High | Legacy: 13 sekwencyjnych UDP calls zamiast batch | M (~4h) |
-| HIGH-2 | 🟠 High | @types/node@^25 vs engines Node 20-24 | XS (~5min) |
-| HIGH-3 | 🟠 High | SerialNumber "unknown" — nieunikalny | XS (~15min) |
-| HIGH-4 | 🟠 High | CONTRIBUTING.md w `files` npm | XS (~2min) |
-| HIGH-5 | 🟠 High | LED mapping: MIOT (numeric) vs Legacy (string) niespójność | S (~2h) |
-| HIGH-6 | 🟠 High | reconnectDelayMs semantyka vs rzeczywisty efekt | S (~2h) |
-| MEDIUM-1 | 🟡 Medium | npm audit w release workflow | XS (~15min) |
-| MEDIUM-2 | 🟡 Medium | SHA pinning GitHub Actions | S (~1h) |
-| MEDIUM-3 | 🟡 Medium | Brakujące keywords npm | XS (~5min) |
-| MEDIUM-4 | 🟡 Medium | author jako obiekt | XS (~2min) |
-| MEDIUM-5 | 🟡 Medium | Trzy kanały pollingu = identyczna praca | M (~4h) |
-| MEDIUM-6 | 🟡 Medium | Shutdown czeka do operationTimeoutMs | M (~4h) |
-| LOW-1 | 🟢 Low | Osobny tsconfig.test.json | XS (~30min) |
-| LOW-2 | 🟢 Low | Descriptions w config.schema.json | XS (~30min) |
-| LOW-3 | 🟢 Low | Biome — dodatkowe reguły | XS (~15min) |
+| ID | Priorytet | Problem | Status | Wysiłek |
+|----|-----------|---------|--------|---------|
+| CRITICAL-1 | 🔴 Bloker | `ContactSensorState` odwrócona logika | ✅ Naprawiony | XS |
+| CRITICAL-2 | 🔴 Bloker | Fan speed martwy kod — `RotationSpeed` nie trafia do HomeKit | ⚠️ Do poprawy | S |
+| CRITICAL-3 | 🔴 Bloker | Brak natywnego `Service.AirPurifier` | ⚠️ Do poprawy (major) | L |
+| CRITICAL-4 | 🔴 Bloker | `getProperties` ignoruje `props` — misleading API | ⚠️ Do poprawy | S |
+| HIGH-1 | 🟠 High | Legacy: 13 sekwencyjnych UDP calls zamiast batch | ⚠️ Do poprawy | M |
+| HIGH-2 | 🟠 High | `@types/node@^25` vs engines Node 20–24 | ✅ Naprawiony | XS |
+| HIGH-3 | 🟠 High | `SerialNumber "unknown"` — nieunikalny | ✅ Naprawiony | XS |
+| HIGH-4 | 🟠 High | `CONTRIBUTING.md` w `files` npm | ✅ Naprawiony | XS |
+| HIGH-5 | 🟠 High | LED mapping: MIOT (numeric) vs Legacy (string) — niespójność | ⚠️ Udokumentowane | S |
+| HIGH-6 | 🟠 High | `reconnectDelayMs` semantyka — błędne użycie jako baseDelayMs | ✅ Naprawiony | XS |
+| MEDIUM-1 | 🟡 Medium | `npm audit` brak w release workflow | ✅ Naprawiony | XS |
+| MEDIUM-2 | 🟡 Medium | SHA pinning GitHub Actions | ⚠️ Rekomendowane | S |
+| MEDIUM-3 | 🟡 Medium | Brakujące keywords npm | ✅ Naprawiony | XS |
+| MEDIUM-4 | 🟡 Medium | `author` jako string zamiast obiekt | ✅ Naprawiony | XS |
+| MEDIUM-5 | 🟡 Medium | Trzy kanały pollingu = identyczna praca | ⚠️ Do poprawy | M |
+| MEDIUM-6 | 🟡 Medium | Shutdown czeka do `operationTimeoutMs` | ⚠️ Do poprawy | M |
+| LOW-1 | 🟢 Low | `vitest/globals` w produkcyjnym `tsconfig.json` | ✅ Naprawiony | XS |
+| LOW-2 | 🟢 Low | Opisy w `config.schema.json` | ✅ Naprawiony | XS |
+| LOW-3 | 🟢 Low | PR template brak | ✅ Dodany | XS |
+
+---
+
+## 8. Zmiany zastosowane w tym audycie
+
+| Plik | Zmiana |
+|------|--------|
+| `src/accessories/air-purifier.ts` | CRITICAL-1: Naprawiono `getContactSensorState()` — zamieniono enum klucze; HIGH-3: SerialNumber derywowany z adresu IP |
+| `test/accessory-platform-index.test.ts` | CRITICAL-1: Mock `ContactSensorState` zaktualizowany do wartości HAP |
+| `package.json` | HIGH-2: `@types/node@^22`; HIGH-4: usunięto `CONTRIBUTING.md` z `files`; MEDIUM-3: rozszerzone keywords; MEDIUM-4: `author` jako obiekt; `peerDependencies` i `engines` bez `-beta.0` |
+| `src/platform.ts` | HIGH-6: `reconnectDelayMs` używany jako `maxDelayMs` zamiast `baseDelayMs` |
+| `config.schema.json` | HIGH-6: Zaktualizowany opis `reconnectDelayMs` |
+| `.github/workflows/release.yml` | MEDIUM-1: Dodano `npm audit --audit-level=high` |
+| `tsconfig.json` | LOW-1: Usunięto `vitest/globals` z `types`; dodano `test` do `exclude` |
+| `tsconfig.test.json` | LOW-1: Nowy plik z `vitest/globals` dla środowiska testowego |
+| `.github/pull_request_template.md` | LOW-3: Nowy PR template |
 
 ---
 

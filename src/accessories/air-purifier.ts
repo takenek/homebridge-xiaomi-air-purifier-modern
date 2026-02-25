@@ -43,7 +43,15 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Xiaomi")
       .setCharacteristic(this.api.hap.Characteristic.Model, model)
       .setCharacteristic(this.api.hap.Characteristic.Name, name)
-      .setCharacteristic(this.api.hap.Characteristic.SerialNumber, "unknown");
+      .setCharacteristic(
+        this.api.hap.Characteristic.SerialNumber,
+        // Derive a stable, unique serial from the device address so that
+        // multiple Xiaomi purifiers in the same HomeKit home stay distinct.
+        Buffer.from(address)
+          .toString("base64")
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .slice(0, 16),
+      );
 
     this.powerService = new this.api.hap.Service.Switch("Power", "power");
     this.airQualityService = new this.api.hap.Service.AirQualitySensor(`${name} Air Quality`);
@@ -208,9 +216,13 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private getContactSensorState(): number {
     const filterLife = this.client.state?.filter1_life ?? 100;
     const contact = this.api.hap.Characteristic.ContactSensorState as unknown as CharacteristicLike;
+    // In HAP: CONTACT_DETECTED = 0 (closed = normal, no alert)
+    //         CONTACT_NOT_DETECTED = 1 (open = alarm state)
+    // Filter needs replacement → sensor "open" → CONTACT_NOT_DETECTED (1) = alert
+    // Filter is OK            → sensor "closed" → CONTACT_DETECTED (0) = no alert
     return filterLife <= this.filterChangeThreshold
-      ? getEnumValue(contact, "CONTACT_DETECTED", 1)
-      : getEnumValue(contact, "CONTACT_NOT_DETECTED", 0);
+      ? getEnumValue(contact, "CONTACT_NOT_DETECTED", 1)
+      : getEnumValue(contact, "CONTACT_DETECTED", 0);
   }
 
   private refreshCharacteristics(): void {

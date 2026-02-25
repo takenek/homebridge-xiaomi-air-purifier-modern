@@ -119,7 +119,10 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       sensorPollIntervalMs,
       retryPolicy: {
         ...DEFAULT_RETRY_POLICY,
-        baseDelayMs: reconnectDelayMs,
+        // reconnectDelayMs is the maximum cap between retry attempts.
+        // The base delay stays at 400 ms (DEFAULT_RETRY_POLICY.baseDelayMs) so the
+        // first retry is fast; subsequent retries back off exponentially up to this cap.
+        maxDelayMs: Math.max(reconnectDelayMs, DEFAULT_RETRY_POLICY.baseDelayMs),
       },
     });
     this.delegate = new AirPurifierAccessory(
