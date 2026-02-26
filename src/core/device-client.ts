@@ -75,14 +75,24 @@ export class DeviceClient {
     return this.currentState;
   }
 
-  public onStateUpdate(listener: (state: DeviceState) => void): void {
+  public onStateUpdate(listener: (state: DeviceState) => void): () => void {
     this.listeners.push(listener);
+
+    return () => {
+      this.listeners = this.listeners.filter((entry) => entry !== listener);
+    };
   }
 
   public onConnectionEvent(
     listener: (event: ConnectionStateEvent) => void,
-  ): void {
+  ): () => void {
     this.connectionListeners.push(listener);
+
+    return () => {
+      this.connectionListeners = this.connectionListeners.filter(
+        (entry) => entry !== listener,
+      );
+    };
   }
 
   public async init(): Promise<void> {

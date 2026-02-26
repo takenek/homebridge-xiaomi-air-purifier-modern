@@ -118,6 +118,32 @@ describe("device client uncovered branches", () => {
     await client.shutdown();
   });
 
+  it("supports unsubscribing state and connection listeners", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+    });
+
+    const stateListener = vi.fn();
+    const connectionListener = vi.fn();
+    const offState = client.onStateUpdate(stateListener);
+    const offConnection = client.onConnectionEvent(connectionListener);
+
+    await client.init();
+    offState();
+    offConnection();
+
+    await vi.advanceTimersByTimeAsync(10);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(stateListener).toHaveBeenCalledTimes(1);
+    expect(connectionListener).toHaveBeenCalledTimes(1);
+
+    await client.shutdown();
+  });
+
   it("keeps polling when a state listener throws", async () => {
     const transport = new BranchTransport();
     const logger = makeLogger();

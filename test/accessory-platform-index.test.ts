@@ -247,6 +247,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -355,6 +356,39 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(client.calls).toContain("shutdown");
   });
 
+  it("uses display address in connection lifecycle logs", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      "10.0.*.*",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    client.connectionListeners[0]?.({ state: "connected" });
+    client.connectionListeners[0]?.({ state: "reconnected" });
+    client.connectionListeners[0]?.({
+      state: "disconnected",
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'Connected to "Office" @ 10.0.*.*!',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      'Reconnected to "Office" @ 10.0.*.*.',
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Disconnected from "Office" @ 10.0.*.*'),
+    );
+  });
+
   it("supports native AirPurifier service characteristics when available", async () => {
     const api = makeApi() as unknown as Record<string, unknown>;
     const serviceConstructors = (api.hap as Record<string, unknown>)
@@ -390,6 +424,7 @@ describe("AirPurifierAccessory switch contract", () => {
       api as never,
       logger as never,
       "Office",
+      "10.0.0.1",
       "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
@@ -451,6 +486,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -474,6 +510,7 @@ describe("AirPurifierAccessory switch contract", () => {
       api as never,
       logger as never,
       "Office",
+      "10.0.0.1",
       "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
@@ -499,6 +536,7 @@ describe("AirPurifierAccessory switch contract", () => {
       api as never,
       logger as never,
       "Office",
+      "10.0.0.1",
       "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
@@ -585,6 +623,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -657,6 +696,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -720,6 +760,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -761,6 +802,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -797,6 +839,7 @@ describe("AirPurifierAccessory switch contract", () => {
       logger as never,
       "Office",
       "10.0.0.1",
+      "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
       10,
@@ -820,6 +863,7 @@ it("handles non-Error init rejection and internal cache key edge", async () => {
     api as never,
     logger as never,
     "Office",
+    "10.0.0.1",
     "10.0.0.1",
     client as never,
     "zhimi.airpurifier.3h",
@@ -1010,6 +1054,32 @@ describe("platform and index", () => {
     expect(noAirServices).not.toContain("Humidity:NoAirSensors Humidity");
     expect(noAirServices).not.toContain("Switch:Child Lock");
 
+    const maskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "Masked",
+        address: "1.1.1.9",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.3h",
+        maskDeviceAddressInLogs: true,
+      } as never,
+      api as never,
+    );
+    expect(maskedPlugin.getServices()).toBeInstanceOf(Array);
+
+    const malformedMaskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "MaskedFallback",
+        address: "local-device",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.3h",
+        maskDeviceAddressInLogs: true,
+      } as never,
+      api as never,
+    );
+    expect(malformedMaskedPlugin.getServices()).toBeInstanceOf(Array);
+
     expect(
       () =>
         new XiaomiAirPurifierAccessoryPlugin(
@@ -1062,6 +1132,7 @@ describe("platform and index", () => {
       api as never,
       logger as never,
       "Office",
+      "10.0.0.1",
       "10.0.0.1",
       client as never,
       "zhimi.airpurifier.3h",
