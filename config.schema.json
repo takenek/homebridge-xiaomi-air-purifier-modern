@@ -37,6 +37,24 @@
           "zhimi.airpurifier.pro"
         ]
       },
+      "enableAirQuality": {
+        "title": "Air Quality Sensor",
+        "type": "boolean",
+        "default": true,
+        "description": "Expose AirQualitySensor service in HomeKit."
+      },
+      "enableTemperature": {
+        "title": "Temperature Sensor",
+        "type": "boolean",
+        "default": true,
+        "description": "Expose TemperatureSensor service in HomeKit."
+      },
+      "enableHumidity": {
+        "title": "Humidity Sensor",
+        "type": "boolean",
+        "default": true,
+        "description": "Expose HumiditySensor service in HomeKit."
+      },
       "filterChangeThreshold": {
         "title": "Filter Change Warning Threshold",
         "type": "integer",
@@ -111,10 +129,7 @@
     {
       "type": "flex",
       "flex-flow": "row wrap",
-      "items": [
-        "address",
-        "token"
-      ]
+      "items": ["address", "token"]
     },
     {
       "type": "help",

@@ -26,6 +26,9 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   address?: string;
   token?: string;
   model?: string;
+  enableAirQuality?: boolean;
+  enableTemperature?: boolean;
+  enableHumidity?: boolean;
   filterChangeThreshold?: number;
   connectTimeoutMs?: number;
   operationTimeoutMs?: number;
@@ -60,10 +63,10 @@ const normalizeModel = (value: string, log: Logging): AirPurifierModel => {
     return value as AirPurifierModel;
   }
 
-  log.warn(
-    `Model "${value}" is not in validated list; using protocol auto-detection fallback.`,
+  log.error(`Unsupported model configured: "${value}".`);
+  throw new Error(
+    `Unsupported model: ${value}. Supported models: ${SUPPORTED_MODELS.join(", ")}.`,
   );
-  return value as AirPurifierModel;
 };
 
 const normalizeThreshold = (value: unknown): number => {
@@ -113,10 +116,22 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const name = assertString(typedConfig.name, "name");
     const address = assertString(typedConfig.address, "address");
     const token = assertHexToken(assertString(typedConfig.token, "token"));
-    const model = normalizeModel(assertString(typedConfig.model, "model"), this.log);
+    const model = normalizeModel(
+      assertString(typedConfig.model, "model"),
+      this.log,
+    );
     const filterChangeThreshold = normalizeThreshold(
       typedConfig.filterChangeThreshold,
     );
+    const enableAirQuality = normalizeBoolean(
+      typedConfig.enableAirQuality,
+      true,
+    );
+    const enableTemperature = normalizeBoolean(
+      typedConfig.enableTemperature,
+      true,
+    );
+    const enableHumidity = normalizeBoolean(typedConfig.enableHumidity, true);
     const connectTimeoutMs = normalizeTimeout(
       typedConfig.connectTimeoutMs,
       15_000,
@@ -179,6 +194,9 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       model,
       filterChangeThreshold,
       {
+        enableAirQuality,
+        enableTemperature,
+        enableHumidity,
         exposeFilterReplaceAlertSensor,
         enableChildLockControl,
       },

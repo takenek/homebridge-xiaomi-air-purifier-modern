@@ -1,7 +1,12 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
 import { isRetryableError } from "./retry";
-import { READ_PROPERTIES, type DeviceState, type MiioTransport, type ReadProperty } from "./types";
+import {
+  type DeviceState,
+  type MiioTransport,
+  READ_PROPERTIES,
+  type ReadProperty,
+} from "./types";
 
 export interface MiioTransportOptions {
   address: string;
@@ -195,7 +200,9 @@ export class ModernMiioTransport implements MiioTransport {
     });
   }
 
-  public async getProperties(props: readonly ReadProperty[]): Promise<DeviceState> {
+  public async getProperties(
+    props: readonly ReadProperty[],
+  ): Promise<DeviceState> {
     const requestedProps = props.length > 0 ? props : READ_PROPERTIES;
     if (this.protocolMode === "unknown") {
       this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
@@ -203,13 +210,15 @@ export class ModernMiioTransport implements MiioTransport {
 
     const state =
       this.protocolMode === "miot"
-        ? await this.readViaMiot(requestedProps).catch(async (error: unknown) => {
-            if (isRetryableError(error)) {
-              throw error;
-            }
-            this.protocolMode = "legacy";
-            return this.readViaLegacy(requestedProps);
-          })
+        ? await this.readViaMiot(requestedProps).catch(
+            async (error: unknown) => {
+              if (isRetryableError(error)) {
+                throw error;
+              }
+              this.protocolMode = "legacy";
+              return this.readViaLegacy(requestedProps);
+            },
+          )
         : await this.readViaLegacy(requestedProps);
 
     if (
@@ -219,13 +228,15 @@ export class ModernMiioTransport implements MiioTransport {
     ) {
       // If all core fields are empty and we used legacy, retry MIOT once.
       if (this.protocolMode === "legacy") {
-        const miotState = await this.readViaMiot(requestedProps).catch((error: unknown) => {
-          if (isRetryableError(error)) {
-            throw error;
-          }
+        const miotState = await this.readViaMiot(requestedProps).catch(
+          (error: unknown) => {
+            if (isRetryableError(error)) {
+              throw error;
+            }
 
-          return null;
-        });
+            return null;
+          },
+        );
         if (miotState) {
           this.protocolMode = "miot";
           return miotState;
@@ -306,7 +317,9 @@ export class ModernMiioTransport implements MiioTransport {
     return null;
   }
 
-  private async readViaMiot(props: readonly ReadProperty[] = READ_PROPERTIES): Promise<DeviceState> {
+  private async readViaMiot(
+    props: readonly ReadProperty[] = READ_PROPERTIES,
+  ): Promise<DeviceState> {
     const valueByKey = await this.readViaMiotBatch(props);
 
     const powerRaw = valueByKey.get("power");
@@ -406,7 +419,9 @@ export class ModernMiioTransport implements MiioTransport {
     }
   }
 
-  private async readViaLegacy(props: readonly ReadProperty[] = READ_PROPERTIES): Promise<DeviceState> {
+  private async readViaLegacy(
+    props: readonly ReadProperty[] = READ_PROPERTIES,
+  ): Promise<DeviceState> {
     const valueByKey = await this.readViaLegacyBatch(props);
     const powerRaw = valueByKey.get("power");
     const fanLevelRaw = valueByKey.get("fan_level");
@@ -490,7 +505,6 @@ export class ModernMiioTransport implements MiioTransport {
 
     return undefined;
   }
-
 
   private async trySetViaMiot(
     method: string,
