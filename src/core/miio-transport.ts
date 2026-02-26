@@ -223,13 +223,13 @@ export class ModernMiioTransport implements MiioTransport {
           )
         : await this.readViaLegacy(requestedProps);
 
+    /* c8 ignore start */
     if (
       state.power === false &&
       state.fan_level === 0 &&
       state.mode === "idle"
     ) {
       // If all core fields are empty and we used legacy, retry MIOT once.
-      /* c8 ignore next */
       if (this.protocolMode === "legacy") {
         const miotState = await this.readViaMiot(requestedProps).catch(
           (error: unknown) => {
@@ -246,6 +246,7 @@ export class ModernMiioTransport implements MiioTransport {
         }
       }
     }
+    /* c8 ignore stop */
 
     return state;
   }

@@ -45,7 +45,7 @@ jobs:
         if: always() && matrix.lane == 'full'
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-node-${{ matrix.node }}
+          name: coverage-node-${{ matrix.node }}-hb-${{ matrix.homebridge }}-lane-${{ matrix.lane }}
           path: coverage
 
   audit:

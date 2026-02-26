@@ -1,6 +1,11 @@
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 import { ModernMiioTransport } from "../src/core/miio-transport";
 import type { DeviceState } from "../src/core/types";
 
@@ -47,10 +52,6 @@ const createTransport = () =>
   });
 
 describe("ModernMiioTransport coverage", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("validates token and supports logger-based suppressed error reporting", async () => {
     expect(
       () =>
@@ -931,9 +932,24 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
   await internals.setProperty("set_power", ["on"]);
   expect(call).not.toHaveBeenCalled();
 
+  internals.protocolMode = "unknown";
+  vi.spyOn(internals, "detectProtocolMode").mockResolvedValueOnce(null);
+  await internals.setProperty("set_power", ["off"]);
+  expect(call).toHaveBeenCalledWith("set_power", ["off"]);
+
   internals.protocolMode = "legacy";
   await internals.setProperty("set_power", ["off"]);
   expect(call).toHaveBeenCalledWith("set_power", ["off"]);
+
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "readViaMiot").mockResolvedValue({
+    ...emptyState,
+    power: false,
+    fan_level: 0,
+    mode: "idle",
+  });
+  const emptyMiot = await internals.getProperties([]);
+  expect(emptyMiot.mode).toBe("idle");
 
   await transport.close();
 });
