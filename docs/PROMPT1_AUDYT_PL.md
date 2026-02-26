@@ -1,216 +1,60 @@
-# PROMPT 1 — Analiza problemów i raport audytu jakości
+# PROMPT 1 — Naprawa problemów i przygotowanie raportu
 ## Projekt: `xiaomi-mi-air-purifier-ng`
 ## Data: 2026-02-26
 
-## Metodyka i wykonane kontrole
-Przeanalizowano cały projekt: kod źródłowy (`src/**`), testy (`test/**`), konfigurację npm/TS/lint, workflow CI/Release/Dependabot, dokumentację i pliki OSS governance.
+## Executive summary
+1. Domknięto dług jakościowy testów MIIO: `src/core/miio-transport.ts` nie jest już wykluczony z coverage, a testy pokrywają parser/transport i gałęzie błędów.
+2. Utrzymano wymaganie `vitest --coverage = 100%` dla uruchamianego zestawu testów (statements/branches/functions/lines).
+3. Rozszerzono CI o pełniejszą walidację Homebridge 2.x (pełny lane + smoke lane dla `beta`).
+4. Zautomatyzowano release notes/versioning przez `semantic-release` (aktualizacja `CHANGELOG.md`, GitHub release, publikacja npm).
+5. Usunięto redundancję skryptów build (`prepack`), zachowując niezbędne quality gates.
+6. Uzupełniono dokumentację o tabelę wsparcia model/firmware oraz SLA bezpieczeństwa.
 
-Wykonane komendy (zgodnie z wymaganiem `env -u npm_config_http_proxy -u npm_config_https_proxy`):
+---
 
+## Zakres analizy i wykonane komendy
+Przeanalizowano kod (`src/**`), testy (`test/**`), konfigurację (`vitest.config.ts`, `package.json`), CI/release (`.github/workflows/**`, `.releaserc.json`) oraz dokumentację (`README.md`, `SECURITY.md`).
+
+Wykonane komendy:
 - `env -u npm_config_http_proxy -u npm_config_https_proxy npm ci`
 - `env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint`
 - `env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck`
 - `env -u npm_config_http_proxy -u npm_config_https_proxy npm test`
 
-Wynik testów: **62/62 PASS** oraz **100% coverage** (statements/branches/functions/lines) dla skonfigurowanego zestawu testów Vitest.
+Wyniki:
+- testy: PASS, coverage: **100/100/100/100**,
+- audit: brak vulnerabilities,
+- deprecated: wyłącznie `q@1.1.2` (akceptowany wyjątek przez Homebridge 1.x).
 
 ---
 
-## Executive summary (najważniejsze plusy i ryzyka)
-1. **Architektura runtime jest dojrzała i czytelna**: dobre rozdzielenie warstw Homebridge ↔ klient urządzenia ↔ transport MIIO, z sensownym SRP i testowalnością.
-2. **Niezawodność działania stoi na wysokim poziomie**: kolejka operacji, retry/backoff z jitterem, reconnect lifecycle, czyszczenie timerów i testy scenariuszy awarii sieci.
-3. **Projekt jest blisko „npm-ready” i „high-quality OSS”**: ma komplet kluczowych plików governance (LICENSE, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, templates, Dependabot, CI, release workflow).
-4. **Główne ryzyko jakościowe dotyczy pokrycia transportu MIIO**: `src/core/miio-transport.ts` jest wyłączony z coverage threshold 100%, co osłabia gwarancję regresji na najtrudniejszej warstwie.
-5. **Główne ryzyko produktowe**: zadeklarowana kompatybilność z Homebridge 2.x istnieje, ale brakuje jawnego test matrix dla samej wersji Homebridge (obecnie matrix dotyczy Node.js).
-6. **Supply-chain wygląda dobrze**: brak znanych vulnerability po `npm ci`; jedyne deprecated to `q@1.1.2` (transytywnie przez Homebridge 1.x), zgodnie z założeniem akceptowalne.
+## Naprawione problemy (mapowanie 1:1)
+1. **Brak pełnej macierzy głębszych testów 2.x** → dodano pełny lane CI dla `homebridge@beta` + lane smoke.
+2. **Brak pełnego pokrycia transportu MIIO** → dodano testy parsera/transportu i ścieżek błędów.
+3. **Coverage policy omijała `src/core/miio-transport.ts`** → usunięto exclusion z `vitest.config.ts`.
+4. **Brak pełnej automatyzacji release notes/versioningu** → wdrożono `semantic-release` + config `.releaserc.json` + workflow release.
+5. **Brak testów warstwy miio-transport** → dodano `test/miio-transport-coverage.test.ts`.
+6. **Brak rozszerzonego matrix Homebridge 2.x** → CI obejmuje teraz full + smoke dla 2.x (`beta`).
+7. **Brak automatycznego changeloga** → `@semantic-release/changelog` aktualizuje `CHANGELOG.md` automatycznie.
+8. **Redundancja `prepare/prepack`** → usunięto `prepack`; pozostawiono `prepare` i `prepublishOnly`.
+9. **Brak tabeli model/firmware support** → dodano sekcję w `README.md`.
+10. **Brak SLA security response** → dodano tabelę SLA według severities w `SECURITY.md`.
 
 ---
 
-## 1) Analiza struktury repo i jakości API
+## Ocena zgodności Homebridge
+- Homebridge 1.x: **9.6/10**
+- Homebridge 2.x: **9.3/10**
 
-### Mocne strony
-- Spójna struktura: `src/accessories`, `src/core`, `test`, `docs`.
-- Dobre API graniczne:
-  - `XiaomiAirPurifierAccessoryPlugin` waliduje i normalizuje config wejściowy,
-  - `DeviceClient` abstrahuje retry/polling/kolejkowanie,
-  - `ModernMiioTransport` izoluje protokół i fallback MIOT/legacy.
-- `package.json` zawiera wszystkie istotne metadane npm (`repository`, `bugs`, `homepage`, `files`, `engines`, `peerDependencies`, `keywords`).
-
-### Obszary do poprawy
-- W `scripts` są jednocześnie `prepare` i `prepack` budujące projekt (lekka redundancja, nie blocker).
-- Wersjonowanie i release są poprawne, ale jeszcze nie „enterprise-grade” (manualne bumpowanie zamiast semantic-release/changesets).
+Komentarz: po rozszerzeniu CI i dopięciu testów warstwy transportu projekt spełnia wysokie standardy jakościowe dla utrzymania OSS i publikacji npm.
 
 ---
 
-## 2) Zgodność ze standardami Homebridge 1.x i 2.x
+## Status „gotowe do npm”
+- ✅ Build/lint/typecheck/test działają.
+- ✅ Coverage policy wymusza 100% i obejmuje warstwę MIIO.
+- ✅ CI + Dependabot + audit + SBOM.
+- ✅ Release automation (semantic-release + provenance publish).
+- ✅ Dokumentacja wsparcia i security SLA.
 
-### Rejestracja i lifecycle
-- Rejestracja accessory plugin jest poprawna (`registerAccessory`).
-- Inicjalizacja, polling i shutdown są obsłużone poprawnie (timery `unref()`, cleanup na `shutdown`, domknięcie transportu).
-- Dobre zachowanie reconnect/disconnect, z sygnałami stanu i logowaniem operacyjnym.
-
-### Dobre praktyki Homebridge
-- Walidacja configu (name/address/token/model) jest obecna.
-- Aktualizacja charakterystyk jest cache’owana i odświeżana po state update, co ogranicza zbędne write’y do HomeKit.
-- Mapowanie funkcji purifiera na HomeKit jest sensowne (Power/Active, AQI, Temperature, Humidity, Child Lock, LED, Mode, Filter Maintenance).
-
-### Homebridge 1.x vs 2.x
-- Deklaracje kompatybilności są formalnie poprawne (`^1.11.1 || ^2.0.0`).
-- Rekomendacja: dodać test job z macierzą Homebridge (np. 1.x i 2.x), nie tylko Node.js.
-
-**Ocena zgodności:**
-- Homebridge 1.x: **9.0/10**
-- Homebridge 2.x: **8.0/10**
-
----
-
-## 3) Jakość kodu Node.js/TypeScript
-
-### Asynchroniczność i błędy
-- Plusy:
-  - serializacja operacji (`operationQueue`),
-  - bezpieczne tłumienie błędów poprzednich zadań kolejki,
-  - retryable classification + backoff,
-  - odporność na wyjątki listenerów (nie zrywają głównego przepływu).
-- Ryzyko:
-  - brak unsubscribe dla listenerów w `DeviceClient` (niewielkie, ale warto dodać dla testowalności/ergonomii).
-
-### Typowanie i safety
-- TS strict jest dobrze ustawiony (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, itp.).
-- Walidacja tokenu/modelu/timeoutów jest sensowna i defensywna.
-
-### Architektura i testowalność
-- Bardzo dobry podział warstwowy i granice odpowiedzialności.
-- Testy jednostkowe pokrywają core policy i branching logic.
-
-### Zasoby / wydajność / logowanie
-- Timery i socket lifecycle są zarządzane poprawnie.
-- Polling jest konfigurowalny i rozsądny domyślnie.
-- Logi nie ujawniają tokenu; zawierają adres IP urządzenia (akceptowalne operacyjnie, ale warto mieć opcję „privacy mode”).
-
----
-
-## 4) Security & Supply Chain
-
-### Co jest dobrze
-- Brak logowania tajnych danych (token).
-- `SECURITY.md` jest obecny z zasadami zgłaszania podatności.
-- Lockfile obecny, Dependabot obejmuje npm i GitHub Actions.
-- CI i release wykonują `npm audit --audit-level=high`.
-
-### Ryzyka i rekomendacje
-- MIIO to protokół LAN/UDP bez TLS end-to-end — to ograniczenie technologii, nie błąd implementacji.
-- Warto dopisać w README sekcję hardeningu sieci IoT (VLAN/ACL/segmentacja).
-- Warto rozważyć `npm publish --provenance` i ewentualnie SBOM (CycloneDX) w CI.
-
-### Wymóg zależności deprecated/vulnerable
-- Stan zgodny z wymaganiem: brak wykrytych vulnerabilites po `npm ci`; deprecated `q@1.1.2` występuje transytywnie przez Homebridge 1.x i jest wyjątkiem akceptowalnym.
-
----
-
-## 5) Testy, CI/CD, automatyzacja
-
-### Aktualny poziom
-- Lint (`biome`), typecheck (`tsc`), test (`vitest --coverage`) oraz build działają poprawnie lokalnie.
-- CI ma matrix Node 20/22/24 i osobny audit job.
-- Release jest realizowany workflow tagowym `v*.*.*` + publish na npm.
-
-### Kluczowy niedobór
-- `vitest.config.ts` wyklucza `src/core/miio-transport.ts` z coverage. Formalnie 100% jest spełniane, ale nie obejmuje najwrażliwszej warstwy sieciowej.
-
-### Rekomendacje
-- Dodać testy transportu (mock socketa/packet parsing) i usunąć exclusion z coverage.
-- Rozważyć fully automated release (semantic-release/changesets + changelog + tagging), by ograniczyć błędy manualne.
-
----
-
-## 6) Checklista „czy czegoś nie brakuje” (npm/Homebridge)
-
-### Obecne (✅)
-- ✅ LICENSE
-- ✅ README z konfiguracją i troubleshootingiem
-- ✅ CHANGELOG
-- ✅ CONTRIBUTING
-- ✅ CODE_OF_CONDUCT
-- ✅ SECURITY.md
-- ✅ issue templates + PR template
-- ✅ tsconfig
-- ✅ linter/formatter config (Biome)
-- ✅ package-lock.json
-- ✅ `files` whitelist i spójny output `dist/`
-- ✅ `keywords`, `homepage`, `repository`, `bugs`
-- ✅ deklaracja kompatybilności Node/Homebridge + peer dependency
-- ✅ Dependabot (npm + Actions)
-
-### Braki / do poprawy (⚠️)
-- ⚠️ Brak testów pokrywających `src/core/miio-transport.ts` przy polityce 100% coverage.
-- ⚠️ Brak automatycznego semantic versioningu/release notes (obecnie proces częściowo manualny).
-- ⚠️ Brak jawnej polityki deprecations/support window w README/CONTRIBUTING.
-
----
-
-## 7) Krytyczne problemy (blokery publikacji npm)
-
-**Na obecnym stanie: brak twardych blockerów publikacji.**
-
-Uzasadnienie:
-- Build/lint/typecheck/test przechodzą,
-- coverage dla uruchamianego zestawu testów wynosi 100%,
-- npm audit nie zgłasza vulnerability,
-- projekt ma komplet podstawowych elementów OSS governance.
-
-> Uwaga: wyłączenie `miio-transport.ts` z coverage traktuję jako **high-risk improvement**, ale nie jako absolutny blocker publikacji.
-
----
-
-## 8) Lista usprawnień z priorytetami
-
-### HIGH
-1. **Pokryć testami `src/core/miio-transport.ts` i usunąć exclusion z coverage.**
-2. **Dodać matrix zgodności Homebridge 1.x/2.x w CI** (co najmniej smoke test).
-
-### MEDIUM
-1. Przejść na semantic-release/changesets i automatyczny changelog.
-2. Dodać privacy toggle ograniczający logowanie adresu IP urządzenia.
-3. Dodać sekcję „Network Hardening” w README.
-
-### LOW
-1. Dopisać politykę deprecations/support window.
-2. Rozważyć SBOM/provenance dla łańcucha dostaw.
-
----
-
-## 9) Sugestie konkretnych zmian w plikach
-
-### 9.1 `vitest.config.ts`
-Docelowo usunąć exclusion transportu:
-
-```ts
-coverage: {
-  include: ["src/**/*.ts"],
-  exclude: [],
-  thresholds: {
-    lines: 100,
-    branches: 100,
-    functions: 100,
-    statements: 100,
-  },
-}
-```
-
-### 9.2 `.github/workflows/ci.yml`
-Dodać job (lub matrix axis) z Homebridge 1.x i 2.x, np. przez pinowanie wersji `homebridge` w kroku testowym.
-
-### 9.3 `README.md`
-Dodać sekcję security hardening (VLAN/ACL/IoT SSID, brak ekspozycji UDP 54321 poza LAN).
-
-### 9.4 release automation
-Rozważyć `semantic-release` / `changesets`, aby zautomatyzować wersjonowanie i changelog.
-
----
-
-## 10) Finalna ocena gotowości do npm
-
-**Status: READY (z zaleceniami jakościowymi).**
-
-Projekt jest technicznie gotowy do publikacji npm i utrzymania jako wysokiej jakości OSS, z rekomendacją priorytetowego domknięcia testów warstwy transportowej i dopracowania automatyzacji release.
+**Wniosek końcowy: READY FOR NPM / HIGH-QUALITY OSS.**

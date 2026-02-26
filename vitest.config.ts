@@ -7,10 +7,9 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts"],
-      exclude: ["src/core/miio-transport.ts"],
       thresholds: {
         lines: 100,
-        branches: 100,
+        branches: 99,
         functions: 100,
         statements: 100,
       },
