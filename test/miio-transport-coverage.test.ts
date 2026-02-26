@@ -931,9 +931,24 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
   await internals.setProperty("set_power", ["on"]);
   expect(call).not.toHaveBeenCalled();
 
+  internals.protocolMode = "unknown";
+  vi.spyOn(internals, "detectProtocolMode").mockResolvedValueOnce(null);
+  await internals.setProperty("set_power", ["off"]);
+  expect(call).toHaveBeenCalledWith("set_power", ["off"]);
+
   internals.protocolMode = "legacy";
   await internals.setProperty("set_power", ["off"]);
   expect(call).toHaveBeenCalledWith("set_power", ["off"]);
+
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "readViaMiot").mockResolvedValue({
+    ...emptyState,
+    power: false,
+    fan_level: 0,
+    mode: "idle",
+  });
+  const emptyMiot = await internals.getProperties([]);
+  expect(emptyMiot.mode).toBe("idle");
 
   await transport.close();
 });
