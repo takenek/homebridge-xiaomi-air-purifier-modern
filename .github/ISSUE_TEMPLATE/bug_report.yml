@@ -1,29 +1,15 @@
 name: Bug report
-description: Report plugin malfunction or runtime error
-title: "bug: "
-labels: [bug]
+description: Report a reproducible bug
 body:
-  - type: textarea
-    id: summary
-    attributes:
-      label: Summary
-      description: What happened?
-    validations:
-      required: true
+  - type: input
+    id: homebridge
+    attributes: {label: Homebridge version}
+    validations: {required: true}
+  - type: input
+    id: node
+    attributes: {label: Node.js version}
+    validations: {required: true}
   - type: textarea
     id: steps
-    attributes:
-      label: Steps to reproduce
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs (redact token/IP if needed)
-  - type: input
-    id: versions
-    attributes:
-      label: Versions
-      description: homebridge, plugin, node.js
-    validations:
-      required: true
+    attributes: {label: Steps to reproduce}
+    validations: {required: true}

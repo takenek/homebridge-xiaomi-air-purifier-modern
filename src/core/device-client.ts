@@ -140,14 +140,17 @@ export class DeviceClient {
     this.operationTimer = setInterval(() => {
       this.safePoll("operation");
     }, this.operationPollIntervalMs);
+    this.operationTimer.unref();
 
     this.sensorTimer = setInterval(() => {
       this.safePoll("sensor");
     }, this.sensorPollIntervalMs);
+    this.sensorTimer.unref();
 
     this.keepAliveTimer = setInterval(() => {
       this.safePoll("keepalive");
     }, this.keepAliveIntervalMs);
+    this.keepAliveTimer.unref();
   }
 
   private safePoll(channel: "operation" | "sensor" | "keepalive"): void {
@@ -253,10 +256,11 @@ export class DeviceClient {
 
       this.retryDelayResolve = resolve;
       this.retryTimer = setTimeout(() => {
-        this.retryTimer = undefined;
+                this.retryTimer = undefined;
         this.retryDelayResolve = undefined;
         resolve();
       }, ms);
+      this.retryTimer.unref();
     });
   }
 

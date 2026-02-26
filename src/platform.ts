@@ -20,20 +20,20 @@ const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
   "zhimi.airpurifier.4",
   "zhimi.airpurifier.pro",
 ];
+const VALID_MODELS = new Set<AirPurifierModel>(SUPPORTED_MODELS);
 
 type XiaomiAccessoryConfig = AccessoryConfig & {
   address?: string;
   token?: string;
-  model?: AirPurifierModel;
+  model?: string;
   filterChangeThreshold?: number;
   connectTimeoutMs?: number;
   operationTimeoutMs?: number;
   reconnectDelayMs?: number;
   keepAliveIntervalMs?: number;
+  operationPollIntervalMs?: number;
+  sensorPollIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
-  enableAirQuality?: boolean;
-  enableTemperature?: boolean;
-  enableHumidity?: boolean;
   enableChildLockControl?: boolean;
 };
 
@@ -55,12 +55,15 @@ const assertHexToken = (value: string): string => {
   return value;
 };
 
-const assertModel = (value: string): AirPurifierModel => {
-  if (SUPPORTED_MODELS.includes(value as AirPurifierModel)) {
+const normalizeModel = (value: string, log: Logging): AirPurifierModel => {
+  if (VALID_MODELS.has(value as AirPurifierModel)) {
     return value as AirPurifierModel;
   }
 
-  throw new Error(`Unsupported model: ${value}`);
+  log.warn(
+    `Model "${value}" is not in validated list; using protocol auto-detection fallback.`,
+  );
+  return value as AirPurifierModel;
 };
 
 const normalizeThreshold = (value: unknown): number => {
@@ -110,7 +113,7 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const name = assertString(typedConfig.name, "name");
     const address = assertString(typedConfig.address, "address");
     const token = assertHexToken(assertString(typedConfig.token, "token"));
-    const model = assertModel(assertString(typedConfig.model, "model"));
+    const model = normalizeModel(assertString(typedConfig.model, "model"), this.log);
     const filterChangeThreshold = normalizeThreshold(
       typedConfig.filterChangeThreshold,
     );
@@ -131,19 +134,20 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       60_000,
       1_000,
     );
+    const operationPollIntervalMs = normalizeTimeout(
+      typedConfig.operationPollIntervalMs,
+      10_000,
+      1_000,
+    );
+    const sensorPollIntervalMs = normalizeTimeout(
+      typedConfig.sensorPollIntervalMs,
+      30_000,
+      1_000,
+    );
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
       typedConfig.exposeFilterReplaceAlertSensor,
       false,
     );
-    const enableAirQuality = normalizeBoolean(
-      typedConfig.enableAirQuality,
-      true,
-    );
-    const enableTemperature = normalizeBoolean(
-      typedConfig.enableTemperature,
-      true,
-    );
-    const enableHumidity = normalizeBoolean(typedConfig.enableHumidity, true);
     const enableChildLockControl = normalizeBoolean(
       typedConfig.enableChildLockControl,
       false,
@@ -155,12 +159,15 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       model,
       connectTimeoutMs,
       operationTimeoutMs,
+      logger: this.log,
     });
     const client = new DeviceClient(transport, this.log, {
+      operationPollIntervalMs,
+      sensorPollIntervalMs,
       keepAliveIntervalMs,
       retryPolicy: {
         ...DEFAULT_RETRY_POLICY,
-        baseDelayMs: reconnectDelayMs,
+        maxDelayMs: reconnectDelayMs,
       },
     });
     this.delegate = new AirPurifierAccessory(
@@ -173,9 +180,6 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       filterChangeThreshold,
       {
         exposeFilterReplaceAlertSensor,
-        enableAirQuality,
-        enableTemperature,
-        enableHumidity,
         enableChildLockControl,
       },
     );

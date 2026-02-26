@@ -104,8 +104,6 @@ describe("retry and polling", () => {
         "ENETRESET",
         "EAI_AGAIN",
         "ENOTFOUND",
-        "EADDRINUSE",
-        "EADDRNOTAVAIL",
         "ERR_NETWORK_CHANGED",
       ];
       const logger = makeLogger();

@@ -6,13 +6,20 @@
   "types": "dist/index.d.ts",
   "keywords": [
     "air-purifier",
+    "air-quality",
+    "airpurifier",
     "homebridge",
     "homebridge-plugin",
     "homekit",
     "iot",
+    "mi",
     "miio",
+    "miot",
+    "pm2.5",
+    "smart-home",
     "xiaomi",
-    "xiaomi-miio"
+    "xiaomi-miio",
+    "zhimi"
   ],
   "engines": {
     "node": "^20.0.0 || ^22.0.0 || ^24.0.0",
@@ -32,8 +39,6 @@
     "config.schema.json",
     "README.md",
     "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "RELEASE_CHECKLIST.md",
     "LICENSE",
     "SECURITY.md",
     "CODE_OF_CONDUCT.md"
@@ -46,18 +51,28 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "prepare": "npm run build",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags"
   },
   "peerDependencies": {
     "homebridge": "^1.11.1 || ^2.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.3",
-    "@types/node": "^25.3.0",
+    "@biomejs/biome": "^2.4.4",
+    "@types/node": "^22.15.30",
     "@vitest/coverage-v8": "^4.0.0",
     "typescript": "^5.8.2",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "homebridge": "^1.11.1"
   },
-  "author": "TaKeN",
-  "displayName": "Xiaomi Mi Air Purifier Modern"
+  "author": {
+    "name": "TaKeN",
+    "url": "https://github.com/takenek"
+  },
+  "displayName": "Xiaomi Mi Air Purifier Modern",
+  "type": "commonjs"
 }

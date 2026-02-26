@@ -1,17 +1,7 @@
 name: Feature request
-description: Suggest an improvement
-title: "feat: "
-labels: [enhancement]
+description: Propose an improvement
 body:
   - type: textarea
-    id: problem
-    attributes:
-      label: Problem statement
-    validations:
-      required: true
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposed solution
-    validations:
-      required: true
+    id: feature
+    attributes: {label: Feature description}
+    validations: {required: true}
