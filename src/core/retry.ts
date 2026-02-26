@@ -41,8 +41,6 @@ export const RETRYABLE_ERROR_CODES = new Set<string>([
   "ENETRESET",
   "EAI_AGAIN",
   "ENOTFOUND",
-  "EADDRINUSE",
-  "EADDRNOTAVAIL",
   "ERR_NETWORK_CHANGED",
 ]);
 

@@ -1,11 +1,10 @@
-# Release Checklist
+# Release checklist
 
-- [ ] Pull latest `main`
-- [ ] Run lint/typecheck/test/build locally
-- [ ] Verify coverage thresholds (lines >= 80%, branches >= 70%)
-- [ ] Update CHANGELOG.md
-- [ ] Run `npm run release`
-- [ ] Push commit + tag
-- [ ] Create GitHub Release
-- [ ] Publish package (`npm publish --access public`)
-- [ ] Validate install via `npm pack` and Homebridge startup
+- [ ] `npm ci`
+- [ ] `npm run lint`
+- [ ] `npm run typecheck`
+- [ ] `npm test` (coverage thresholds are 100% lines/functions/branches/statements)
+- [ ] `npm run build`
+- [ ] `npm pack --dry-run` and verify package contents
+- [ ] Update `CHANGELOG.md`
+- [ ] Publish via one of: `npm run release:patch|release:minor|release:major`

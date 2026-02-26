@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
 import { isRetryableError } from "./retry";
-import type { DeviceState, MiioTransport, ReadProperty } from "./types";
+import { READ_PROPERTIES, type DeviceState, type MiioTransport, type ReadProperty } from "./types";
 
 export interface MiioTransportOptions {
   address: string;
@@ -9,6 +9,11 @@ export interface MiioTransportOptions {
   model: string;
   connectTimeoutMs?: number;
   operationTimeoutMs?: number;
+  logger?: MiioTransportLogger;
+}
+
+export interface MiioTransportLogger {
+  debug(message: string): void;
 }
 
 interface MiioSession {
@@ -166,9 +171,13 @@ export class ModernMiioTransport implements MiioTransport {
         ? String(Reflect.get(error, "code") ?? "UNKNOWN")
         : "UNKNOWN";
     const message = error instanceof Error ? error.message : String(error);
-    process.emitWarning(
-      `[miio-transport:${context}] suppressed error (code=${code}): ${message}`,
-    );
+    const formatted = `[miio-transport:${context}] suppressed error (code=${code}): ${message}`;
+    if (this.options.logger) {
+      this.options.logger.debug(formatted);
+      return;
+    }
+
+    process.emitWarning(formatted);
   }
 
   public constructor(private readonly options: MiioTransportOptions) {
@@ -186,23 +195,22 @@ export class ModernMiioTransport implements MiioTransport {
     });
   }
 
-  public async getProperties(
-    _props: readonly ReadProperty[],
-  ): Promise<DeviceState> {
+  public async getProperties(props: readonly ReadProperty[]): Promise<DeviceState> {
+    const requestedProps = props.length > 0 ? props : READ_PROPERTIES;
     if (this.protocolMode === "unknown") {
       this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
     }
 
     const state =
       this.protocolMode === "miot"
-        ? await this.readViaMiot().catch(async (error: unknown) => {
+        ? await this.readViaMiot(requestedProps).catch(async (error: unknown) => {
             if (isRetryableError(error)) {
               throw error;
             }
             this.protocolMode = "legacy";
-            return this.readViaLegacy();
+            return this.readViaLegacy(requestedProps);
           })
-        : await this.readViaLegacy();
+        : await this.readViaLegacy(requestedProps);
 
     if (
       state.power === false &&
@@ -211,7 +219,7 @@ export class ModernMiioTransport implements MiioTransport {
     ) {
       // If all core fields are empty and we used legacy, retry MIOT once.
       if (this.protocolMode === "legacy") {
-        const miotState = await this.readViaMiot().catch((error: unknown) => {
+        const miotState = await this.readViaMiot(requestedProps).catch((error: unknown) => {
           if (isRetryableError(error)) {
             throw error;
           }
@@ -298,8 +306,8 @@ export class ModernMiioTransport implements MiioTransport {
     return null;
   }
 
-  private async readViaMiot(): Promise<DeviceState> {
-    const valueByKey = await this.readViaMiotBatch();
+  private async readViaMiot(props: readonly ReadProperty[] = READ_PROPERTIES): Promise<DeviceState> {
+    const valueByKey = await this.readViaMiotBatch(props);
 
     const powerRaw = valueByKey.get("power");
     const fanLevelRaw = valueByKey.get("fan_level");
@@ -329,10 +337,13 @@ export class ModernMiioTransport implements MiioTransport {
     };
   }
 
-  private async readViaMiotBatch(): Promise<Map<string, unknown>> {
+  private async readViaMiotBatch(
+    props: readonly ReadProperty[] = READ_PROPERTIES,
+  ): Promise<Map<string, unknown>> {
     const uniqueCandidates = new Set<string>();
     const requestCandidates: MiotProperty[] = [];
-    for (const [, candidates] of Object.entries(MIOT_MAP)) {
+    for (const key of props) {
+      const candidates = MIOT_MAP[key] ?? [];
       for (const candidate of candidates) {
         const signature = `${candidate.did}:${candidate.siid}:${candidate.piid}`;
         if (!uniqueCandidates.has(signature)) {
@@ -368,7 +379,8 @@ export class ModernMiioTransport implements MiioTransport {
       }
 
       const valueByKey = new Map<string, unknown>();
-      for (const [key, candidates] of Object.entries(MIOT_MAP)) {
+      for (const key of props) {
+        const candidates = MIOT_MAP[key] ?? [];
         for (const candidate of candidates) {
           const signature = `${candidate.did}:${candidate.siid}:${candidate.piid}`;
           if (valueBySignature.has(signature)) {
@@ -385,8 +397,8 @@ export class ModernMiioTransport implements MiioTransport {
       }
 
       const valueByKey = new Map<string, unknown>();
-      for (const [key, candidates] of Object.entries(MIOT_MAP)) {
-        const value = await this.readMiotOne(candidates);
+      for (const key of props) {
+        const value = await this.readMiotOne(MIOT_MAP[key] ?? []);
         valueByKey.set(key, value);
       }
 
@@ -394,10 +406,11 @@ export class ModernMiioTransport implements MiioTransport {
     }
   }
 
-  private async readViaLegacy(): Promise<DeviceState> {
-    const powerRaw = await this.readLegacyOne(LEGACY_MAP.power ?? []);
-    const fanLevelRaw = await this.readLegacyOne(LEGACY_MAP.fan_level ?? []);
-    const modeRaw = await this.readLegacyOne(LEGACY_MAP.mode ?? []);
+  private async readViaLegacy(props: readonly ReadProperty[] = READ_PROPERTIES): Promise<DeviceState> {
+    const valueByKey = await this.readViaLegacyBatch(props);
+    const powerRaw = valueByKey.get("power");
+    const fanLevelRaw = valueByKey.get("fan_level");
+    const modeRaw = valueByKey.get("mode");
 
     if (
       powerRaw === undefined &&
@@ -411,29 +424,46 @@ export class ModernMiioTransport implements MiioTransport {
       power: toBoolean(powerRaw),
       fan_level: toNumber(fanLevelRaw),
       mode: toMode(modeRaw),
-      temperature: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.temperature ?? []),
-      ),
-      humidity: toNumber(await this.readLegacyOne(LEGACY_MAP.humidity ?? [])),
-      aqi: toNumber(await this.readLegacyOne(LEGACY_MAP.aqi ?? [])),
-      filter1_life: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.filter1_life ?? []),
-      ),
-      child_lock: toBoolean(
-        await this.readLegacyOne(LEGACY_MAP.child_lock ?? []),
-      ),
-      led: toBoolean(await this.readLegacyOne(LEGACY_MAP.led ?? [])),
-      buzzer_volume: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.buzzer_volume ?? []),
-      ),
-      motor1_speed: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.motor1_speed ?? []),
-      ),
-      use_time: toNumber(await this.readLegacyOne(LEGACY_MAP.use_time ?? [])),
-      purify_volume: toNumber(
-        await this.readLegacyOne(LEGACY_MAP.purify_volume ?? []),
-      ),
+      temperature: toNumber(valueByKey.get("temperature")),
+      humidity: toNumber(valueByKey.get("humidity")),
+      aqi: toNumber(valueByKey.get("aqi")),
+      filter1_life: toNumber(valueByKey.get("filter1_life")),
+      child_lock: toBoolean(valueByKey.get("child_lock")),
+      led: toBoolean(valueByKey.get("led")),
+      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
+      motor1_speed: toNumber(valueByKey.get("motor1_speed")),
+      use_time: toNumber(valueByKey.get("use_time")),
+      purify_volume: toNumber(valueByKey.get("purify_volume")),
     };
+  }
+
+  private async readViaLegacyBatch(
+    props: readonly ReadProperty[],
+  ): Promise<Map<string, unknown>> {
+    const requests = props.map(async (key) => {
+      const aliases = LEGACY_MAP[key] ?? [];
+      if (aliases.length === 0) {
+        return [key, undefined] as const;
+      }
+
+      const response = await this.call("get_prop", aliases);
+      if (!Array.isArray(response)) {
+        return [key, undefined] as const;
+      }
+
+      let selected: unknown;
+      for (const value of response) {
+        if (value !== undefined && value !== null && value !== "") {
+          selected = value;
+          break;
+        }
+      }
+
+      return [key, selected] as const;
+    });
+
+    const entries = await Promise.all(requests);
+    return new Map(entries);
   }
 
   private async readMiotOne(
@@ -461,23 +491,6 @@ export class ModernMiioTransport implements MiioTransport {
     return undefined;
   }
 
-  private async readLegacyOne(candidates: readonly string[]): Promise<unknown> {
-    for (const candidate of candidates) {
-      try {
-        const response = await this.call("get_prop", [candidate]);
-        if (Array.isArray(response)) {
-          return response[0];
-        }
-      } catch (error: unknown) {
-        if (isRetryableError(error)) {
-          throw error;
-        }
-        // try next candidate
-      }
-    }
-
-    return undefined;
-  }
 
   private async trySetViaMiot(
     method: string,
@@ -601,7 +614,8 @@ export class ModernMiioTransport implements MiioTransport {
       throw new Error("MIIO session not initialized.");
     }
 
-    const requestId = this.nextMessageId++;
+    const requestId = this.nextMessageId;
+    this.nextMessageId = (this.nextMessageId % 2_147_483_647) + 1;
     const payload = JSON.stringify({
       id: requestId,
       method,
@@ -639,10 +653,15 @@ export class ModernMiioTransport implements MiioTransport {
       return null;
     }
 
-    const decrypted = this.decrypt(encryptedPayload);
-    const parsed = JSON.parse(
-      decrypted.toString("utf8"),
-    ) as MiioResponsePayload;
+    let parsed: MiioResponsePayload;
+    try {
+      parsed = JSON.parse(
+        this.decrypt(encryptedPayload).toString("utf8"),
+      ) as MiioResponsePayload;
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Malformed MIIO JSON response for ${method}: ${reason}`);
+    }
 
     if (parsed.error) {
       throw new MiioCommandError(
@@ -699,16 +718,8 @@ export class ModernMiioTransport implements MiioTransport {
         }
 
         if (expectEncrypted && typeof expectedResponseId === "number") {
-          const encryptedPayload = message.subarray(32);
-          try {
-            const decrypted = this.decrypt(encryptedPayload);
-            const parsed = JSON.parse(
-              decrypted.toString("utf8"),
-            ) as MiioResponsePayload;
-            if (parsed.id !== expectedResponseId) {
-              return;
-            }
-          } catch {
+          const messageId = message.readUInt32BE(4);
+          if (messageId !== 0 && messageId !== expectedResponseId) {
             return;
           }
         }

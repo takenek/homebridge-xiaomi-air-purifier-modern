@@ -1,31 +1,26 @@
-name: release
+name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - 'v*.*.*'
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: npm
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm publish --access public --provenance
+      - run: npm audit --audit-level=high
+      - run: npm run check
+      - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

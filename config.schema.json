@@ -22,7 +22,8 @@
         "title": "Token",
         "type": "string",
         "required": true,
-        "pattern": "^\\w{32}$"
+        "pattern": "^[0-9a-fA-F]{32}$",
+        "description": "32-character token in hexadecimal format (0-9, a-f)."
       },
       "model": {
         "title": "Model",
@@ -35,21 +36,6 @@
           "zhimi.airpurifier.4",
           "zhimi.airpurifier.pro"
         ]
-      },
-      "enableAirQuality": {
-        "title": "Air Quality",
-        "type": "boolean",
-        "default": true
-      },
-      "enableTemperature": {
-        "title": "Temperature",
-        "type": "boolean",
-        "default": true
-      },
-      "enableHumidity": {
-        "title": "Humidity",
-        "type": "boolean",
-        "default": true
       },
       "filterChangeThreshold": {
         "title": "Filter Change Warning Threshold",
@@ -84,7 +70,7 @@
         "type": "integer",
         "default": 15000,
         "minimum": 100,
-        "description": "Base delay used by reconnect backoff policy."
+        "description": "Maximum delay cap used by reconnect backoff policy (first retry starts fast, then increases up to this value)."
       },
       "keepAliveIntervalMs": {
         "title": "Keep Alive Interval (ms)",
@@ -98,6 +84,20 @@
         "type": "boolean",
         "default": false,
         "description": "Adds an extra Contact Sensor service for filter replacement warning. Keep disabled to avoid duplicate warning tiles in Homebridge UI."
+      },
+      "operationPollIntervalMs": {
+        "title": "Operation Poll Interval (ms)",
+        "type": "integer",
+        "default": 10000,
+        "minimum": 1000,
+        "description": "Polling interval for control-related state refresh."
+      },
+      "sensorPollIntervalMs": {
+        "title": "Sensor Poll Interval (ms)",
+        "type": "integer",
+        "default": 30000,
+        "minimum": 1000,
+        "description": "Polling interval for slower sensor updates."
       }
     }
   },
@@ -111,7 +111,10 @@
     {
       "type": "flex",
       "flex-flow": "row wrap",
-      "items": ["address", "token"]
+      "items": [
+        "address",
+        "token"
+      ]
     },
     {
       "type": "help",
@@ -136,7 +139,7 @@
     },
     {
       "type": "section",
-      "title": "Advanced options",
+      "title": "Sensors & Alerts",
       "expandable": true,
       "expanded": false,
       "items": [
@@ -160,6 +163,12 @@
         },
         {
           "key": "keepAliveIntervalMs"
+        },
+        {
+          "key": "operationPollIntervalMs"
+        },
+        {
+          "key": "sensorPollIntervalMs"
         }
       ]
     }
