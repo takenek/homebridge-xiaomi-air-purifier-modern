@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- `LICENSE`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates and PR template.
-- `release.yml` workflow for npm publish with provenance (`npm publish --provenance`).
-- Config validation for strict token format and supported model list.
+- Commit linting in CI (Conventional Commits enforcement for pull requests).
+- Semantic-release configuration (`.releaserc.json`) for automatic versioning, changelog updates, GitHub releases and npm publishing.
+- Homebridge compatibility smoke-test job (`1.x` and experimental `2.x`) in CI.
+- Security hardening guidance for LAN deployments and token/log redaction recommendations in docs.
+- Support window and deprecation policy documentation in README/CONTRIBUTING.
 
 ### Changed
-- Homebridge config/runtime parity for sensor toggles (`enableAirQuality`, `enableTemperature`, `enableHumidity`) and child-lock toggle (`enableChildLockControl`).
-- Updated Node/Homebridge engine compatibility ranges to major lines (`20.x/22.x/24.x`, Homebridge `1.x/2.x`).
-- CI hardening: workflow permissions, concurrency and npm audit job.
-- Packaging metadata hardened (`displayName`, extended keywords, prepublish checks, OSS policy files in published package).
+- CI quality gates now include explicit `npm run build`.
+- Release workflow migrated from manual tag-driven `npm publish` to semantic-release on `main` with npm provenance enabled.
+- `package.json` release scripts migrated to `semantic-release` and release-related dev dependencies added.
+- Release checklist updated for automated release flow.
+

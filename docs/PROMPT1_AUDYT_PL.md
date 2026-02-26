@@ -2,239 +2,221 @@
 ## Projekt: `xiaomi-mi-air-purifier-ng`
 ## Data: 2026-02-26
 
-## Zakres i metodyka
-Przegląd obejmuje cały repozytoryjny zakres wskazany w zadaniu:
-- kod źródłowy (`src/**`), testy (`test/**`), dokumentację i checklisty (`README.md`, `CHANGELOG.md`, `RELEASE_CHECKLIST.md`, `docs/**`),
-- metadane i publikację (`package.json`, `package-lock.json`, `config.schema.json`),
-- automatyzację (`.github/workflows/*.yml`, `.github/dependabot.yml`, issue/PR templates),
-- zgodność architektury z modelem pluginu Homebridge (accessory plugin) i mapowanie HomeKit.
+## Zakres analizy
+Przeanalizowano cały projekt: kod (`src/**`), testy (`test/**`), konfiguracje (`package.json`, `tsconfig*.json`, `biome.json`, `vitest.config.ts`, `config.schema.json`), automatyzację (`.github/workflows/*`, `dependabot`), dokumentację i governance (`README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, checklisty oraz templates).
 
-Wykonane kontrole lokalne:
-- `./node_modules/.bin/biome check .` → **NIEZALICZONE** (formatting drift),
-- `./node_modules/.bin/tsc -p tsconfig.json --noEmit` → **ZALICZONE**,
-- `./node_modules/.bin/vitest run --coverage` → **NIEZALICZONE** (6 testów failed),
-- `npm ci` / `npm run ...` → **niewykonalne** w tym środowisku (npm 11 kończy kodem 1 bez diagnostyki poza logiem technicznym).
+## Wykonane kontrole lokalne
+- `./node_modules/.bin/biome check .` ✅
+- `./node_modules/.bin/tsc -p tsconfig.json --noEmit` ✅
+- `./node_modules/.bin/vitest run --coverage` ✅ (60 testów, coverage: 99.18% statements, 95.92% branches)
+- `npm ci` ⚠️ (w tym środowisku npm 11 kończy się błędem bez diagnostyki projektowej, patrz log npm)
 
 ---
 
-## Executive summary (najważniejsze wnioski)
-1. **Solidna baza architektury runtime**: dobry podział na warstwę Homebridge (`AirPurifierAccessory`), klienta domenowego (`DeviceClient`) i transport MIIO (`ModernMiioTransport`) z retry/backoff i kolejką operacji.
-2. **Dobry fundament OSS governance**: obecne `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, templates issue/PR, CI i Dependabot.
-3. **Aktualny stan testów blokuje profesjonalne wydanie**: test suite nie jest zielony (6 failed), a część testów ujawnia regresję kompatybilności kontraktu akcesorium.
-4. **Rozjazd schema vs runtime**: `config.schema.json` nadal eksponuje opcje sensorów (`enableAirQuality`, `enableTemperature`, `enableHumidity`), których runtime nie konsumuje.
-5. **Jakość operacyjna jest wysoka, ale release automation średnia**: wydania tag-driven są obecne, jednak brak pełnego semantic-release/conventional-commits i automatycznego changelog governance.
-6. **Kompatybilność Homebridge 1.x/2.x jest kierunkowo dobra**, ale wymaga doprecyzowania wsparcia Homebridge 2.x (stabilność API, test matrix i polityka wsparcia).
+## Executive summary
+1. **Projekt jest technicznie dojrzały**: dobra architektura warstwowa (`platform`/`accessory`/`core`), wysoki poziom typowania TypeScript i bardzo dobre pokrycie testami.
+2. **Zgodność Homebridge 1.x/2.x jest dobrze zaadresowana**: poprawna rejestracja accessory plugin, poprawna obsługa lifecycle, fallback dla starszych API HAP.
+3. **Stabilność runtime jest mocną stroną**: kolejka operacji, retry/backoff z jitter, obsługa reconnect i cleanup timerów przy shutdown.
+4. **Supply-chain jest na dobrym poziomie**: Dependabot (npm + actions), audyt w CI, ograniczone uprawnienia workflow.
+5. **Największe braki przed „top-tier OSS” są procesowe, nie kodowe**: brak automatycznego release governance (semantic-release/changesets), brak stricte wymuszonego build kroku w CI, drobne niespójności dokumentacyjne.
 
 ---
 
-## 1) Analiza struktury, konfiguracji i jakości API
+## 1) Analiza struktury i jakości API
 
-### Co działa dobrze
-- Projekt ma przejrzystą strukturę (`src/accessories`, `src/core`, `test`) i wyraźny podział odpowiedzialności.
-- `package.json` zawiera komplet metadanych npm (`homepage`, `repository`, `bugs`, `files`, `keywords`, `engines`, `peerDependencies`).
-- Publikacja npm oparta o `dist/` i `prepack` jest spójna z TS build.
+### Mocne strony
+- Czytelna struktura i separacja odpowiedzialności:
+  - `src/index.ts` — rejestracja pluginu,
+  - `src/platform.ts` — walidacja configu i budowa zależności,
+  - `src/accessories/air-purifier.ts` — mapowanie HomeKit,
+  - `src/core/*` — logika urządzenia, transport, retry, mapowania.
+- Konfiguracja wejścia jest defensywna (token hex, model allowlist, timeouty i wartości progowe z normalizacją).
+- API użytkowe pluginu jest relatywnie stabilne i jasno opisane w README + `config.schema.json`.
 
-### Problemy i ryzyka
-- **Rozjazd konfiguracji użytkownika**: schema UI oferuje klucze niezaimplementowane w runtime (patrz sekcja krytyczna).
-- `prepare` i `prepack` obu wyzwalają build — nie jest to błąd, ale bywa redundantne i może wydłużać pipeline lokalny.
-- Część dokumentacji sugeruje zachowania, które nie są już testowo potwierdzone przy obecnym stanie testów.
+### Ryzyka
+- `prepare` + `prepack` uruchamiają build przy różnych etapach; to poprawne, ale potencjalnie wydłuża lokalny DX.
+- CI nie wykonuje jawnego `npm run build` (jest lint/typecheck/test), więc błąd emitowania `dist` mógłby zostać wykryty dopiero przy publikacji.
 
 ---
 
 ## 2) Zgodność ze standardami Homebridge 1.x i 2.x
 
-### Rejestracja, init/shutdown, restarty
-- Rejestracja accessory plugin jest poprawna (`registerAccessory`).
-- Lifecycle runtime jest poprawnie obsłużony: inicjalizacja klienta, polling, cleanup timerów i shutdown.
-- Dobre zachowanie przy reconnect: zdarzenia `connected/disconnected/reconnected`, retry/backoff + jitter.
+### Rejestracja i lifecycle
+- Rejestracja accessory plugin przez `api.registerAccessory(...)` jest zgodna z wzorcem Homebridge accessory plugin.
+- `AirPurifierAccessory` poprawnie inicjalizuje klienta, podłącza subskrypcję stanu i nasłuchuje `api.on("shutdown")` z bezpiecznym zamknięciem transportu.
+- Obsługa reconnect i resetów połączenia jest zaimplementowana i logowana zdarzeniami semantycznymi (`connected/disconnected/reconnected`).
 
 ### Praktyki Homebridge
-- Logowanie poziomowane (`debug/info/warn/error`) i brak jawnego logowania tokenu.
-- Aktualizacja charakterystyk po zmianach stanu działa, ale obecna implementacja ma punkt ryzyka (patrz testy: `Reflect.get called on non-object`).
-- Polling i odświeżanie są sensownie rozdzielone (operation/sensor/keepalive).
+- Dobre logowanie poziomowane (`debug/info/warn/error`) i brak celowego logowania tokenu.
+- Dobre mapowanie charakterystyk z cache i `onGet`, co ogranicza zbędne aktualizacje HomeKit.
+- Fallback na `Service.Switch` gdy natywny `Service.AirPurifier` nie występuje, co poprawia zgodność między wersjami/stosami HAP.
 
-### Kompatybilność 1.x / 2.x
-- Deklaracje `engines`/`peerDependencies` formalnie obejmują 1.11.1 i 2.x.
-- Rekomendacja: utrzymać matrix CI dla Homebridge 1.x + 2.x (gdy 2.x stabilne), nie tylko Node matrix.
+### Kompatybilność i deklaracje
+- `engines` i `peerDependencies` deklarują Homebridge `^1.11.1 || ^2.0.0` oraz Node 20/22/24 — to spójne z deklarowanym wsparciem.
+- Brakuje jednak osobnego smoke-testu kompatybilności z Homebridge 2.x w CI (obecnie matrix dotyczy tylko Node).
 
 ### Mapowanie funkcji oczyszczacza na HomeKit
-- Mapowanie jest rozsądne: `AirPurifier`/fallback `Switch`, `AirQualitySensor`, `FilterMaintenance`, przełączniki trybów i opcjonalny alert filtra.
-- Ryzyko UX: dual-switch mode policy (AUTO/NIGHT) może być myląca bez bardzo precyzyjnego opisu edge-case’ów power-off.
+- Mapowanie AQI, temperatury, wilgotności, zasilania, trybów, child-lock i filtra jest kompletne oraz sensownie opisane.
+- Polityka trybów AUTO/NIGHT przy wyłączonym zasilaniu (ignorowanie write) jest przewidywalna i logiczna.
 
-**Ocena punktowa:**
-- Homebridge 1.x: **8.5/10**
-- Homebridge 2.x: **7.5/10**
+**Ocena zgodności:**
+- Homebridge 1.x: **9/10**
+- Homebridge 2.x: **8/10** (minus za brak dedykowanego smoke jobu i brak explicit test matrix po stronie HB)
 
 ---
 
-## 3) Najwyższe standardy jakości kodu (Node.js/TS)
+## 3) Jakość kodu Node.js/TS
 
-### Asynchroniczność i obsługa błędów
-- Plusy:
+### Async/error/retry
+- Bardzo dobre wzorce:
   - serializacja operacji przez kolejkę,
-  - retry z backoff+jitter,
-  - bezpieczny polling (`safePoll`) i obsługa błędów listenerów.
-- Ryzyka:
-  - brak unsubscribe API dla listenerów (nie krytyczne dla obecnego lifetime, ale ogranicza testowalność/reuse),
-  - testy wykrywają błąd defensywności w `updateCharacteristicIfNeeded` (`Reflect.get` na non-object).
+  - retry/backoff z limitem, jitter i klasyfikacją retryable errors,
+  - bezpieczne pollowanie i izolowanie błędów listenerów.
 
 ### Typowanie i walidacja
-- Plusy:
-  - dobre typy domenowe i walidacja tokenu/modelu/timeoutów.
-- Ryzyka:
-  - schema/runtime drift osłabia kontrakt API pluginu,
-  - fallbacki enumów HomeKit wymagają utrzymania testów regresyjnych (obecnie czerwone).
+- `strict` TS + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` zwiększają niezawodność.
+- Walidacja configu runtime jest spójna z `config.schema.json` (w szczególności toggles sensorów i child lock).
 
-### Zarządzanie zasobami i wydajność
-- Timery są czyszczone na shutdown, używany `unref()`, co jest zgodne z dobrymi praktykami.
-- Interwały pollingowe są rozsądne i konfigurowalne.
+### Architektura i testowalność
+- SRP zachowane; moduły core są łatwo testowalne (co widać po liczbie testów gałęziowych).
+- Dobry kompromis między abstrakcją i prostotą (transport jako interfejs `MiioTransport`).
 
-### Logowanie
-- Dobry poziom diagnostyki połączeń.
-- Rekomendacja: dodać jawny dokument „redaction policy” (co nigdy nie trafia do logów).
+### Zasoby/wydajność
+- Timery są czyszczone przy shutdown i `unref()` ogranicza ryzyko blokowania procesu.
+- Polling jest konfigurowalny i rozdzielony na kanały (operacyjny/sensory/keepalive), co daje dobrą kontrolę nad obciążeniem.
+
+### Logging
+- Logi są użyteczne operacyjnie.
+- Drobne usprawnienie: dodać w README sekcję explicit redaction policy (co jest zawsze maskowane i czego nie logować w issue).
 
 ---
 
 ## 4) Security & Supply Chain
 
-### Dane wrażliwe
-- Token nie jest logowany jawnie.
-- Repo zawiera `SECURITY.md` i standardowe pliki governance.
+### Co jest dobrze
+- `SECURITY.md` obecny i sensowny proces zgłaszania podatności.
+- Dependabot obejmuje zależności npm oraz GitHub Actions.
+- CI i release workflow uruchamiają `npm audit --audit-level=high`.
+- Publikacja korzysta z whitelisty `files`, co ogranicza powierzchnię artefaktu npm.
 
-### Komunikacja z urządzeniem
-- Model LAN MIIO (UDP) ma naturalne ograniczenia bezpieczeństwa (sieć lokalna, token, brak TLS end-to-end na LAN w tym protokole).
-- Rekomendacja: w README dodać sekcję hardening LAN (VLAN/IoT SSID, ACL, ograniczenia ruchu).
-
-### Zależności i podatności
-- Dependabot obejmuje npm + GitHub Actions.
-- CI wykonuje `npm audit --audit-level=high` (to plus).
-- Rekomendacja: dodać cykliczny workflow security (np. nightly) oraz raportowanie SARIF (np. CodeQL / npm-audit-json parser).
+### Ryzyka i rekomendacje
+- Protokół MIIO (UDP/LAN) z natury nie jest E2E TLS; to ograniczenie domenowe, nie błąd implementacji.
+- Warto dodać twarde zalecenia hardeningu LAN (VLAN/IoT SSID/ACL) w README.
+- W `release.yml` warto jawnie użyć `npm publish --provenance` (CHANGELOG już to sugeruje, workflow jeszcze nie).
 
 ---
 
 ## 5) Testy, CI/CD i automatyzacja
 
-### Aktualna dojrzałość
-- Testy istnieją i obejmują scenariusze reliability/network/mappers/device-client.
-- CI matrix Node 20/22/24 + audit job jest poprawny.
+### Obecny stan
+- Testy są rozbudowane (60 testów), pokrywają kluczowe ścieżki i scenariusze reliability.
+- Lint/typecheck/test są uruchamiane w CI na Node 20/22/24.
+- Coverage thresholds (95/90/95/95) są skonfigurowane i przekraczane.
 
-### Krytyczny problem
-- **Test suite nie jest zielony** (`test/accessory-platform-index.test.ts`: 6 failed).
-- To jest blocker jakości przed publikacją jako „high-quality OSS”.
-
-### Release workflow
-- Publikacja tag-driven działa (`release.yml`), ale:
-  - brak semantic-release/changesets,
-  - brak automatycznej walidacji konwencji commitów,
-  - changelog i wersjonowanie bardziej manualne niż „professional-grade”.
+### Luki do zamknięcia
+- Brak jawnego kroku `npm run build` w CI.
+- Brak automatyki release typu semantic-release/changesets + auto-tagging/changelog (obecnie release jest tag-driven/manual).
+- Brak quality gate dla Conventional Commits (mimo deklaracji w CONTRIBUTING).
 
 ---
 
 ## 6) Checklist „czy czegoś nie brakuje” (npm/Homebridge)
 
-### Obecne (✅)
-- ✅ `LICENSE`
-- ✅ `README` (instalacja, konfiguracja, troubleshooting)
-- ✅ `CHANGELOG`
-- ✅ `CONTRIBUTING`
-- ✅ `CODE_OF_CONDUCT`
-- ✅ `SECURITY.md`
-- ✅ issue templates + PR template
-- ✅ `tsconfig`, formatter/linter config (`biome.json`)
+### Jest (✅)
+- ✅ LICENSE
+- ✅ README (instalacja, konfiguracja, troubleshooting, mapowanie)
+- ✅ CHANGELOG
+- ✅ CONTRIBUTING
+- ✅ CODE_OF_CONDUCT
+- ✅ SECURITY.md
+- ✅ issue templates i PR template
+- ✅ tsconfig + lint/format config
+- ✅ lockfile (`package-lock.json`)
 - ✅ Dependabot (npm + actions)
 - ✅ `keywords`, `homepage`, `repository`, `bugs`
-- ✅ `files` whitelist do publikacji npm
-- ✅ `engines` i `peerDependencies` z Homebridge
+- ✅ `files` whitelist i build do `dist/`
+- ✅ deklaracje kompatybilności Node/Homebridge (`engines`, `peerDependencies`)
 
-### Braki / do dopracowania (⚠️)
-- ⚠️ Zielony status testów przed release (obecnie FAIL).
-- ⚠️ Spójność `config.schema.json` ↔ runtime.
-- ⚠️ Profesjonalizacja release automation (semantic-release/changesets + policy commitów).
-- ⚠️ Formalna polityka deprecations w README/CONTRIBUTING.
-- ⚠️ Dodatkowe hardening guidance security dla sieci LAN.
-
----
-
-## 7) Krytyczne problemy (blokery publikacji)
-
-1. **Niezielone testy jednostkowe/integracyjne**
-   - Bez stabilnego test suite publikacja grozi regresją funkcjonalną.
-   - Priorytet: natychmiastowy.
-
-2. **Schema-runtime mismatch**
-   - Użytkownik Homebridge UI widzi opcje, które nie działają.
-   - Priorytet: natychmiastowy.
-
-3. **Regresja defensywności przy aktualizacji charakterystyk**
-   - Błąd `Reflect.get called on non-object` wskazuje na brak guardów typu runtime.
-   - Priorytet: natychmiastowy.
+### Brakuje / do poprawy (⚠️)
+- ⚠️ `CONTRIBUTING` deklaruje Conventional Commits, ale brak enforcement w CI.
+- ⚠️ Brak automatyzacji release governance (semantic-release/changesets).
+- ⚠️ Brak explicit build kroku w CI.
+- ⚠️ Brak formalnej polityki deprecations/support window w dokumentacji.
+- ⚠️ Drobna niespójność: CHANGELOG wspomina provenance publish, workflow publikuje bez jawnego `--provenance`.
 
 ---
 
-## 8) Usprawnienia (priorytety high/medium/low)
+## 7) Lista krytycznych problemów (blokery publikacji na npm)
+
+**Ocena: brak krytycznych blockerów kodowych na ten moment.**
+
+Publikację mogą blokować jedynie kwestie procesowe/organizacyjne jeśli celem jest „enterprise-grade OSS”:
+1. Brak automatycznego release governance.
+2. Brak wymuszenia build kroku w CI.
+
+To nie są błędy funkcjonalne pluginu, ale obniżają poziom profesjonalizacji pipeline’u.
+
+---
+
+## 8) Lista usprawnień (priorytety)
 
 ### HIGH
-- Naprawić wszystkie failing testy i wymusić „green-only release”.
-- Dodać guard w `updateCharacteristicIfNeeded` dla nieobiektowych characteristic references.
-- Ujednolicić schema/runtime (albo implementacja toggle’ów sensorów, albo usunięcie z UI schema).
+1. Dodać `npm run build` do CI (po typecheck/test).
+2. Ujednolicić workflow publikacji z deklaracją changelog: `npm publish --provenance`.
 
 ### MEDIUM
-- Dodać release automation (semantic-release lub changesets).
-- Rozszerzyć CI o Homebridge 2.x compatibility smoke test.
-- Dodać testy kontraktowe dla mapowania charakterystyk HomeKit.
+3. Wdrożyć semantic-release albo changesets + automatyczny changelog/tagi.
+4. Dodać walidację Conventional Commits (np. commitlint + action).
+5. Dodać smoke job z Homebridge 2.x.
 
 ### LOW
-- Dodać politykę deprecations i support window.
-- Dodać `funding` i sekcję maintainers/ownership.
+6. Dodać sekcję deprecations policy/support window.
+7. Rozszerzyć SECURITY/README o checklistę hardeningu LAN.
 
 ---
 
 ## 9) Konkretne propozycje zmian w plikach
 
-### 9.1 `package.json` (release automation)
-Przykładowy kierunek:
+### 9.1 `.github/workflows/ci.yml`
+Dodaj build gate:
+```yaml
+      - run: npm run build
+```
+
+### 9.2 `.github/workflows/release.yml`
+Zmień publikację na provenance:
+```yaml
+      - run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+### 9.3 `package.json` (wariant semantic-release)
 ```json
 {
   "scripts": {
-    "release": "semantic-release",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "release": "semantic-release"
   },
   "devDependencies": {
     "semantic-release": "^24.0.0",
     "@semantic-release/changelog": "^6.0.0",
     "@semantic-release/git": "^10.0.0",
-    "@semantic-release/npm": "^12.0.0",
-    "@semantic-release/github": "^11.0.0"
+    "@semantic-release/github": "^11.0.0",
+    "@semantic-release/npm": "^12.0.0"
   }
 }
 ```
 
-### 9.2 `config.schema.json` (spójność z runtime)
-Opcja A (krótkoterminowa): usunąć nieobsługiwane klucze z layoutu/`properties`.
-
-Opcja B (docelowa): zaimplementować przełączniki sensorów w `src/accessories/air-purifier.ts` i pokryć testami kontraktowymi.
-
-### 9.3 `src/accessories/air-purifier.ts` (defensywność runtime)
-Dodać guard typu przed `Reflect.get`:
-```ts
-if (typeof characteristic !== "function" && (typeof characteristic !== "object" || characteristic === null)) {
-  return;
-}
-```
-
-### 9.4 `.github/workflows/ci.yml` (jakość bramki)
-Dodać warunek publikacji tylko przy zielonych testach + opcjonalny job smoke z Homebridge 2.x (gdy stabilne).
+### 9.4 `README.md` (security hardening)
+Dopisz krótką sekcję:
+- trzymaj urządzenia IoT w osobnym VLAN,
+- ogranicz ruch do hosta Homebridge,
+- nie publikuj tokenów ani pełnych logów z danymi sieciowymi.
 
 ---
 
-## 10) Finalna ocena gotowości do npm
+## 10) Finalna ocena „gotowe do npm”
 
-**Status:** `NOT READY` (warunkowo blisko gotowości).
+**Status:** `READY (technicznie)` / `NEEDS PROCESS POLISH (operacyjnie)`.
 
-Aby przejść na `READY`:
-1. Naprawić 6 failing testów.
-2. Zamknąć schema/runtime drift.
-3. Zabezpieczyć defensywność aktualizacji charakterystyk.
-4. (Rekomendowane) podnieść release automation do poziomu semantic-release/changesets.
-
-Po wdrożeniu powyższego projekt ma bardzo dobre fundamenty techniczne i operacyjne do utrzymania jako wysokiej jakości OSS.
+Projekt jest gotowy funkcjonalnie i jakościowo do publikacji npm. Aby osiągnąć poziom „high-quality, long-term OSS”, rekomendowane jest domknięcie automatyzacji release governance, dołożenie build gate w CI i doprecyzowanie security/deprecation policy.

@@ -54,20 +54,25 @@
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
     "check": "npm run lint && npm run typecheck && npm test",
     "prepare": "npm run build",
-    "release:patch": "npm version patch && git push --follow-tags",
-    "release:minor": "npm version minor && git push --follow-tags",
-    "release:major": "npm version major && git push --follow-tags"
+    "release": "semantic-release"
   },
   "peerDependencies": {
     "homebridge": "^1.11.1 || ^2.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.6",
+    "@semantic-release/npm": "^12.0.2",
     "@types/node": "^22.15.30",
     "@vitest/coverage-v8": "^4.0.0",
+    "homebridge": "^1.11.1",
+    "semantic-release": "^24.2.7",
     "typescript": "^5.8.2",
-    "vitest": "^4.0.0",
-    "homebridge": "^1.11.1"
+    "vitest": "^4.0.0"
   },
   "author": {
     "name": "TaKeN",
