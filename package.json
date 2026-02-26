@@ -50,13 +50,9 @@
     "lint:fix": "biome check --write .",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "prepack": "npm run build",
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
     "check": "npm run lint && npm run typecheck && npm test",
-    "prepare": "npm run build",
-    "release:patch": "npm version patch && git push --follow-tags",
-    "release:minor": "npm version minor && git push --follow-tags",
-    "release:major": "npm version major && git push --follow-tags"
+    "prepare": "npm run build"
   },
   "peerDependencies": {
     "homebridge": "^1.11.1 || ^2.0.0"

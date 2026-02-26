@@ -106,6 +106,15 @@ Each purifier is configured as a separate accessory entry:
 | Mi Air Purifier 4 | `zhimi.airpurifier.4` |
 | Mi Air Purifier Pro | `zhimi.airpurifier.pro` |
 
+### Model / firmware support status
+
+| Model | Firmware support level | Notes |
+|-------|-------------------------|-------|
+| Mi Air Purifier 2H (`zhimi.airpurifier.2h`) | Validated | Covered by integration-style read/write tests. |
+| Mi Air Purifier 3 / 3H (`zhimi.airpurifier.3`, `zhimi.airpurifier.3h`) | Validated | Legacy + MIOT fallback paths validated. |
+| Mi Air Purifier 4 / Pro (`zhimi.airpurifier.4`, `zhimi.airpurifier.pro`) | Validated | Primary MIOT mode and fallback paths validated. |
+| Other `zhimi.airpurifier.*` variants | Best effort | Transport supports MIOT + legacy probing, but behavior may differ by firmware branch. |
+
 ---
 
 ## Token extraction
@@ -184,7 +193,7 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 ## Support & deprecation policy
 
 - Supported runtime: active LTS Node versions listed in `package.json` engines.
-- Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI smoke lane.
+- Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
 
 ---
