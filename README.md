@@ -138,10 +138,12 @@ Common methods:
 
 | AQI range | HomeKit AirQuality |
 |-----------|--------------------|
-| 0–35 | Excellent |
-| 36–70 | Good |
-| 71–100 | Fair |
-| > 100 | Poor |
+| < 0 / NaN | UNKNOWN (0) |
+| 0–35 | Excellent (1) |
+| 36–75 | Good (2) |
+| 76–115 | Fair (3) |
+| 116–150 | Poor (4) |
+| > 150 | Inferior (5) |
 
 ### Mode switch (AUTO/NIGHT)
 
