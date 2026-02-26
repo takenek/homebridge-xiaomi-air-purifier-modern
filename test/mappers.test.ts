@@ -28,4 +28,9 @@ describe("aqi mapping", () => {
     expect(aqiToHomeKitAirQuality(150)).toBe(4);
     expect(aqiToHomeKitAirQuality(151)).toBe(5);
   });
+
+  it("maps invalid AQI values to unknown", () => {
+    expect(aqiToHomeKitAirQuality(Number.NaN)).toBe(0);
+    expect(aqiToHomeKitAirQuality(-1)).toBe(0);
+  });
 });

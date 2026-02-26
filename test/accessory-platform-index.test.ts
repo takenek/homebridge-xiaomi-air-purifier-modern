@@ -410,8 +410,34 @@ describe("AirPurifierAccessory switch contract", () => {
       .getCharacteristic(characteristics.RotationSpeed as { UUID: string })
       .onSetHandler?.(50);
 
+    client.state = { ...baseState, power: false, mode: "sleep", fan_level: 10 };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+
     expect(client.calls).toContain("power:true");
     expect(setFanLevel).toHaveBeenCalled();
+    expect(
+      purifierService.updates.some(
+        (update) =>
+          update.characteristic === "active" &&
+          update.value === characteristics.Active.INACTIVE,
+      ),
+    ).toBe(true);
+    expect(
+      purifierService.updates.some(
+        (update) =>
+          update.characteristic === "currentAirPurifierState" &&
+          update.value === characteristics.CurrentAirPurifierState.INACTIVE,
+      ),
+    ).toBe(true);
+    expect(
+      purifierService.updates.some(
+        (update) =>
+          update.characteristic === "targetAirPurifierState" &&
+          update.value === characteristics.TargetAirPurifierState.MANUAL,
+      ),
+    ).toBe(true);
   });
 
   it("logs shutdown error instead of leaving unhandled rejection", async () => {
@@ -1025,5 +1051,94 @@ describe("platform and index", () => {
           api as never,
         ),
     ).toThrow("Invalid or missing config field: name");
+  });
+
+  it("handles services without onGet and returns cached onGet values", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    const onGetService = {
+      UUID: "custom-service",
+      subtype: "custom-sub",
+      getCharacteristic: vi.fn(() => {
+        let handler: (() => unknown) | undefined;
+        return {
+          onGet: (next: () => unknown) => {
+            handler = next;
+          },
+          run: () => handler?.(),
+        };
+      }),
+    };
+
+    const characteristic = { UUID: "custom-characteristic" };
+    (
+      accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
+    ).bindOnGet(onGetService, characteristic, false);
+
+    const cacheKey = `${onGetService.UUID}:${onGetService.subtype}:${characteristic.UUID}`;
+    const bound = onGetService.getCharacteristic.mock.results[0]?.value as {
+      run: () => unknown;
+    };
+    expect(bound.run()).toBe(false);
+    (
+      accessory as unknown as {
+        characteristicCache: Map<string, unknown>;
+      }
+    ).characteristicCache.set(cacheKey, true);
+    expect(bound.run()).toBe(true);
+
+    const undefinedSubtypeService = {
+      UUID: "custom-service-undefined-subtype",
+      getCharacteristic: vi.fn(() => {
+        let handler: (() => unknown) | undefined;
+        return {
+          onGet: (next: () => unknown) => {
+            handler = next;
+          },
+          run: () => handler?.(),
+        };
+      }),
+    };
+    (
+      accessory as unknown as {
+        bindOnGet: (...args: unknown[]) => void;
+        characteristicCache: Map<string, unknown>;
+      }
+    ).bindOnGet(undefinedSubtypeService, characteristic, false);
+    (
+      accessory as unknown as {
+        characteristicCache: Map<string, unknown>;
+      }
+    ).characteristicCache.set(
+      `${undefinedSubtypeService.UUID}::${characteristic.UUID}`,
+      true,
+    );
+    const undefinedSubtypeBound = undefinedSubtypeService.getCharacteristic.mock
+      .results[0]?.value as { run: () => unknown };
+    expect(undefinedSubtypeBound.run()).toBe(true);
+
+    const noOnGetService = {
+      UUID: "service-no-on-get",
+      subtype: undefined,
+      getCharacteristic: vi.fn(() => ({})),
+    };
+
+    expect(() => {
+      (
+        accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
+      ).bindOnGet(noOnGetService, characteristic, false);
+    }).not.toThrow();
   });
 });
