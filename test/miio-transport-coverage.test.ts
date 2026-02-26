@@ -1,6 +1,10 @@
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+beforeEach(() => {
+  vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
