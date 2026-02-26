@@ -26,6 +26,9 @@ jobs:
             lane: full
           - node: 22
             homebridge: "beta"
+            lane: full
+          - node: 24
+            homebridge: "beta"
             lane: smoke
     steps:
       - uses: actions/checkout@v4
