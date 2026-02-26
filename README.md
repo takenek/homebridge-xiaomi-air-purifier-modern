@@ -18,7 +18,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Air Quality Sensor | AQI mapped to Excellent/Good/Fair/Poor |
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
-| Switch: Child Lock | Device child lock |
+| Switch: Child Lock | Optional control (`enableChildLockControl`) |
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
@@ -28,8 +28,8 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 ## Requirements
 
-- Homebridge **1.11.1+** or **2.0+**
-- Node.js **20.20+**, **22.22+**, or **24.13+**
+- Homebridge **1.11.1+** or **2.x**
+- Node.js **20.x**, **22.x**, or **24.x**
 - Xiaomi Mi Air Purifier on the same LAN (UDP 54321)
 - Device token (32-char hex)
 
@@ -83,6 +83,10 @@ Each purifier is configured as a separate accessory entry:
 | `address` | string | Yes | LAN IP address |
 | `token` | string | Yes | 32-character hex token |
 | `model` | string | Yes | Xiaomi model identifier |
+| `enableAirQuality` | boolean | No | Expose Air Quality Sensor service (default `true`) |
+| `enableTemperature` | boolean | No | Expose Temperature Sensor service (default `true`) |
+| `enableHumidity` | boolean | No | Expose Humidity Sensor service (default `true`) |
+| `enableChildLockControl` | boolean | No | Expose Child Lock switch service (default `false`) |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |

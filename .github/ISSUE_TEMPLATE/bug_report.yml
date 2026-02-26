@@ -1,0 +1,29 @@
+name: Bug report
+description: Report plugin malfunction or runtime error
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redact token/IP if needed)
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: homebridge, plugin, node.js
+    validations:
+      required: true

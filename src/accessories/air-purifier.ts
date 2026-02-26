@@ -14,14 +14,23 @@ import {
   resolveModeFromNightSwitch,
 } from "../core/mode-policy";
 
+export interface AccessoryFeatureFlags {
+  exposeFilterReplaceAlertSensor: boolean;
+  enableAirQuality: boolean;
+  enableTemperature: boolean;
+  enableHumidity: boolean;
+  enableChildLockControl: boolean;
+}
+
 export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly informationService: Service;
   private readonly powerService: Service;
-  private readonly airQualityService: Service;
-  private readonly temperatureService: Service;
-  private readonly humidityService: Service;
-  private readonly childLockService: Service;
+  private readonly airQualityService: Service | null;
+  private readonly temperatureService: Service | null;
+  private readonly humidityService: Service | null;
+  private readonly childLockService: Service | null;
   private readonly ledService: Service;
+  private readonly address: string;
   private readonly modeAutoService: Service;
   private readonly modeNightService: Service;
   private readonly filterService: Service;
@@ -32,12 +41,24 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly api: API,
     private readonly log: Logging,
     private readonly name: string,
-    private readonly address: string,
+    address: string,
     private readonly client: DeviceClient,
     model: string,
     private readonly filterChangeThreshold: number,
-    private readonly exposeFilterReplaceAlertSensor = false,
+    featuresOrExpose: AccessoryFeatureFlags | boolean = false,
   ) {
+    this.address = address;
+
+    const features: AccessoryFeatureFlags =
+      typeof featuresOrExpose === "boolean"
+        ? {
+            exposeFilterReplaceAlertSensor: featuresOrExpose,
+            enableAirQuality: true,
+            enableTemperature: true,
+            enableHumidity: true,
+            enableChildLockControl: true,
+          }
+        : featuresOrExpose;
     this.informationService = new this.api.hap.Service.AccessoryInformation()
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Xiaomi")
       .setCharacteristic(this.api.hap.Characteristic.Model, model)
@@ -45,19 +66,18 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       .setCharacteristic(this.api.hap.Characteristic.SerialNumber, "unknown");
 
     this.powerService = new this.api.hap.Service.Switch("Power", "power");
-    this.airQualityService = new this.api.hap.Service.AirQualitySensor(
-      `${name} Air Quality`,
-    );
-    this.temperatureService = new this.api.hap.Service.TemperatureSensor(
-      `${name} Temperature`,
-    );
-    this.humidityService = new this.api.hap.Service.HumiditySensor(
-      `${name} Humidity`,
-    );
-    this.childLockService = new this.api.hap.Service.Switch(
-      "Child Lock",
-      "child_lock",
-    );
+    this.airQualityService = features.enableAirQuality
+      ? new this.api.hap.Service.AirQualitySensor(`${name} Air Quality`)
+      : null;
+    this.temperatureService = features.enableTemperature
+      ? new this.api.hap.Service.TemperatureSensor(`${name} Temperature`)
+      : null;
+    this.humidityService = features.enableHumidity
+      ? new this.api.hap.Service.HumiditySensor(`${name} Humidity`)
+      : null;
+    this.childLockService = features.enableChildLockControl
+      ? new this.api.hap.Service.Switch("Child Lock", "child_lock")
+      : null;
     this.ledService = new this.api.hap.Service.Switch("LED Night Mode", "led");
     this.modeAutoService = new this.api.hap.Service.Switch(
       "Mode AUTO ON/OFF",
@@ -70,7 +90,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     this.filterService = new this.api.hap.Service.FilterMaintenance(
       "Filter Life",
     );
-    this.filterAlertService = this.exposeFilterReplaceAlertSensor
+    this.filterAlertService = features.exposeFilterReplaceAlertSensor
       ? new this.api.hap.Service.ContactSensor(
           "Filter Replace Alert",
           "filter_replace_alert",
@@ -78,6 +98,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       : null;
 
     this.applyServiceNames();
+    this.log.debug(`Accessory initialized for device endpoint ${address}.`);
 
     this.bindHandlers();
     this.client.onStateUpdate(() => this.refreshCharacteristics());
@@ -102,10 +123,28 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     const namedServices: Array<{ service: Service; name: string }> = [
       { service: this.informationService, name: this.name },
       { service: this.powerService, name: "Power" },
-      { service: this.airQualityService, name: `${this.name} Air Quality` },
-      { service: this.temperatureService, name: `${this.name} Temperature` },
-      { service: this.humidityService, name: `${this.name} Humidity` },
-      { service: this.childLockService, name: "Child Lock" },
+      ...(this.airQualityService
+        ? [
+            {
+              service: this.airQualityService,
+              name: `${this.name} Air Quality`,
+            },
+          ]
+        : []),
+      ...(this.temperatureService
+        ? [
+            {
+              service: this.temperatureService,
+              name: `${this.name} Temperature`,
+            },
+          ]
+        : []),
+      ...(this.humidityService
+        ? [{ service: this.humidityService, name: `${this.name} Humidity` }]
+        : []),
+      ...(this.childLockService
+        ? [{ service: this.childLockService, name: "Child Lock" }]
+        : []),
       { service: this.ledService, name: "LED Night Mode" },
       { service: this.modeAutoService, name: "Mode AUTO ON/OFF" },
       { service: this.modeNightService, name: "Mode NIGHT ON/OFF" },
@@ -131,10 +170,10 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     return [
       this.informationService,
       this.powerService,
-      this.airQualityService,
-      this.temperatureService,
-      this.humidityService,
-      this.childLockService,
+      ...(this.airQualityService ? [this.airQualityService] : []),
+      ...(this.temperatureService ? [this.temperatureService] : []),
+      ...(this.humidityService ? [this.humidityService] : []),
+      ...(this.childLockService ? [this.childLockService] : []),
       this.ledService,
       this.modeAutoService,
       this.modeNightService,
@@ -151,7 +190,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       );
 
     this.childLockService
-      .getCharacteristic(this.api.hap.Characteristic.On)
+      ?.getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) =>
         this.client.setChildLock(Boolean(value)),
       );
@@ -209,27 +248,38 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       state.power,
     );
 
-    this.updateCharacteristicIfNeeded(
-      this.airQualityService,
-      this.api.hap.Characteristic.AirQuality,
-      aqiToHomeKitAirQuality(state.aqi),
-    );
-    this.updateCharacteristicIfNeeded(
-      this.temperatureService,
-      this.api.hap.Characteristic.CurrentTemperature,
-      state.temperature,
-    );
-    this.updateCharacteristicIfNeeded(
-      this.humidityService,
-      this.api.hap.Characteristic.CurrentRelativeHumidity,
-      state.humidity,
-    );
+    if (this.airQualityService) {
+      this.updateCharacteristicIfNeeded(
+        this.airQualityService,
+        this.api.hap.Characteristic.AirQuality,
+        aqiToHomeKitAirQuality(state.aqi),
+      );
+    }
 
-    this.updateCharacteristicIfNeeded(
-      this.childLockService,
-      this.api.hap.Characteristic.On,
-      state.child_lock,
-    );
+    if (this.temperatureService) {
+      this.updateCharacteristicIfNeeded(
+        this.temperatureService,
+        this.api.hap.Characteristic.CurrentTemperature,
+        state.temperature,
+      );
+    }
+
+    if (this.humidityService) {
+      this.updateCharacteristicIfNeeded(
+        this.humidityService,
+        this.api.hap.Characteristic.CurrentRelativeHumidity,
+        state.humidity,
+      );
+    }
+
+    if (this.childLockService) {
+      this.updateCharacteristicIfNeeded(
+        this.childLockService,
+        this.api.hap.Characteristic.On,
+        state.child_lock,
+      );
+    }
+
     this.updateCharacteristicIfNeeded(
       this.ledService,
       this.api.hap.Characteristic.On,

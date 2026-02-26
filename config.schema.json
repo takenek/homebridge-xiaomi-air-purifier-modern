@@ -59,17 +59,11 @@
         "maximum": 100,
         "description": "Show <b>Change Filter</b> warning when Filter Life reaches or drops below this value."
       },
-      "enableFanSpeedControl": {
-        "title": "Fan Speed",
-        "type": "boolean",
-        "default": false,
-        "description": "Allows you to see control the fan speed."
-      },
       "enableChildLockControl": {
         "title": "Child Lock",
         "type": "boolean",
         "default": false,
-        "description": "Allows you to lock/unlock the physical control."
+        "description": "Expose Child Lock switch service in HomeKit."
       },
       "connectTimeoutMs": {
         "title": "Connect Timeout (ms)",
@@ -151,9 +145,6 @@
         },
         {
           "key": "exposeFilterReplaceAlertSensor"
-        },
-        {
-          "key": "enableFanSpeedControl"
         },
         {
           "key": "enableChildLockControl"
