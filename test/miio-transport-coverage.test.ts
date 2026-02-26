@@ -1,6 +1,11 @@
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 import { ModernMiioTransport } from "../src/core/miio-transport";
 import type { DeviceState } from "../src/core/types";
 
@@ -47,10 +52,6 @@ const createTransport = () =>
   });
 
 describe("ModernMiioTransport coverage", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it("validates token and supports logger-based suppressed error reporting", async () => {
     expect(
       () =>
