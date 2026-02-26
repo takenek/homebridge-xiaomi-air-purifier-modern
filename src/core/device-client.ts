@@ -147,6 +147,7 @@ export class DeviceClient {
   }
 
   private startPolling(): void {
+    this.clearTimers();
     this.operationTimer = setInterval(() => {
       this.safePoll("operation");
     }, this.operationPollIntervalMs);
