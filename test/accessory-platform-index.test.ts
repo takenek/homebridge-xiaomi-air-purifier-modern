@@ -898,6 +898,56 @@ describe("platform and index", () => {
         ),
     ).not.toThrow();
 
+    const pluginWithoutAirServices = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "NoAirSensors",
+        address: "1.1.1.6",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.3h",
+        enableAirQuality: false,
+        enableTemperature: false,
+        enableHumidity: false,
+        enableChildLockControl: false,
+      } as never,
+      api as never,
+    );
+    const noAirServices = pluginWithoutAirServices
+      .getServices()
+      .map((service) => (service as unknown as FakeService).name);
+    expect(noAirServices).not.toContain("AirQuality:NoAirSensors Air Quality");
+    expect(noAirServices).not.toContain("Temp:NoAirSensors Temperature");
+    expect(noAirServices).not.toContain("Humidity:NoAirSensors Humidity");
+    expect(noAirServices).not.toContain("Switch:Child Lock");
+
+    expect(
+      () =>
+        new XiaomiAirPurifierAccessoryPlugin(
+          logger as never,
+          {
+            name: "BadToken",
+            address: "1.1.1.7",
+            token: "xyz",
+            model: "zhimi.airpurifier.3h",
+          } as never,
+          api as never,
+        ),
+    ).toThrow("token must be a 32-character hexadecimal string");
+
+    expect(
+      () =>
+        new XiaomiAirPurifierAccessoryPlugin(
+          logger as never,
+          {
+            name: "BadModel",
+            address: "1.1.1.8",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.unknown",
+          } as never,
+          api as never,
+        ),
+    ).toThrow("Unsupported model");
+
     expect(
       () =>
         new XiaomiAirPurifierAccessoryPlugin(

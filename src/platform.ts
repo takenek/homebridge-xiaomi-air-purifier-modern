@@ -13,6 +13,14 @@ import type { AirPurifierModel } from "./core/types";
 export const ACCESSORY_NAME = "XiaomiMiAirPurifier";
 export const PLUGIN_NAME = "homebridge-xiaomi-air-purifier-modern";
 
+const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
+  "zhimi.airpurifier.2h",
+  "zhimi.airpurifier.3",
+  "zhimi.airpurifier.3h",
+  "zhimi.airpurifier.4",
+  "zhimi.airpurifier.pro",
+];
+
 type XiaomiAccessoryConfig = AccessoryConfig & {
   address?: string;
   token?: string;
@@ -23,6 +31,10 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   reconnectDelayMs?: number;
   keepAliveIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
+  enableAirQuality?: boolean;
+  enableTemperature?: boolean;
+  enableHumidity?: boolean;
+  enableChildLockControl?: boolean;
 };
 
 const assertString = (value: unknown, field: string): string => {
@@ -31,6 +43,24 @@ const assertString = (value: unknown, field: string): string => {
   }
 
   return value;
+};
+
+const assertHexToken = (value: string): string => {
+  if (!/^[0-9a-fA-F]{32}$/.test(value)) {
+    throw new Error(
+      "Invalid config field: token must be a 32-character hexadecimal string.",
+    );
+  }
+
+  return value;
+};
+
+const assertModel = (value: string): AirPurifierModel => {
+  if (SUPPORTED_MODELS.includes(value as AirPurifierModel)) {
+    return value as AirPurifierModel;
+  }
+
+  throw new Error(`Unsupported model: ${value}`);
 };
 
 const normalizeThreshold = (value: unknown): number => {
@@ -79,8 +109,8 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     const typedConfig = config as XiaomiAccessoryConfig;
     const name = assertString(typedConfig.name, "name");
     const address = assertString(typedConfig.address, "address");
-    const token = assertString(typedConfig.token, "token");
-    const model = assertString(typedConfig.model, "model") as AirPurifierModel;
+    const token = assertHexToken(assertString(typedConfig.token, "token"));
+    const model = assertModel(assertString(typedConfig.model, "model"));
     const filterChangeThreshold = normalizeThreshold(
       typedConfig.filterChangeThreshold,
     );
@@ -103,6 +133,19 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
     );
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
       typedConfig.exposeFilterReplaceAlertSensor,
+      false,
+    );
+    const enableAirQuality = normalizeBoolean(
+      typedConfig.enableAirQuality,
+      true,
+    );
+    const enableTemperature = normalizeBoolean(
+      typedConfig.enableTemperature,
+      true,
+    );
+    const enableHumidity = normalizeBoolean(typedConfig.enableHumidity, true);
+    const enableChildLockControl = normalizeBoolean(
+      typedConfig.enableChildLockControl,
       false,
     );
 
@@ -128,7 +171,13 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       client,
       model,
       filterChangeThreshold,
-      exposeFilterReplaceAlertSensor,
+      {
+        exposeFilterReplaceAlertSensor,
+        enableAirQuality,
+        enableTemperature,
+        enableHumidity,
+        enableChildLockControl,
+      },
     );
   }
 
