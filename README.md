@@ -188,6 +188,26 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 
 ---
 
+
+## Security hardening (LAN)
+
+Because Xiaomi MIIO control is local-LAN UDP based, apply basic network hardening:
+
+- place IoT devices in a dedicated VLAN / IoT SSID,
+- allow purifier traffic only from the Homebridge host where possible,
+- block inbound WAN access to UDP `54321`,
+- never post full logs with token/IP details in public issues.
+
+---
+
+## Support window & deprecations
+
+- We support Homebridge **1.x** and **2.x** according to `package.json` engines/peer range.
+- We support active Node.js LTS/current major lines declared in `engines` (20/22/24).
+- Deprecated configuration keys remain supported for at least one minor release and are announced in `CHANGELOG.md` before removal in the next major release.
+
+---
+
 ## Development
 
 ```bash
