@@ -34,7 +34,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly humidityService: Service | null;
   private readonly childLockService: Service | null;
   private readonly ledService: Service;
-  private readonly address: string;
+  private readonly displayAddress: string;
   private readonly modeAutoService: Service;
   private readonly modeNightService: Service;
   private readonly filterService: Service;
@@ -47,12 +47,13 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly log: Logging,
     private readonly name: string,
     address: string,
+    displayAddress: string,
     private readonly client: DeviceClient,
     model: string,
     private readonly filterChangeThreshold: number,
     featuresOrExpose: AccessoryFeatureFlags | boolean = false,
   ) {
-    this.address = address;
+    this.displayAddress = displayAddress;
 
     const features: AccessoryFeatureFlags =
       typeof featuresOrExpose === "boolean"
@@ -118,7 +119,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       : null;
 
     this.applyServiceNames();
-    this.log.debug(`Accessory initialized for device endpoint ${address}.`);
+    this.log.debug(
+      `Accessory initialized for device endpoint ${this.displayAddress}.`,
+    );
 
     this.bindHandlers();
     this.client.onStateUpdate(() => this.refreshCharacteristics());
@@ -542,17 +545,17 @@ export class AirPurifierAccessory implements AccessoryPlugin {
 
   private logConnectionEvent(event: ConnectionStateEvent): void {
     if (event.state === "connected") {
-      this.log.info(`Connected to "${this.name}" @ ${this.address}!`);
+      this.log.info(`Connected to "${this.name}" @ ${this.displayAddress}!`);
       return;
     }
 
     if (event.state === "reconnected") {
-      this.log.info(`Reconnected to "${this.name}" @ ${this.address}.`);
+      this.log.info(`Reconnected to "${this.name}" @ ${this.displayAddress}.`);
       return;
     }
 
     this.log.warn(
-      `Disconnected from "${this.name}" @ ${this.address} (code ${event.code ?? "UNKNOWN"}): ${event.message ?? "Unknown error"}`,
+      `Disconnected from "${this.name}" @ ${this.displayAddress} (code ${event.code ?? "UNKNOWN"}): ${event.message ?? "Unknown error"}`,
     );
   }
 

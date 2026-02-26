@@ -93,6 +93,7 @@ Each purifier is configured as a separate accessory entry:
 | `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
 | `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
 | `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`) |
+| `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
 | `_bridge` | object | No | Optional child bridge configuration |
 
 ### Known model strings
@@ -168,6 +169,26 @@ The accessory logs connection lifecycle events per device:
 
 ---
 
+
+## Network hardening (recommended)
+
+Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trusted-LAN only:
+
+1. Put IoT devices in a dedicated VLAN / SSID.
+2. Allow only Homebridge host ↔ purifier UDP 54321 in ACL/firewall rules.
+3. Block WAN egress from IoT VLAN when possible.
+4. Enable `maskDeviceAddressInLogs` when log forwarding goes to shared SIEM or external support channels.
+
+---
+
+## Support & deprecation policy
+
+- Supported runtime: active LTS Node versions listed in `package.json` engines.
+- Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI smoke lane.
+- Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
+
+---
+
 ## Troubleshooting
 
 ### Device not responding / timeout
@@ -192,11 +213,11 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 
 ```bash
 export NODE_OPTIONS="--unhandled-rejections=strict --trace-warnings --trace-uncaught --throw-deprecation --pending-deprecation --trace-deprecation"
-npm ci
-npm run lint
-npm run typecheck
-npm test
-npm run build
+env -u npm_config_http_proxy -u npm_config_https_proxy npm ci
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run lint
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run typecheck
+env -u npm_config_http_proxy -u npm_config_https_proxy npm test
+env -u npm_config_http_proxy -u npm_config_https_proxy npm run build
 ```
 
 ---

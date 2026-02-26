@@ -38,6 +38,16 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   sensorPollIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
   enableChildLockControl?: boolean;
+  maskDeviceAddressInLogs?: boolean;
+};
+
+const maskAddress = (address: string): string => {
+  const segments = address.split(".");
+  if (segments.length !== 4) {
+    return "[masked]";
+  }
+
+  return `${segments[0]}.${segments[1]}.*.*`;
 };
 
 const assertString = (value: unknown, field: string): string => {
@@ -167,6 +177,13 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       typedConfig.enableChildLockControl,
       false,
     );
+    const maskDeviceAddressInLogs = normalizeBoolean(
+      typedConfig.maskDeviceAddressInLogs,
+      false,
+    );
+    const displayAddress = maskDeviceAddressInLogs
+      ? maskAddress(address)
+      : address;
 
     const transport = new ModernMiioTransport({
       address,
@@ -190,6 +207,7 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       this.log,
       name,
       address,
+      displayAddress,
       client,
       model,
       filterChangeThreshold,

@@ -116,6 +116,12 @@
         "default": 30000,
         "minimum": 1000,
         "description": "Polling interval for slower sensor updates."
+      },
+      "maskDeviceAddressInLogs": {
+        "title": "Mask Device IP in Logs",
+        "type": "boolean",
+        "default": false,
+        "description": "Mask device IP address in runtime logs (for privacy-sensitive deployments)."
       }
     }
   },
@@ -166,6 +172,9 @@
         },
         {
           "key": "enableChildLockControl"
+        },
+        {
+          "key": "maskDeviceAddressInLogs"
         },
         {
           "key": "connectTimeoutMs"
