@@ -19,6 +19,9 @@ import {
 } from "../core/mode-policy";
 
 export interface AccessoryFeatureFlags {
+  enableAirQuality: boolean;
+  enableTemperature: boolean;
+  enableHumidity: boolean;
   exposeFilterReplaceAlertSensor: boolean;
   enableChildLockControl: boolean;
 }
@@ -26,7 +29,9 @@ export interface AccessoryFeatureFlags {
 export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly informationService: Service;
   private readonly purifierService: Service;
-  private readonly airQualityService: Service;
+  private readonly airQualityService: Service | null;
+  private readonly temperatureService: Service | null;
+  private readonly humidityService: Service | null;
   private readonly childLockService: Service | null;
   private readonly ledService: Service;
   private readonly address: string;
@@ -52,6 +57,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     const features: AccessoryFeatureFlags =
       typeof featuresOrExpose === "boolean"
         ? {
+            enableAirQuality: true,
+            enableTemperature: true,
+            enableHumidity: true,
             exposeFilterReplaceAlertSensor: featuresOrExpose,
             enableChildLockControl: true,
           }
@@ -65,14 +73,28 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.buildSerialNumber(address),
       );
 
-    const AirPurifierService = Reflect.get(this.api.hap.Service as object, "AirPurifier");
+    const AirPurifierService = Reflect.get(
+      this.api.hap.Service as object,
+      "AirPurifier",
+    );
     this.usesNativePurifierService = Boolean(AirPurifierService);
     this.purifierService = this.usesNativePurifierService
-      ? new (AirPurifierService as new (name: string, subtype: string) => Service)(name, "main")
+      ? new (
+          AirPurifierService as new (
+            name: string,
+            subtype: string,
+          ) => Service
+        )(name, "main")
       : new this.api.hap.Service.Switch("Power", "power");
-    this.airQualityService = new this.api.hap.Service.AirQualitySensor(
-      `${name} Air Quality`,
-    );
+    this.airQualityService = features.enableAirQuality
+      ? new this.api.hap.Service.AirQualitySensor(`${name} Air Quality`)
+      : null;
+    this.temperatureService = features.enableTemperature
+      ? new this.api.hap.Service.TemperatureSensor(`${name} Temperature`)
+      : null;
+    this.humidityService = features.enableHumidity
+      ? new this.api.hap.Service.HumiditySensor(`${name} Humidity`)
+      : null;
     this.childLockService = features.enableChildLockControl
       ? new this.api.hap.Service.Switch("Child Lock", "child_lock")
       : null;
@@ -121,10 +143,25 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     const namedServices: Array<{ service: Service; name: string }> = [
       { service: this.informationService, name: this.name },
       { service: this.purifierService, name: this.name },
-      {
-        service: this.airQualityService,
-        name: `${this.name} Air Quality`,
-      },
+      ...(this.airQualityService
+        ? [
+            {
+              service: this.airQualityService,
+              name: `${this.name} Air Quality`,
+            },
+          ]
+        : []),
+      ...(this.temperatureService
+        ? [
+            {
+              service: this.temperatureService,
+              name: `${this.name} Temperature`,
+            },
+          ]
+        : []),
+      ...(this.humidityService
+        ? [{ service: this.humidityService, name: `${this.name} Humidity` }]
+        : []),
       ...(this.childLockService
         ? [{ service: this.childLockService, name: "Child Lock" }]
         : []),
@@ -153,7 +190,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     return [
       this.informationService,
       this.purifierService,
-      this.airQualityService,
+      ...(this.airQualityService ? [this.airQualityService] : []),
+      ...(this.temperatureService ? [this.temperatureService] : []),
+      ...(this.humidityService ? [this.humidityService] : []),
       ...(this.childLockService ? [this.childLockService] : []),
       this.ledService,
       this.modeAutoService,
@@ -167,39 +206,48 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     if (!this.usesNativePurifierService) {
       this.purifierService
         .getCharacteristic(this.api.hap.Characteristic.On)
-        .onSet(async (value: CharacteristicValue) => this.client.setPower(Boolean(value)));
-      this.bindOnGet(this.purifierService, this.api.hap.Characteristic.On, false);
-      return;
-    }
-
-    this.purifierService
-      .getCharacteristic(this.api.hap.Characteristic.Active)
-      .onSet(async (value: CharacteristicValue) =>
-        this.client.setPower(
-          Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
-        ),
+        .onSet(async (value: CharacteristicValue) =>
+          this.client.setPower(Boolean(value)),
+        );
+      this.bindOnGet(
+        this.purifierService,
+        this.api.hap.Characteristic.On,
+        false,
       );
-    this.bindOnGet(
-      this.purifierService,
-      this.api.hap.Characteristic.Active,
-      Number(this.api.hap.Characteristic.Active.INACTIVE),
-    );
-    this.bindOnGet(
-      this.purifierService,
-      this.api.hap.Characteristic.CurrentAirPurifierState,
-      Number(this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE),
-    );
-    this.bindOnGet(
-      this.purifierService,
-      this.api.hap.Characteristic.TargetAirPurifierState,
-      Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO),
-    );
-    this.purifierService
-      .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
-      .onSet(async (value: CharacteristicValue) => {
-        await this.client.setFanLevel(rotationSpeedToFanLevel(Number(value)));
-      });
-    this.bindOnGet(this.purifierService, this.api.hap.Characteristic.RotationSpeed, 0);
+    } else {
+      this.purifierService
+        .getCharacteristic(this.api.hap.Characteristic.Active)
+        .onSet(async (value: CharacteristicValue) =>
+          this.client.setPower(
+            Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
+          ),
+        );
+      this.bindOnGet(
+        this.purifierService,
+        this.api.hap.Characteristic.Active,
+        Number(this.api.hap.Characteristic.Active.INACTIVE),
+      );
+      this.bindOnGet(
+        this.purifierService,
+        this.api.hap.Characteristic.CurrentAirPurifierState,
+        Number(this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE),
+      );
+      this.bindOnGet(
+        this.purifierService,
+        this.api.hap.Characteristic.TargetAirPurifierState,
+        Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO),
+      );
+      this.purifierService
+        .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
+        .onSet(async (value: CharacteristicValue) => {
+          await this.client.setFanLevel(rotationSpeedToFanLevel(Number(value)));
+        });
+      this.bindOnGet(
+        this.purifierService,
+        this.api.hap.Characteristic.RotationSpeed,
+        0,
+      );
+    }
 
     this.childLockService
       ?.getCharacteristic(this.api.hap.Characteristic.On)
@@ -207,7 +255,11 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.client.setChildLock(Boolean(value)),
       );
     if (this.childLockService) {
-      this.bindOnGet(this.childLockService, this.api.hap.Characteristic.On, false);
+      this.bindOnGet(
+        this.childLockService,
+        this.api.hap.Characteristic.On,
+        false,
+      );
     }
 
     this.ledService
@@ -239,20 +291,44 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         );
         await this.handleModeSwitch(mode);
       });
-    this.bindOnGet(this.modeNightService, this.api.hap.Characteristic.On, false);
+    this.bindOnGet(
+      this.modeNightService,
+      this.api.hap.Characteristic.On,
+      false,
+    );
+
+    if (this.airQualityService) {
+      this.bindOnGet(
+        this.airQualityService,
+        this.api.hap.Characteristic.AirQuality,
+        Number(this.api.hap.Characteristic.AirQuality.UNKNOWN),
+      );
+      this.bindOnGet(
+        this.airQualityService,
+        this.api.hap.Characteristic.PM2_5Density,
+        0,
+      );
+    }
+    if (this.temperatureService) {
+      this.bindOnGet(
+        this.temperatureService,
+        this.api.hap.Characteristic.CurrentTemperature,
+        0,
+      );
+    }
+    if (this.humidityService) {
+      this.bindOnGet(
+        this.humidityService,
+        this.api.hap.Characteristic.CurrentRelativeHumidity,
+        0,
+      );
+    }
 
     this.bindOnGet(
-      this.airQualityService,
-      this.api.hap.Characteristic.AirQuality,
-      Number(this.api.hap.Characteristic.AirQuality.UNKNOWN),
-    );
-    this.bindOnGet(
-      this.airQualityService,
-      this.api.hap.Characteristic.PM2_5Density,
+      this.filterService,
+      this.api.hap.Characteristic.FilterLifeLevel,
       0,
     );
-
-    this.bindOnGet(this.filterService, this.api.hap.Characteristic.FilterLifeLevel, 0);
     this.bindOnGet(
       this.filterService,
       this.api.hap.Characteristic.FilterChangeIndication,
@@ -320,16 +396,32 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       );
     }
 
-    this.updateCharacteristicIfNeeded(
-      this.airQualityService,
-      this.api.hap.Characteristic.AirQuality,
-      aqiToHomeKitAirQuality(state.aqi),
-    );
-    this.updateCharacteristicIfNeeded(
-      this.airQualityService,
-      this.api.hap.Characteristic.PM2_5Density,
-      Math.max(0, state.aqi),
-    );
+    if (this.airQualityService) {
+      this.updateCharacteristicIfNeeded(
+        this.airQualityService,
+        this.api.hap.Characteristic.AirQuality,
+        aqiToHomeKitAirQuality(state.aqi),
+      );
+      this.updateCharacteristicIfNeeded(
+        this.airQualityService,
+        this.api.hap.Characteristic.PM2_5Density,
+        Math.max(0, state.aqi),
+      );
+    }
+    if (this.temperatureService) {
+      this.updateCharacteristicIfNeeded(
+        this.temperatureService,
+        this.api.hap.Characteristic.CurrentTemperature,
+        state.temperature,
+      );
+    }
+    if (this.humidityService) {
+      this.updateCharacteristicIfNeeded(
+        this.humidityService,
+        this.api.hap.Characteristic.CurrentRelativeHumidity,
+        state.humidity,
+      );
+    }
 
     if (this.childLockService) {
       this.updateCharacteristicIfNeeded(
@@ -406,15 +498,18 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   }
 
   private bindOnGet(
-    service: Service | null,
+    service: Service,
     characteristic: unknown,
     fallback: CharacteristicValue,
   ): void {
-    if (!service) {
+    const characteristicUuid = this.resolveCharacteristicUuid(characteristic);
+    if (!characteristicUuid) {
       return;
     }
 
-    const bound = service.getCharacteristic(characteristic as never) as unknown as {
+    const bound = service.getCharacteristic(
+      characteristic as never,
+    ) as unknown as {
       onGet?: (handler: () => CharacteristicValue) => unknown;
     };
     if (typeof bound.onGet !== "function") {
@@ -424,9 +519,21 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     bound.onGet(
       () =>
         this.characteristicCache.get(
-          `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${String(Reflect.get(characteristic as object, "UUID") ?? "")}`,
+          `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`,
         ) ?? fallback,
     );
+  }
+
+  private resolveCharacteristicUuid(characteristic: unknown): string {
+    if (
+      (typeof characteristic !== "object" || characteristic === null) &&
+      typeof characteristic !== "function"
+    ) {
+      return "";
+    }
+
+    const uuid = Reflect.get(characteristic as object, "UUID");
+    return typeof uuid === "string" ? uuid : "";
   }
 
   private buildSerialNumber(ipAddress: string): string {
@@ -454,9 +561,10 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     characteristic: unknown,
     value: CharacteristicValue,
   ): void {
-    const characteristicUuid = String(
-      Reflect.get(characteristic as object, "UUID") ?? "",
-    );
+    const characteristicUuid = this.resolveCharacteristicUuid(characteristic);
+    if (!characteristicUuid) {
+      return;
+    }
     const key = `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`;
     if (this.characteristicCache.get(key) === value) {
       return;

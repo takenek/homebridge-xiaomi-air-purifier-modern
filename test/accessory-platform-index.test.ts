@@ -34,9 +34,14 @@ afterEach(() => {
 
 class FakeCharacteristic {
   public onSetHandler: ((value: unknown) => Promise<void> | void) | null = null;
+  public onGetHandler: (() => unknown) | null = null;
   public constructor(public readonly UUID: string) {}
   public onSet(handler: (value: unknown) => Promise<void> | void): this {
     this.onSetHandler = handler;
+    return this;
+  }
+  public onGet(handler: () => unknown): this {
+    this.onGetHandler = handler;
     return this;
   }
 }
@@ -348,6 +353,65 @@ describe("AirPurifierAccessory switch contract", () => {
 
     api.emit("shutdown");
     expect(client.calls).toContain("shutdown");
+  });
+
+  it("supports native AirPurifier service characteristics when available", async () => {
+    const api = makeApi() as unknown as Record<string, unknown>;
+    const serviceConstructors = (api.hap as Record<string, unknown>)
+      .Service as Record<string, unknown>;
+    serviceConstructors.AirPurifier = class extends FakeService {
+      public constructor(name: string, subtype?: string) {
+        super(`AirPurifier:${name}`, subtype);
+      }
+    };
+
+    const characteristics = (api.hap as Record<string, unknown>)
+      .Characteristic as Record<string, unknown>;
+    characteristics.Active = { UUID: "active", ACTIVE: 1, INACTIVE: 0 };
+    characteristics.CurrentAirPurifierState = {
+      UUID: "currentAirPurifierState",
+      INACTIVE: 0,
+      PURIFYING_AIR: 2,
+    };
+    characteristics.TargetAirPurifierState = {
+      UUID: "targetAirPurifierState",
+      AUTO: 0,
+      MANUAL: 1,
+    };
+    characteristics.RotationSpeed = { UUID: "rotationSpeed" };
+
+    const logger = makeLogger();
+    const client = new FakeClient();
+    const setFanLevel = vi.fn(async (_value: number) => undefined);
+    (client as unknown as { setFanLevel: typeof setFanLevel }).setFanLevel =
+      setFanLevel;
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    const purifierService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "AirPurifier:Office",
+      ) as unknown as FakeService;
+
+    await purifierService
+      .getCharacteristic(characteristics.Active as { UUID: string })
+      .onSetHandler?.(1);
+    await purifierService
+      .getCharacteristic(characteristics.RotationSpeed as { UUID: string })
+      .onSetHandler?.(50);
+
+    expect(client.calls).toContain("power:true");
+    expect(setFanLevel).toHaveBeenCalled();
   });
 
   it("logs shutdown error instead of leaving unhandled rejection", async () => {

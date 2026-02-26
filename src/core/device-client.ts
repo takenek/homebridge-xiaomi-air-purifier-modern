@@ -256,7 +256,7 @@ export class DeviceClient {
 
       this.retryDelayResolve = resolve;
       this.retryTimer = setTimeout(() => {
-                this.retryTimer = undefined;
+        this.retryTimer = undefined;
         this.retryDelayResolve = undefined;
         resolve();
       }, ms);
