@@ -14,8 +14,8 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 | HomeKit Service | Description |
 |-----------------|-------------|
-| Switch: Power | Main purifier power ON/OFF |
-| Air Quality Sensor | AQI mapped to Excellent/Good/Fair/Poor |
+| AirPurifier (HB 2.x) / Switch: Power (HB 1.x) | Main purifier power ON/OFF. On Homebridge 2.x the native AirPurifier service is used with Active, CurrentAirPurifierState, TargetAirPurifierState, and RotationSpeed characteristics. On Homebridge 1.x a Switch fallback is used. |
+| Air Quality Sensor | AQI mapped to Excellent/Good/Fair/Poor + PM2.5 Density |
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
@@ -92,7 +92,9 @@ Each purifier is configured as a separate accessory entry:
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
 | `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
 | `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
-| `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`) |
+| `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`, min `1000`) |
+| `operationPollIntervalMs` | integer | No | Polling interval for control-related state refresh in milliseconds (default `10000`, min `1000`) |
+| `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |
 | `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
 | `_bridge` | object | No | Optional child bridge configuration |
 
@@ -145,6 +147,10 @@ Common methods:
 | 116–150 | Poor (4) |
 | > 150 | Inferior (5) |
 
+### PM2.5 Density
+
+The Air Quality Sensor service also exposes `PM2_5Density` set to the raw AQI value from the device (clamped to a minimum of `0`).
+
 ### Mode switch (AUTO/NIGHT)
 
 - Separate switches are exposed: `Mode AUTO ON/OFF` and `Mode NIGHT ON/OFF`.
@@ -155,7 +161,7 @@ Common methods:
 
 - `FilterLifeLevel` = `filter1_life`
 - `FilterChangeIndication` = `CHANGE_FILTER` when `<= filterChangeThreshold` (default `10`), otherwise `FILTER_OK`
-- Optional: `ContactSensorState` on `Filter Replace Alert` = `CONTACT_DETECTED` when replacement is needed, otherwise `CONTACT_NOT_DETECTED` (only when `exposeFilterReplaceAlertSensor: true`)
+- Optional: `ContactSensorState` on `Filter Replace Alert` = `CONTACT_NOT_DETECTED` (open = alert) when replacement is needed, otherwise `CONTACT_DETECTED` (closed = normal) (only when `exposeFilterReplaceAlertSensor: true`)
 
 Default behavior keeps only `FilterMaintenance` to avoid duplicate warning presentation in Homebridge. Enable `exposeFilterReplaceAlertSensor` only if your Home app does not surface filter maintenance status.
 

@@ -740,7 +740,7 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(contactUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
-  it("uses numeric fallbacks for FilterChangeIndication enum values", () => {
+  it("uses numeric fallbacks for FilterChangeIndication only (without ContactSensorState enums)", () => {
     const api = makeApi();
     const filterCharacteristic = (
       api as unknown as {

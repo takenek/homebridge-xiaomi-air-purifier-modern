@@ -204,7 +204,7 @@ export class ModernMiioTransport implements MiioTransport {
     props: readonly ReadProperty[],
   ): Promise<DeviceState> {
     const requestedProps = props.length > 0 ? props : READ_PROPERTIES;
-    /* c8 ignore next */
+    /* c8 ignore next -- protocolMode is set by prior setProperty/getProperties calls in real use; unreachable in unit tests that mock higher-level methods. */
     if (this.protocolMode === "unknown") {
       this.protocolMode = (await this.detectProtocolMode()) ?? "legacy";
     }
@@ -213,7 +213,7 @@ export class ModernMiioTransport implements MiioTransport {
       this.protocolMode === "miot"
         ? await this.readViaMiot(requestedProps).catch(
             async (error: unknown) => {
-              /* c8 ignore next */
+              /* c8 ignore next -- retryable errors are re-thrown by the caller (pollWithRetry); tested at the DeviceClient level, not transport level. */
               if (isRetryableError(error)) {
                 throw error;
               }
@@ -223,13 +223,12 @@ export class ModernMiioTransport implements MiioTransport {
           )
         : await this.readViaLegacy(requestedProps);
 
-    /* c8 ignore start */
+    /* c8 ignore start -- defensive live-device fallback: when legacy returns all-empty core fields, retry MIOT once. Cannot be triggered in tests because the transport mock controls the protocol mode. */
     if (
       state.power === false &&
       state.fan_level === 0 &&
       state.mode === "idle"
     ) {
-      // If all core fields are empty and we used legacy, retry MIOT once.
       if (this.protocolMode === "legacy") {
         const miotState = await this.readViaMiot(requestedProps).catch(
           (error: unknown) => {
@@ -282,7 +281,7 @@ export class ModernMiioTransport implements MiioTransport {
           resolve();
         });
       } catch (error: unknown) {
-        /* c8 ignore start */
+        /* c8 ignore start -- dgram close() throws synchronously only on double-close race; the socketClosed guard above prevents it in normal flow. */
         const code =
           error instanceof Error
             ? String(Reflect.get(error, "code") ?? "")
@@ -303,7 +302,7 @@ export class ModernMiioTransport implements MiioTransport {
     const probe = MIOT_POWER_PROBE;
     try {
       const result = await this.call("get_properties", [probe]);
-      /* c8 ignore start */
+      /* c8 ignore start -- always true for well-formed MIOT responses; guard exists for malformed firmware replies. */
       if (Array.isArray(result) && result.length > 0) {
         /* c8 ignore stop */
         return "miot";
@@ -367,7 +366,7 @@ export class ModernMiioTransport implements MiioTransport {
       const candidates = MIOT_MAP[key] ?? [];
       for (const candidate of candidates) {
         const signature = `${candidate.did}:${candidate.siid}:${candidate.piid}`;
-        /* c8 ignore start */
+        /* c8 ignore start -- dedup guard; current MIOT_MAP has no duplicate siid:piid entries, but guard protects against future additions. */
         if (!uniqueCandidates.has(signature)) {
           /* c8 ignore stop */
           uniqueCandidates.add(signature);
@@ -393,7 +392,7 @@ export class ModernMiioTransport implements MiioTransport {
           continue;
         }
 
-        /* c8 ignore start */
+        /* c8 ignore start -- batch response parsing internals; tested indirectly via readViaMiot which is covered through higher-level mocks. The batch happy-path returns code=0 for all items in mock. */
         if ((payload.code ?? 0) !== 0) {
           continue;
         }
@@ -504,7 +503,7 @@ export class ModernMiioTransport implements MiioTransport {
         }
 
         const payload = result[0] as MiotValueResult;
-        /* c8 ignore start */
+        /* c8 ignore start -- per-property fallback success check; always code=0 in mock; guard exists for firmware-specific error codes on individual properties. */
         if ((payload.code ?? 0) === 0) {
           /* c8 ignore stop */
           return payload.value;
@@ -687,7 +686,7 @@ export class ModernMiioTransport implements MiioTransport {
         this.decrypt(encryptedPayload).toString("utf8"),
       ) as MiioResponsePayload;
     } catch (error: unknown) {
-      /* c8 ignore next: JSON.parse throws Error instances in Node.js runtime. */
+      /* c8 ignore next -- JSON.parse always throws SyntaxError (an Error subclass) in Node.js; the non-Error branch is a defensive TypeScript guard. */
       const reason = error instanceof Error ? error.message : String(error);
       throw new Error(`Malformed MIIO JSON response for ${method}: ${reason}`);
     }
