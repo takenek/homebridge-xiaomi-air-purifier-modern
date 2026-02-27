@@ -52,6 +52,8 @@ class FakeService {
   public updates: Array<{ characteristic: string; value: unknown }> = [];
   public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
     [];
+  public primaryService = false;
+  public readonly linkedServices: FakeService[] = [];
   private readonly characteristics = new Map<string, FakeCharacteristic>();
 
   public constructor(
@@ -87,6 +89,16 @@ class FakeService {
     value: unknown,
   ): this {
     this.updates.push({ characteristic: characteristic.UUID, value });
+    return this;
+  }
+
+  public setPrimaryService(isPrimary = true): this {
+    this.primaryService = isPrimary;
+    return this;
+  }
+
+  public addLinkedService(service: FakeService): this {
+    this.linkedServices.push(service);
     return this;
   }
 }
@@ -266,6 +278,17 @@ describe("AirPurifierAccessory switch contract", () => {
       "Switch:Mode NIGHT ON/OFF",
     ]);
 
+    const powerServiceForPrimaryCheck = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "Switch:Power",
+      ) as unknown as FakeService;
+    expect(powerServiceForPrimaryCheck.primaryService).toBe(true);
+    expect(powerServiceForPrimaryCheck.linkedServices.length).toBeGreaterThan(
+      0,
+    );
+
     for (const service of accessory.getServices()) {
       const typed = service as unknown as FakeService;
       if (!typed.name.startsWith("Switch:")) {
@@ -437,6 +460,9 @@ describe("AirPurifierAccessory switch contract", () => {
         (service) =>
           (service as unknown as FakeService).name === "AirPurifier:Office",
       ) as unknown as FakeService;
+
+    expect(purifierService.primaryService).toBe(true);
+    expect(purifierService.linkedServices.length).toBeGreaterThan(0);
 
     await purifierService
       .getCharacteristic(characteristics.Active as { UUID: string })

@@ -118,6 +118,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         )
       : null;
 
+    this.markPrimaryAndLinkServices();
     this.applyServiceNames();
     this.log.debug(
       `Accessory initialized for device endpoint ${this.displayAddress}.`,
@@ -140,6 +141,31 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.log.warn(`Shutdown error: ${message}`);
       });
     });
+  }
+
+  private markPrimaryAndLinkServices(): void {
+    const purifier = this.purifierService as unknown as {
+      setPrimaryService?: (isPrimary?: boolean) => unknown;
+      addLinkedService?: (service: Service) => unknown;
+    };
+
+    purifier.setPrimaryService?.(true);
+
+    const linkedServices: Service[] = [
+      this.modeAutoService,
+      this.modeNightService,
+      this.ledService,
+      this.filterService,
+      ...(this.childLockService ? [this.childLockService] : []),
+      ...(this.airQualityService ? [this.airQualityService] : []),
+      ...(this.temperatureService ? [this.temperatureService] : []),
+      ...(this.humidityService ? [this.humidityService] : []),
+      ...(this.filterAlertService ? [this.filterAlertService] : []),
+    ];
+
+    for (const service of linkedServices) {
+      purifier.addLinkedService?.(service);
+    }
   }
 
   private applyServiceNames(): void {
