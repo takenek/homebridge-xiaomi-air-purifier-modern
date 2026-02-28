@@ -10,13 +10,15 @@
         "type": "string",
         "required": true,
         "default": "Air Purifier",
-        "placeholder": "Air Purifier"
+        "placeholder": "Air Purifier",
+        "description": "Display name for this accessory in HomeKit."
       },
       "address": {
         "title": "IP Address",
         "type": "string",
         "required": true,
-        "format": "ipv4"
+        "format": "ipv4",
+        "description": "LAN IP address of the air purifier."
       },
       "token": {
         "title": "Token",
@@ -29,6 +31,7 @@
         "title": "Model",
         "type": "string",
         "required": true,
+        "description": "Xiaomi model identifier. Check the README for supported models.",
         "enum": [
           "zhimi.airpurifier.2h",
           "zhimi.airpurifier.3",

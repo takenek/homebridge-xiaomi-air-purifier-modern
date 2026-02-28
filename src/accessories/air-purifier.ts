@@ -408,7 +408,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.updateCharacteristicIfNeeded(
         this.airQualityService,
         this.api.hap.Characteristic.PM2_5Density,
-        Math.max(0, state.aqi),
+        Math.min(1000, Math.max(0, state.aqi)),
       );
     }
     if (this.temperatureService) {
