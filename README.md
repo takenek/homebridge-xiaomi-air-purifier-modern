@@ -149,7 +149,11 @@ Common methods:
 
 ### PM2.5 Density
 
-The Air Quality Sensor service also exposes `PM2_5Density` set to the raw AQI value from the device (clamped to a minimum of `0`).
+The Air Quality Sensor service also exposes `PM2_5Density` set to the raw AQI value from the device (clamped to the range `[0, 1000]` µg/m³).
+
+### Rotation Speed and fan mode
+
+Setting **Rotation Speed** in HomeKit automatically switches the device to `favorite` mode. This is required by the MIOT protocol for manual fan speed control. The mode change is reflected in the HomeKit Mode switches after the next state poll.
 
 ### Mode switch (AUTO/NIGHT)
 
@@ -165,7 +169,7 @@ The Air Quality Sensor service also exposes `PM2_5Density` set to the raw AQI va
 
 Default behavior keeps only `FilterMaintenance` to avoid duplicate warning presentation in Homebridge. Enable `exposeFilterReplaceAlertSensor` only if your Home app does not surface filter maintenance status.
 
-Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are documented in `docs/reliability-testing.md`.
+Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are available in [`test/network-scenarios.test.ts`](./test/network-scenarios.test.ts).
 
 ---
 
