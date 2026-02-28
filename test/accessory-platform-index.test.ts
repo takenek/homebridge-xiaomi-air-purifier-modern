@@ -231,7 +231,7 @@ class FakeClient {
   public async setLed(value: boolean): Promise<void> {
     this.calls.push(`led:${value}`);
   }
-  public async setMode(value: "auto" | "sleep"): Promise<void> {
+  public async setMode(value: string): Promise<void> {
     this.calls.push(`mode:${value}`);
   }
 }
@@ -356,12 +356,12 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(client.calls).toContain("shutdown");
   });
 
-  it("uses display address in connection lifecycle logs", () => {
+  it("uses display address in connection lifecycle logs and serial number", () => {
     const api = makeApi();
     const logger = makeLogger();
     const client = new FakeClient();
 
-    new AirPurifierAccessory(
+    const accessory = new AirPurifierAccessory(
       api as never,
       logger as never,
       "Office",
@@ -371,6 +371,17 @@ describe("AirPurifierAccessory switch contract", () => {
       "zhimi.airpurifier.3h",
       10,
     );
+
+    const infoService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "AccessoryInformation",
+      ) as unknown as FakeService;
+    const serialCall = infoService.setCalls.find(
+      (call) => call.characteristic === "serial",
+    );
+    expect(serialCall?.value).toBe("miap-10-0-*-*");
 
     client.connectionListeners[0]?.({ state: "connected" });
     client.connectionListeners[0]?.({ state: "reconnected" });
@@ -444,6 +455,20 @@ describe("AirPurifierAccessory switch contract", () => {
     await purifierService
       .getCharacteristic(characteristics.RotationSpeed as { UUID: string })
       .onSetHandler?.(50);
+
+    await purifierService
+      .getCharacteristic(
+        characteristics.TargetAirPurifierState as { UUID: string },
+      )
+      .onSetHandler?.(characteristics.TargetAirPurifierState.AUTO);
+    expect(client.calls).toContain("mode:auto");
+
+    await purifierService
+      .getCharacteristic(
+        characteristics.TargetAirPurifierState as { UUID: string },
+      )
+      .onSetHandler?.(characteristics.TargetAirPurifierState.MANUAL);
+    expect(client.calls).toContain("mode:favorite");
 
     client.state = { ...baseState, power: false, mode: "sleep", fan_level: 10 };
     for (const listener of client.listeners) {
