@@ -46,7 +46,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly api: API,
     private readonly log: Logging,
     private readonly name: string,
-    address: string,
+    _address: string,
     displayAddress: string,
     private readonly client: DeviceClient,
     model: string,
@@ -71,7 +71,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       .setCharacteristic(this.api.hap.Characteristic.Name, name)
       .setCharacteristic(
         this.api.hap.Characteristic.SerialNumber,
-        this.buildSerialNumber(address),
+        this.buildSerialNumber(displayAddress),
       );
 
     const AirPurifierService = Reflect.get(
@@ -240,6 +240,14 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.api.hap.Characteristic.TargetAirPurifierState,
         Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO),
       );
+      this.purifierService
+        .getCharacteristic(this.api.hap.Characteristic.TargetAirPurifierState)
+        .onSet(async (value: CharacteristicValue) => {
+          const isAuto =
+            Number(value) ===
+            Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO);
+          await this.client.setMode(isAuto ? "auto" : "favorite");
+        });
       this.purifierService
         .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
         .onSet(async (value: CharacteristicValue) => {
