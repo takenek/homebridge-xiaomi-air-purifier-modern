@@ -163,7 +163,7 @@
     },
     {
       "type": "section",
-      "title": "Sensors & Alerts",
+      "title": "Alerts & Controls",
       "expandable": true,
       "expanded": false,
       "items": [
@@ -175,7 +175,15 @@
         },
         {
           "key": "enableChildLockControl"
-        },
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Privacy & Timing",
+      "expandable": true,
+      "expanded": false,
+      "items": [
         {
           "key": "maskDeviceAddressInLogs"
         },

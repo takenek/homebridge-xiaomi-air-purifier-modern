@@ -74,6 +74,11 @@ const toMd5 = (...chunks: Buffer[]): Buffer => {
 
 const toBoolean = (value: unknown): boolean =>
   value === "on" || value === true || value === 1;
+const toLegacyLed = (value: unknown): boolean => {
+  // led_b uses numeric encoding: 0=bright(on), 1=dim(on), 2=off
+  if (typeof value === "number") return value !== 2;
+  return toBoolean(value);
+};
 const toNumber = (value: unknown): number => {
   if (typeof value === "number") {
     return value;
@@ -455,7 +460,7 @@ export class ModernMiioTransport implements MiioTransport {
       aqi: toNumber(valueByKey.get("aqi")),
       filter1_life: toNumber(valueByKey.get("filter1_life")),
       child_lock: toBoolean(valueByKey.get("child_lock")),
-      led: toBoolean(valueByKey.get("led")),
+      led: toLegacyLed(valueByKey.get("led")),
       buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
       motor1_speed: toNumber(valueByKey.get("motor1_speed")),
       use_time: toNumber(valueByKey.get("use_time")),
@@ -466,30 +471,32 @@ export class ModernMiioTransport implements MiioTransport {
   private async readViaLegacyBatch(
     props: readonly ReadProperty[],
   ): Promise<Map<string, unknown>> {
-    const requests = props.map(async (key) => {
-      const aliases = LEGACY_MAP[key] ?? [];
-      if (aliases.length === 0) {
-        return [key, undefined] as const;
+    const pairs: Array<[ReadProperty, string]> = [];
+    for (const key of props) {
+      for (const alias of LEGACY_MAP[key] ?? []) {
+        pairs.push([key, alias]);
       }
+    }
 
-      const response = await this.call("get_prop", aliases);
-      if (!Array.isArray(response)) {
-        return [key, undefined] as const;
+    if (pairs.length === 0) {
+      return new Map();
+    }
+
+    const result = await this.call(
+      "get_prop",
+      pairs.map(([, alias]) => alias),
+    );
+    const responses = Array.isArray(result) ? result : [];
+    const valueByKey = new Map<ReadProperty, unknown>();
+    pairs.forEach(([key], i) => {
+      if (valueByKey.has(key)) return;
+      const value = responses[i];
+      if (value !== undefined && value !== null && value !== "") {
+        valueByKey.set(key, value);
       }
-
-      let selected: unknown;
-      for (const value of response) {
-        if (value !== undefined && value !== null && value !== "") {
-          selected = value;
-          break;
-        }
-      }
-
-      return [key, selected] as const;
     });
 
-    const entries = await Promise.all(requests);
-    return new Map(entries);
+    return valueByKey;
   }
 
   private async readMiotOne(

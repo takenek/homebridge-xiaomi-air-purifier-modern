@@ -23,6 +23,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
 | Filter Maintenance | `filter1_life` as filter life level + change indication |
+| Contact Sensor: Filter Replace Alert | Optional extra sensor for filter replacement warning (`exposeFilterReplaceAlertSensor`, default `false`) |
 
 ---
 
@@ -91,7 +92,7 @@ Each purifier is configured as a separate accessory entry:
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
 | `operationTimeoutMs` | integer | No | MIIO operation timeout in milliseconds (default `15000`) |
-| `reconnectDelayMs` | integer | No | Base reconnect backoff delay in milliseconds (default `15000`) |
+| `reconnectDelayMs` | integer | No | Maximum reconnect backoff delay cap in milliseconds — first retry starts fast (~400 ms base), subsequent retries grow exponentially up to this ceiling (default `15000`) |
 | `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`, min `1000`) |
 | `operationPollIntervalMs` | integer | No | Polling interval for control-related state refresh in milliseconds (default `10000`, min `1000`) |
 | `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |

@@ -209,6 +209,29 @@ describe("ModernMiioTransport coverage", () => {
       code: "EDEVICEUNAVAILABLE",
     });
 
+    // M1: led_b numeric encoding — 0=bright(on), 1=dim(on), 2=off
+    vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+      new Map<string, unknown>([
+        ["power", true],
+        ["fan_level", 2],
+        ["mode", "auto"],
+        ["led", 0], // led_b=0 → bright → on
+      ]),
+    );
+    const legacyLedBright = await internals.readViaLegacy(["power"]);
+    expect(legacyLedBright.led).toBe(true);
+
+    vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+      new Map<string, unknown>([
+        ["power", true],
+        ["fan_level", 2],
+        ["mode", "auto"],
+        ["led", 2], // led_b=2 → off
+      ]),
+    );
+    const legacyLedOff = await internals.readViaLegacy(["power"]);
+    expect(legacyLedOff.led).toBe(false);
+
     await transport.close();
   });
 
@@ -448,6 +471,11 @@ it("covers detectProtocolMode outcomes and legacy batch parsing", async () => {
     .mockResolvedValueOnce("bad");
   await expect(internals.detectProtocolMode()).resolves.toBeNull();
 
+  // props with no LEGACY_MAP entries return empty map without a call
+  const emptyLegacy = await internals.readViaLegacyBatch(["unknown" as never]);
+  expect(emptyLegacy.size).toBe(0);
+
+  // non-array response → all values undefined
   vi.spyOn(internals, "call").mockResolvedValueOnce("bad");
   const badLegacy = await internals.readViaLegacyBatch([
     "unknown" as never,
@@ -456,14 +484,25 @@ it("covers detectProtocolMode outcomes and legacy batch parsing", async () => {
   expect(badLegacy.get("unknown" as never)).toBeUndefined();
   expect(badLegacy.get("power" as never)).toBeUndefined();
 
-  vi.spyOn(internals, "call").mockResolvedValueOnce([
-    "",
-    undefined,
-    null,
-    "ok",
-  ]);
+  // M2: single value in response maps to the property
+  vi.spyOn(internals, "call").mockResolvedValueOnce(["ok"]);
   const goodLegacy = await internals.readViaLegacyBatch(["power" as never]);
   expect(goodLegacy.get("power" as never)).toBe("ok");
+
+  // M2: alias fallback — first alias null, second alias used
+  // "temperature" → aliases ["temperature", "temp_dec"]
+  vi.spyOn(internals, "call").mockResolvedValueOnce([null, "21"]);
+  const tempLegacy = await internals.readViaLegacyBatch([
+    "temperature" as never,
+  ]);
+  expect(tempLegacy.get("temperature" as never)).toBe("21");
+
+  // M2: first valid alias wins; second alias pair is skipped (covers has(key) guard)
+  vi.spyOn(internals, "call").mockResolvedValueOnce(["30", "ignored"]);
+  const tempFirst = await internals.readViaLegacyBatch([
+    "temperature" as never,
+  ]);
+  expect(tempFirst.get("temperature" as never)).toBe("30");
 
   await transport.close();
 });

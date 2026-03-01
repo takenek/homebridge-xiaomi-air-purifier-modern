@@ -52,7 +52,7 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
-    "check": "npm run lint && npm run typecheck && npm test",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "prepare": "npm run build"
   },
   "peerDependencies": {
