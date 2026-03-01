@@ -24,6 +24,7 @@ export interface AccessoryFeatureFlags {
   enableHumidity: boolean;
   exposeFilterReplaceAlertSensor: boolean;
   enableChildLockControl: boolean;
+  enableBuzzerControl: boolean;
 }
 
 export class AirPurifierAccessory implements AccessoryPlugin {
@@ -33,6 +34,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
   private readonly temperatureService: Service | null;
   private readonly humidityService: Service | null;
   private readonly childLockService: Service | null;
+  private readonly buzzerService: Service | null;
   private readonly ledService: Service;
   private readonly displayAddress: string;
   private readonly modeAutoService: Service;
@@ -63,6 +65,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
             enableHumidity: true,
             exposeFilterReplaceAlertSensor: featuresOrExpose,
             enableChildLockControl: true,
+            enableBuzzerControl: false,
           }
         : featuresOrExpose;
     this.informationService = new this.api.hap.Service.AccessoryInformation()
@@ -98,6 +101,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       : null;
     this.childLockService = features.enableChildLockControl
       ? new this.api.hap.Service.Switch("Child Lock", "child_lock")
+      : null;
+    this.buzzerService = features.enableBuzzerControl
+      ? new this.api.hap.Service.Switch("Buzzer", "buzzer")
       : null;
     this.ledService = new this.api.hap.Service.Switch("LED Night Mode", "led");
     this.modeAutoService = new this.api.hap.Service.Switch(
@@ -168,6 +174,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       ...(this.childLockService
         ? [{ service: this.childLockService, name: "Child Lock" }]
         : []),
+      ...(this.buzzerService
+        ? [{ service: this.buzzerService, name: "Buzzer" }]
+        : []),
       { service: this.ledService, name: "LED Night Mode" },
       { service: this.modeAutoService, name: "Mode AUTO ON/OFF" },
       { service: this.modeNightService, name: "Mode NIGHT ON/OFF" },
@@ -197,6 +206,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       ...(this.temperatureService ? [this.temperatureService] : []),
       ...(this.humidityService ? [this.humidityService] : []),
       ...(this.childLockService ? [this.childLockService] : []),
+      ...(this.buzzerService ? [this.buzzerService] : []),
       this.ledService,
       this.modeAutoService,
       this.modeNightService,
@@ -271,6 +281,15 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.api.hap.Characteristic.On,
         false,
       );
+    }
+
+    this.buzzerService
+      ?.getCharacteristic(this.api.hap.Characteristic.On)
+      .onSet(async (value: CharacteristicValue) =>
+        this.client.setBuzzerVolume(value ? 100 : 0),
+      );
+    if (this.buzzerService) {
+      this.bindOnGet(this.buzzerService, this.api.hap.Characteristic.On, false);
     }
 
     this.ledService
@@ -441,6 +460,14 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.childLockService,
         this.api.hap.Characteristic.On,
         state.child_lock,
+      );
+    }
+
+    if (this.buzzerService) {
+      this.updateCharacteristicIfNeeded(
+        this.buzzerService,
+        this.api.hap.Characteristic.On,
+        state.buzzer_volume > 0,
       );
     }
 

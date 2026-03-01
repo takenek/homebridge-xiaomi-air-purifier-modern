@@ -1,6 +1,7 @@
 import {
   computeBackoffDelay,
   DEFAULT_RETRY_POLICY,
+  effectiveMaxRetries,
   isRetryableError,
   type RetryPolicy,
 } from "./retry";
@@ -244,7 +245,11 @@ export class DeviceClient {
           this.emitConnectionEvent({ state: "disconnected", code, message });
         }
 
-        if (!isRetryableError(error) || attempt > this.retryPolicy.maxRetries) {
+        const maxRetries = effectiveMaxRetries(
+          error,
+          this.retryPolicy.maxRetries,
+        );
+        if (!isRetryableError(error) || attempt > maxRetries) {
           throw error;
         }
 

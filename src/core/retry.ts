@@ -44,6 +44,8 @@ export const RETRYABLE_ERROR_CODES = new Set<string>([
   "ERR_NETWORK_CHANGED",
 ]);
 
+export const DEVICE_UNAVAILABLE_MAX_RETRIES = 2;
+
 export const isRetryableError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
@@ -55,4 +57,20 @@ export const isRetryableError = (error: unknown): boolean => {
   }
 
   return false;
+};
+
+export const effectiveMaxRetries = (
+  error: unknown,
+  policyMaxRetries: number,
+): number => {
+  if (!(error instanceof Error)) {
+    return policyMaxRetries;
+  }
+
+  const code = Reflect.get(error, "code");
+  if (code === "EDEVICEUNAVAILABLE") {
+    return Math.min(DEVICE_UNAVAILABLE_MAX_RETRIES, policyMaxRetries);
+  }
+
+  return policyMaxRetries;
 };
