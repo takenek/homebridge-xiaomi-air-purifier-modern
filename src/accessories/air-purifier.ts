@@ -390,7 +390,9 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.purifierService,
         this.api.hap.Characteristic.CurrentAirPurifierState,
         state.power
-          ? this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
+          ? state.mode === "idle"
+            ? this.api.hap.Characteristic.CurrentAirPurifierState.IDLE
+            : this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
           : this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE,
       );
       this.updateCharacteristicIfNeeded(

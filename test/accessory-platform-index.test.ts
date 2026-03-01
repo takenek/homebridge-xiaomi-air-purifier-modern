@@ -416,6 +416,7 @@ describe("AirPurifierAccessory switch contract", () => {
     characteristics.CurrentAirPurifierState = {
       UUID: "currentAirPurifierState",
       INACTIVE: 0,
+      IDLE: 1,
       PURIFYING_AIR: 2,
     };
     characteristics.TargetAirPurifierState = {
@@ -496,6 +497,33 @@ describe("AirPurifierAccessory switch contract", () => {
         (update) =>
           update.characteristic === "targetAirPurifierState" &&
           update.value === characteristics.TargetAirPurifierState.MANUAL,
+      ),
+    ).toBe(true);
+
+    // H1: power=true + mode=idle → CurrentAirPurifierState.IDLE
+    client.state = { ...baseState, power: true, mode: "idle" };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+    expect(
+      purifierService.updates.some(
+        (update) =>
+          update.characteristic === "currentAirPurifierState" &&
+          update.value === characteristics.CurrentAirPurifierState.IDLE,
+      ),
+    ).toBe(true);
+
+    // power=true + mode=auto → CurrentAirPurifierState.PURIFYING_AIR
+    client.state = { ...baseState, power: true, mode: "auto" };
+    for (const listener of client.listeners) {
+      listener(client.state);
+    }
+    expect(
+      purifierService.updates.some(
+        (update) =>
+          update.characteristic === "currentAirPurifierState" &&
+          update.value ===
+            characteristics.CurrentAirPurifierState.PURIFYING_AIR,
       ),
     ).toBe(true);
   });
