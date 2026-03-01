@@ -19,6 +19,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
+| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`) |
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
@@ -88,6 +89,7 @@ Each purifier is configured as a separate accessory entry:
 | `enableTemperature` | boolean | No | Expose Temperature Sensor service (default `true`) |
 | `enableHumidity` | boolean | No | Expose Humidity Sensor service (default `true`) |
 | `enableChildLockControl` | boolean | No | Expose Child Lock switch service (default `false`) |
+| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`) |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
@@ -150,7 +152,7 @@ Common methods:
 
 ### PM2.5 Density
 
-The Air Quality Sensor service also exposes `PM2_5Density` set to the raw AQI value from the device (clamped to the range `[0, 1000]` µg/m³).
+The Air Quality Sensor service exposes `PM2_5Density` set to the raw AQI value reported by the device's PM2.5 sensor (clamped to `[0, 1000]`). Note: the device reports an AQI index derived from its PM2.5 sensor, not a direct µg/m³ measurement. In practice the values are close (especially in the 0–500 range), and this mapping is the standard approach used across the Homebridge ecosystem for Xiaomi purifiers.
 
 ### Rotation Speed and fan mode
 
@@ -208,6 +210,7 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 - Supported runtime: active LTS Node versions listed in `package.json` engines.
 - Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
+- **v2.0 roadmap:** Migration from `accessory` plugin to `platform` plugin for multi-device support and auto-discovery. The current accessory-based architecture supports multiple devices via child bridges (`_bridge` config).
 
 ---
 

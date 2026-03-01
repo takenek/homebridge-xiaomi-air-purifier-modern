@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DeviceClient } from "../src/core/device-client";
-import { isRetryableError } from "../src/core/retry";
+import {
+  DEVICE_UNAVAILABLE_MAX_RETRIES,
+  effectiveMaxRetries,
+  isRetryableError,
+} from "../src/core/retry";
 import type { DeviceState, MiioTransport } from "../src/core/types";
 
 const state: DeviceState = {
@@ -24,6 +28,7 @@ class BranchTransport implements MiioTransport {
   public throwsErrorOnPoll = false;
   public throwsNonRetryable = false;
   public retryableFailuresRemaining = 0;
+  public deviceUnavailableFailuresRemaining = 0;
   public throwErrorWithoutCode = false;
   public callCount = 0;
   public setCalls: Array<{ method: string; params: readonly unknown[] }> = [];
@@ -42,6 +47,13 @@ class BranchTransport implements MiioTransport {
     if (this.throwsErrorOnPoll) {
       const error = new Error("poll-error");
       Reflect.set(error, "code", "ECONNRESET");
+      throw error;
+    }
+
+    if (this.deviceUnavailableFailuresRemaining > 0) {
+      this.deviceUnavailableFailuresRemaining -= 1;
+      const error = new Error("core properties unavailable");
+      Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
       throw error;
     }
 
@@ -506,6 +518,61 @@ describe("device client uncovered branches", () => {
     await expect(client.setLed(true)).resolves.toBeUndefined();
     await client.shutdown();
   });
+
+  it("stops retrying EDEVICEUNAVAILABLE after reduced retry cap", async () => {
+    const transport = new BranchTransport();
+    transport.deviceUnavailableFailuresRemaining = 10;
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+      retryPolicy: {
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+        maxRetries: 8,
+        jitterFactor: 0,
+      },
+      randomFn: () => 0.5,
+    });
+
+    const initPromise = client.init();
+    const rejectedInit = expect(initPromise).rejects.toBeInstanceOf(Error);
+    await vi.advanceTimersByTimeAsync(100);
+    await rejectedInit;
+
+    // Should have been capped at DEVICE_UNAVAILABLE_MAX_RETRIES (2) + 1 initial attempt = 3 calls
+    expect(transport.callCount).toBe(DEVICE_UNAVAILABLE_MAX_RETRIES + 1);
+
+    await client.shutdown();
+  });
+
+  it("recovers after EDEVICEUNAVAILABLE retries when device becomes available", async () => {
+    const transport = new BranchTransport();
+    transport.deviceUnavailableFailuresRemaining = 1;
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+      retryPolicy: {
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+        maxRetries: 8,
+        jitterFactor: 0,
+      },
+      randomFn: () => 0.5,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(10);
+    await initPromise;
+
+    expect(client.state).toEqual(state);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining("Recovered"),
+    );
+
+    await client.shutdown();
+  });
 });
 
 describe("retry helper uncovered branches", () => {
@@ -517,5 +584,27 @@ describe("retry helper uncovered branches", () => {
     const error = new Error("oops");
     Reflect.set(error, "code", 123);
     expect(isRetryableError(error)).toBe(false);
+  });
+
+  it("returns reduced max for EDEVICEUNAVAILABLE", () => {
+    const error = new Error("unavailable");
+    Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
+    expect(effectiveMaxRetries(error, 8)).toBe(DEVICE_UNAVAILABLE_MAX_RETRIES);
+  });
+
+  it("returns policy max for network errors", () => {
+    const error = new Error("timeout");
+    Reflect.set(error, "code", "ETIMEDOUT");
+    expect(effectiveMaxRetries(error, 8)).toBe(8);
+  });
+
+  it("returns policy max for non-Error values", () => {
+    expect(effectiveMaxRetries("oops", 8)).toBe(8);
+  });
+
+  it("returns min of DEVICE_UNAVAILABLE_MAX_RETRIES and policy max", () => {
+    const error = new Error("unavailable");
+    Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
+    expect(effectiveMaxRetries(error, 1)).toBe(1);
   });
 });

@@ -38,6 +38,7 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   sensorPollIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
   enableChildLockControl?: boolean;
+  enableBuzzerControl?: boolean;
   maskDeviceAddressInLogs?: boolean;
 };
 
@@ -177,6 +178,10 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       typedConfig.enableChildLockControl,
       false,
     );
+    const enableBuzzerControl = normalizeBoolean(
+      typedConfig.enableBuzzerControl,
+      false,
+    );
     const maskDeviceAddressInLogs = normalizeBoolean(
       typedConfig.maskDeviceAddressInLogs,
       false,
@@ -217,6 +222,7 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
         enableHumidity,
         exposeFilterReplaceAlertSensor,
         enableChildLockControl,
+        enableBuzzerControl,
       },
     );
   }
