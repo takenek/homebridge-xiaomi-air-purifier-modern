@@ -1,10 +1,11 @@
-# Homebridge Plugin Audit Report
+# Homebridge Plugin Audit Report — v4
 
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
-**Data audytu:** 2026-02-28
-**Audytor:** Claude (pełny code review + security audit)
-**Zakres:** Każdy plik w repozytorium przeczytany i przeanalizowany. Build, lint, typecheck, testy i npm pack zweryfikowane.
+**Data audytu:** 2026-03-01
+**Audytor:** Claude (pełny code review + security audit + README vs kod)
+**Poprzedni audyt:** v3 (2026-02-28) — wyniki H1–H3, M1, M4 naprawione między v3 a v4
+**Zakres:** Każdy plik w repozytorium przeczytany i przeanalizowany. Wszystkie warstwy: transport → client → accessory → platform → CI/CD → dokumentacja.
 
 ---
 
@@ -12,614 +13,539 @@
 
 ### Największe plusy
 
-1. **Zero runtime dependencies** — wtyczka opiera się wyłącznie na Node.js built-ins (`node:crypto`, `node:dgram`). To absolutny złoty standard w ekosystemie Homebridge, eliminujący ryzyko supply-chain niemal w 100%.
+1. **Zero runtime dependencies** — wtyczka opiera się wyłącznie na `node:crypto` i `node:dgram`. To absolutny złoty standard eliminujący ryzyko supply-chain niemal w 100%.
 
-2. **100% pokrycie kodu testami** (statements, branches, functions, lines) — wymuszone progami w `vitest.config.ts` z `thresholds: 100`. 84 testy w 9 plikach, w tym 7 scenariuszy network reliability (restart, reconnect, Wi-Fi outage). Test:source ratio wynosi 3703:2085 linii (~1.8x), co świadczy o solidnym pokryciu edge-case'ów.
+2. **100% pokrycie kodu testami** (statements, branches, functions, lines) — wymuszone progami w `vitest.config.ts`. 84 testy w 9 plikach (stosunek test:src ≈ 1.78×), w tym 7 scenariuszy sieciowych (restart urządzenia, utrata routera, packet loss, Wi-Fi outage).
 
-3. **Profesjonalny pipeline CI/CD** — semantic-release z provenance npm, SBOM CycloneDX, OSV Scanner, Dependabot (npm + GitHub Actions), npm audit w CI, macierzowy test na Node 20/22/24 + Homebridge 1.11.2/beta. Trzy workflow'y (CI, Release, Supply Chain) z poprawnym `permissions` scoping.
+3. **Profesjonalny pipeline CI/CD** — semantic-release z npm provenance, SBOM CycloneDX, OSV Scanner, Dependabot (npm + GitHub Actions), macierz CI na Node 20/22/24 × Homebridge 1.11.2/beta, permissions PoLP (least privilege).
 
-4. **Solidna architektura** — czytelny podział na warstwy (`MiioTransport` → `DeviceClient` → `AirPurifierAccessory` → `XiaomiAirPurifierAccessoryPlugin`), pattern Observer dla aktualizacji stanu, operation queue serializująca dostęp do transportu, retry z exponential backoff + jitter, MIOT batch reads minimalizujące round-trips.
+4. **Solidna architektura** — czysty podział `MiioTransport → DeviceClient → AirPurifierAccessory → XiaomiAirPurifierAccessoryPlugin`, operation queue serializująca UDP, retry z exponential backoff + jitter, MIOT batch reads.
 
-5. **Pełna dokumentacja OSS** — README z konfiguracją/troubleshooting/AQI mapping/network hardening, config.schema.json z layoutem, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY.md z SLA, issue/PR templates, RELEASE_CHECKLIST, LICENSE (MIT).
+5. **Kompletna dokumentacja OSS** — README z konfiguracją/troubleshooting/AQI mapping/network hardening, `config.schema.json` z layoutem, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY.md z SLA, issue/PR templates, CODEOWNERS, RELEASE_CHECKLIST, LICENSE MIT.
 
-6. **Kompatybilność Homebridge 1.x / 2.x** — dynamiczna detekcja `AirPurifier` service via `Reflect.get()` z graceful fallback na `Switch`, poprawne `peerDependencies`, testowane w CI z obu wersjami, `ConfiguredName` characteristic opcjonalnie stosowany gdy dostępny.
+6. **Pełna kompatybilność Homebridge 1.x / 2.x** — dynamiczna detekcja `AirPurifier` service przez `Reflect.get()` z fallback na `Switch`, `ConfiguredName` opcjonalnie, `TargetAirPurifierState.onSet` obsługiwane, peerDeps = engines, CI matrix testuje obie wersje.
 
-### Najważniejsze ryzyka / uwagi
+### Największe ryzyka / uwagi
 
-1. **SerialNumber zawiera niezamaskowany IP** — `miap-10-0-0-1` jest ustawiany z surowego adresu nawet gdy `maskDeviceAddressInLogs: true` (`air-purifier.ts:543`). Nie stanowi to bezpieczeństwa krytycznego (SerialNumber jest widoczny tylko lokalnie w HomeKit), ale jest niespójne z intencją maskowania.
+1. **Legacy LED `led_b` numeric encoding** — `toBoolean(0) = false` w `readViaLegacy`, podczas gdy w MIOT value=0 oznacza LED włączony. Jeśli starsze urządzenie zwraca numeryczny `led_b=0` (jasność pełna), plugin błędnie ustawi `led=false`. Ryzyko ograniczone — urządzenia z legacy API zazwyczaj zwracają `"on"`/`"off"` dla `led`.
 
-2. **Legacy batch reads generują N równoległych UDP calls** — `readViaLegacyBatch` (`miio-transport.ts:466-493`) wysyła osobny `get_prop` call per property, co oznacza ~13 równoległych UDP packetów. Na starszych urządzeniach może to prowadzić do packet loss. MIOT path poprawnie batchuje w jeden call.
+2. **`readViaLegacyBatch`: 13 równoległych UDP calls** — `Promise.all` na 13 `get_prop` zapytaniach. Starsze urządzenia mogą tracić pakiety przy takim obciążeniu; MIOT batch elegancko rozwiązuje ten problem jednym `get_properties` call.
 
-3. **`pluginType: "accessory"`** — celowa decyzja architektoniczna (accessory-per-device), ale ogranicza możliwości multi-device management i automatycznego discovery. Nie jest to błąd — rozważyć migrację do `platform` w przyszłej wersji major.
+3. **`EDEVICEUNAVAILABLE` w retryable codes** — gdy core properties (power/fan_level/mode) są niedostępne (np. zły model), błąd jest retryowany 8 razy zanim zostanie odrzucony. Przy rzeczywiście niezgodnym modelu przedłuża czas startu.
 
-4. **`TargetAirPurifierState` brak `onSet` handlera** — w native AirPurifier service path, użytkownik nie może zmienić trybu purifier bezpośrednio przez TargetAirPurifierState (tylko przez dedykowane switche AUTO/NIGHT). Świadome ograniczenie, ale może mylić użytkowników.
+4. **`CurrentAirPurifierState` uproszczone mapowanie** — kod zawsze ustawia `PURIFYING_AIR` gdy `power=true`, ignorując `mode === "idle"`. Właściwszym mapowaniem byłoby `IDLE` dla `mode === "idle"`, `PURIFYING_AIR` dla pozostałych.
 
 ---
 
-## 2. Analiza struktury projektu
+## 2. Status napraw z poprzednich audytów
+
+| ID | Problem | Status |
+|----|---------|--------|
+| H1 | SerialNumber ujawniał raw IP nawet przy maskowaniu | ✅ Naprawione — `buildSerialNumber(displayAddress)` |
+| H2 | Brak `TargetAirPurifierState.onSet` handlera | ✅ Naprawione — `air-purifier.ts:243-249` |
+| H3 | Bug report template bez pola wersji pluginu | ✅ Naprawione — `plugin_version` field dodany |
+| M1 | Brak SHA pinning GitHub Actions | ✅ Naprawione — wszystkie akcje SHA-pinned |
+| M4 | Brak CODEOWNERS | ✅ Naprawione — `* @takenek` |
+
+---
+
+## 3. Analiza struktury projektu
 
 ```
 xiaomi-mi-air-purifier-ng/
-├── src/                           2085 linii
-│   ├── index.ts                   Entry point — registerAccessory (14 linii)
-│   ├── platform.ts                Config validation, wiring (227 linii)
+├── src/                           ~2100 linii
+│   ├── index.ts                   Entry point (14 linii)
+│   ├── platform.ts                Config validation, wiring (228 linii)
 │   ├── accessories/
-│   │   └── air-purifier.ts        HomeKit service/characteristic mapping (579 linii)
+│   │   └── air-purifier.ts        HomeKit services/characteristics (588 linii)
 │   └── core/
-│       ├── device-client.ts       State management, polling, retry, queue (316 linii)
-│       ├── miio-transport.ts      MIIO/MIOT UDP protocol implementation (774 linii)
-│       ├── mappers.ts             Fan level ↔ rotation speed, AQI mapping (40 linii)
-│       ├── mode-policy.ts         Auto/Night mode switch logic (29 linii)
-│       ├── retry.ts               Exponential backoff, retryable error codes (58 linii)
-│       └── types.ts               TypeScript types, ReadProperty tuple (48 linii)
-├── test/                          3703 linii, 84 testy
+│       ├── device-client.ts       State management, polling, retry, queue (317 linii)
+│       ├── miio-transport.ts      MIIO/MIOT UDP protocol (775 linii)
+│       ├── mappers.ts             Fan level, AQI mapping (41 linii)
+│       ├── mode-policy.ts         Auto/Night mode logic (30 linii)
+│       ├── retry.ts               Exponential backoff (59 linii)
+│       └── types.ts               TypeScript types (49 linii)
+├── test/                          ~3700 linii, 84 testy
 ├── .github/
 │   ├── workflows/                 ci.yml, release.yml, supply-chain.yml
-│   ├── dependabot.yml
+│   ├── dependabot.yml / CODEOWNERS
 │   ├── ISSUE_TEMPLATE/            bug_report.yml, feature_request.yml, config.yml
 │   └── pull_request_template.md
-├── config.schema.json             Homebridge UI schema z layout (203 linii)
-├── biome.json                     Linter/formatter config
-├── tsconfig.json / tsconfig.test.json
-├── vitest.config.ts
-├── .releaserc.json                semantic-release config
-├── .editorconfig / .npmrc / .gitignore
+├── config.schema.json             Homebridge UI schema (203 linii)
+├── biome.json / tsconfig.json / tsconfig.test.json / vitest.config.ts
+├── .releaserc.json / .editorconfig / .npmrc / .gitignore
 ├── package.json / package-lock.json
-├── CHANGELOG.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
-├── LICENSE / SECURITY.md / RELEASE_CHECKLIST.md
-└── README.md
+└── README.md / CHANGELOG.md / CONTRIBUTING.md / CODE_OF_CONDUCT.md
+    LICENSE / SECURITY.md / RELEASE_CHECKLIST.md
 ```
 
-**Ocena struktury: Doskonała** — czysty podział na warstwy, SRP przestrzegane, moduły mają jasne odpowiedzialności. Brak "god objects" — największa klasa (`ModernMiioTransport`, ~600 linii logiki) jest uzasadniona złożonością protokołu MIIO/MIOT.
+**Ocena struktury: Doskonała.** Czysty podział na warstwy, SRP przestrzegane, brak "god objects".
 
 ---
 
-## 3. Zgodność ze standardami Homebridge 1.x i 2.x
+## 4. Zgodność ze standardami Homebridge 1.x i 2.x
 
-### 3.1 Rejestracja wtyczki
-
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| `registerAccessory` | ✅ | `src/index.ts:9` — poprawne `export =` z `(api: API) => void` |
-| `pluginAlias` match | ✅ | `config.schema.json:2` alias `XiaomiMiAirPurifier` = `ACCESSORY_NAME` w `platform.ts:13` |
-| `pluginType: "accessory"` | ✅ | Celowy wybór; każdy oczyszczacz = osobna entry w `accessories[]` |
-| `displayName` | ✅ | `package.json:72` — widoczne w Homebridge UI |
-| `PLUGIN_NAME` consistency | ✅ | `homebridge-xiaomi-air-purifier-modern` w platform.ts i package.json |
-
-### 3.2 Lifecycle management
+### 4.1 Rejestracja i lifecycle
 
 | Aspekt | Status | Komentarz |
 |--------|--------|-----------|
-| Init (constructor) | ✅ | `void client.init().then(...).catch(...)` — nie blokuje konstruktora Homebridge |
-| Shutdown | ✅ | `api.on("shutdown", ...)` w `air-purifier.ts:137-142` — czyści timery + zamyka socket |
-| Timer cleanup | ✅ | `clearTimers()` w `device-client.ts:278-301` czyści wszystkie 4 timery (operation, sensor, keepalive, retry) |
-| Timer unref | ✅ | Wszystkie timery mają `.unref()` — nie blokują graceful shutdown Node.js |
-| Error isolation | ✅ | Shutdown i init errors logowane jako `warn`, nie propagowane |
-| Constructor throw safety | ✅ | Config validation errors thrown before transport init — safe early failure |
+| `registerAccessory` | ✅ | Poprawne `export =` z `(api: API) => void` |
+| `pluginAlias` match | ✅ | `XiaomiMiAirPurifier` = `ACCESSORY_NAME` w platform.ts |
+| `displayName` | ✅ | `package.json:73` — widoczny w Homebridge UI |
+| Init (non-blocking) | ✅ | `void client.init().then(...).catch(...)` — nie blokuje konstruktora |
+| Shutdown | ✅ | `api.on("shutdown", ...)` w `air-purifier.ts:137-142` |
+| Timer cleanup | ✅ | `clearTimers()` czyści 4 timery + resolve pending retry delay |
+| Timer unref | ✅ | Wszystkie `.unref()` — nie blokują graceful shutdown |
+| Socket cleanup | ✅ | Idempotent `close()` z `ERR_SOCKET_DGRAM_NOT_RUNNING` guard |
+| Error isolation | ✅ | Shutdown i init errors jako `warn`, nie propagowane |
 
-### 3.3 Obsługa restartów i reconnect
+### 4.2 Reconnect i retry
 
 | Aspekt | Status | Komentarz |
 |--------|--------|-----------|
-| Exponential backoff | ✅ | `retry.ts`: base=400ms, max=30s, 8 retries, 20% jitter |
-| Jitter | ✅ | `(randomFn() * 2 - 1) * jitterRange` — symetryczny ±jitter |
-| Retryable error codes | ✅ | 16 kodów sieciowych w `RETRYABLE_ERROR_CODES` |
-| Connection events | ✅ | connected/disconnected/reconnected z logowaniem |
-| Handshake retry | ✅ | `call()` automatycznie robi re-handshake po transport error |
-| Session invalidation | ✅ | `this.session = null` po transport error w `call()` |
-| No timer leaks | ✅ | Test `[S5]` potwierdza `getTimerCount() === 0` po shutdown |
-| Retry-during-shutdown | ✅ | `destroyed` flag sprawdzany w `pollWithRetry` i `delay` |
+| Exponential backoff | ✅ | base=400ms, max=15s (configurable), 8 retries, 20% jitter |
+| 16 retryable error codes | ✅ | ETIMEDOUT, ECONNRESET, ENETDOWN, EHOSTUNREACH, EAI_AGAIN, … |
+| Connection events | ✅ | `connected`/`disconnected`/`reconnected` z logowaniem |
+| Handshake retry | ✅ | `call()` re-handshake po transport error |
+| Session invalidation | ✅ | `this.session = null` po każdym transport error |
+| No timer leaks | ✅ | Test [S5]: `getTimerCount() === 0` po shutdown |
+| Retry-during-shutdown | ✅ | `destroyed` flag w `pollWithRetry` i `delay` |
 
-### 3.4 Mapowanie HomeKit
+### 4.3 Mapowanie HomeKit
 
 | Oczyszczacz → HomeKit | Status | Komentarz |
 |----------------------|--------|-----------|
 | Power ON/OFF | ✅ | `Active`/`CurrentAirPurifierState` (HB 2.x) lub `Switch:On` (HB 1.x) |
-| RotationSpeed | ✅ | Fan level 1-16 ↔ 0-100% z poprawnym round-trip |
-| TargetAirPurifierState | ✅ | auto ↔ manual (onGet only — brak onSet, tryby zmieniane przez mode switches) |
-| AirQuality | ✅ | 5-stopniowa skala: ≤35=Excellent, ≤75=Good, ≤115=Fair, ≤150=Poor, >150=Inferior |
-| PM2.5 Density | ✅ | Raw AQI clamped do 0-1000 (`Math.min(1000, Math.max(0, state.aqi))`) |
-| Temperature | ✅ | `CurrentTemperature` — opcjonalny (`enableTemperature`) |
-| Humidity | ✅ | `CurrentRelativeHumidity` — opcjonalny (`enableHumidity`) |
-| Filter Maintenance | ✅ | `FilterLifeLevel` + `FilterChangeIndication` z konfigurowalnym progiem |
-| Filter Alert sensor | ✅ | Opcjonalny `ContactSensor` (`exposeFilterReplaceAlertSensor`) |
+| RotationSpeed | ✅ | Fan level 1–16 ↔ 0–100% z poprawnym round-trip |
+| TargetAirPurifierState | ✅ | onGet + **onSet**: AUTO=auto, MANUAL=favorite |
+| CurrentAirPurifierState | ⚠️ | `power ? PURIFYING_AIR : INACTIVE` — brak IDLE dla `mode==="idle"` |
+| AirQuality | ✅ | ≤35=Excellent, ≤75=Good, ≤115=Fair, ≤150=Poor, >150=Inferior |
+| PM2.5 Density | ✅ | Raw AQI clamped [0, 1000] µg/m³ |
+| Temperature / Humidity | ✅ | Opcjonalne sensory |
+| Filter Maintenance | ✅ | FilterLifeLevel + FilterChangeIndication z konfigurowalnym progiem |
+| Filter Alert (Contact) | ✅ | Opcjonalny ContactSensor (`exposeFilterReplaceAlertSensor`) |
 | Child Lock | ✅ | Opcjonalny Switch (`enableChildLockControl`) |
-| LED | ✅ | Switch "LED Night Mode" |
-| Mode AUTO/NIGHT | ✅ | Dedykowane switche z power-guard (mode change ignored when power OFF) |
-| AccessoryInformation | ✅ | Manufacturer, Model, Name, SerialNumber |
+| LED / Mode AUTO/NIGHT | ✅ | Mode switches z power-guard |
+| AccessoryInformation | ✅ | SerialNumber z `displayAddress` (maskowanie respektowane) |
 
-### 3.5 Kompatybilność wersji
+### 4.4 Kompatybilność wersji
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| `engines.homebridge` | ✅ | `^1.11.1 \|\| ^2.0.0` |
-| `peerDependencies.homebridge` | ✅ | Identyczne z engines |
-| `engines.node` | ✅ | `^20.0.0 \|\| ^22.0.0 \|\| ^24.0.0` |
-| CI matrix | ✅ | Node 20/22/24 × Homebridge 1.11.2 + Node 22/24 × Homebridge beta |
-| `AirPurifier` service detection | ✅ | `Reflect.get()` z fallback na Switch |
-| `ConfiguredName` detection | ✅ | Dynamiczne sprawdzanie + graceful skip |
-| `FilterChangeIndication` enums | ✅ | `Reflect.get()` z numeric fallback values |
-| `ContactSensorState` enums | ✅ | `Reflect.get()` z numeric fallback values |
+| Aspekt | Status |
+|--------|--------|
+| `engines.homebridge`: `^1.11.1 \|\| ^2.0.0` | ✅ |
+| `peerDependencies` = `engines.homebridge` | ✅ |
+| `engines.node`: `^20.0.0 \|\| ^22.0.0 \|\| ^24.0.0` | ✅ |
+| CI matrix: Node 20/22/24 × HB 1.11.2/beta | ✅ |
+| Dynamic `AirPurifier` service detection | ✅ |
+| Dynamic `ConfiguredName` detection | ✅ |
+| Enum fallbacks (numeric defaults) | ✅ |
 
 ### Ocena zgodności Homebridge: **9.5/10**
 
-Jedyne zalecenie: rozważyć dodanie `TargetAirPurifierState.onSet` handlera (zmiana trybu auto/manual bezpośrednio z HomeKit) i migrację na `platform` plugin w przyszłej wersji major.
-
 ---
 
-## 4. Jakość kodu (Node.js/TypeScript)
+## 5. Jakość kodu (Node.js / TypeScript)
 
-### 4.1 Typowanie TypeScript
+### 5.1 Typowanie
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| `strict: true` | ✅ | `tsconfig.json:9` |
-| `noImplicitAny` | ✅ | Podwójne zabezpieczenie obok strict |
-| `noUnusedLocals/Parameters` | ✅ | |
-| `noUncheckedIndexedAccess` | ✅ | Doskonałe — rzadko widziane w ekosystemie |
-| `exactOptionalPropertyTypes` | ✅ | Bardzo restrykcyjne — wymusza explicit undefined |
-| `noExplicitAny` (Biome) | ✅ | `"error"` level w biome.json |
-| Target | ✅ | ES2022 — odpowiednie dla Node 20+ (top-level await, private fields) |
-| Module | ✅ | CommonJS — wymagane przez Homebridge |
+| Aspekt | Status |
+|--------|--------|
+| `strict: true` + `noImplicitAny` | ✅ |
+| `noUnusedLocals` + `noUnusedParameters` | ✅ |
+| `noUncheckedIndexedAccess` | ✅ (rzadkie w HB ekosystemie) |
+| `exactOptionalPropertyTypes` | ✅ |
+| `noExplicitAny: error` (Biome) | ✅ |
+| Target ES2022, module CommonJS | ✅ |
 
-**Ocena typowania: Wzorcowa (10/10)** — jedne z najostrzejszych ustawień TS w ekosystemie Homebridge.
-
-### 4.2 Asynchroniczność i obsługa błędów
+### 5.2 Asynchroniczność i obsługa błędów
 
 | Aspekt | Status | Komentarz |
 |--------|--------|-----------|
 | async/await consistency | ✅ | Brak mieszania callbacks z promises |
-| Operation queue | ✅ | `enqueueOperation` serializuje dostęp do transport — zapobiega UDP race conditions |
-| Queue error isolation | ✅ | Previous rejection nie blokuje następnych operacji (logged as `debug`) |
-| Unhandled rejection safety | ✅ | Wszystkie `void promise.catch()` w fire-and-forget paths |
-| Listener error isolation | ✅ | try/catch wokół state i connection listener callbacks |
-| Socket error handler | ✅ | `socket.on("error", ...)` w `miio-transport.ts:198` — zapobiega process crash |
-| Timeout management | ✅ | Konfigurowalne timeouty per-operation z cleanup |
+| Operation queue | ✅ | `enqueueOperation` serializuje UDP — brak race conditions |
+| Queue error isolation | ✅ | Rejected poprzednie operacje nie blokują kolejnych |
+| `void promise.catch()` | ✅ | Wszystkie fire-and-forget paths |
+| Listener error isolation | ✅ | try/catch wokół każdego callback |
+| Socket error handler | ✅ | `socket.on("error", ...)` — zapobiega process crash |
 
-### 4.3 Architektura
-
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Separation of concerns | ✅ | Transport → Client → Accessory → Platform — 4 czyste warstwy |
-| Interface segregation | ✅ | `MiioTransport` interface w `types.ts` umożliwia testowanie |
-| SRP | ✅ | Każdy moduł ma jedną odpowiedzialność |
-| Testowalność | ✅ | DI przez constructor, interface-based mocking |
-| No god objects | ✅ | Żaden plik nie przekracza 800 linii |
-| Config validation | ✅ | Defensywne normalizacje: `assertString`, `assertHexToken`, `normalizeModel`, `normalizeThreshold`, `normalizeTimeout`, `normalizeBoolean` |
-| Protocol detection | ✅ | Auto-detect MIOT vs legacy z fallback chain |
-
-### 4.4 Zarządzanie zasobami
+### 5.3 Zasoby i zarządzanie pamięcią
 
 | Aspekt | Status | Komentarz |
 |--------|--------|-----------|
-| Timer cleanup | ✅ | Centralne `clearTimers()` — 4 timery (operation, sensor, keepalive, retry) + resolve pending delay |
-| Socket cleanup | ✅ | `close()` z `socketClosed` idempotent guard + `ERR_SOCKET_DGRAM_NOT_RUNNING` handling |
-| Event listener cleanup | ✅ | `onStateUpdate`/`onConnectionEvent` zwracają unsubscribe fn |
-| Memory leaks | ✅ | `characteristicCache` to bounded Map (max ~30 entries, fixed set of characteristics) |
+| Timer cleanup | ✅ | Centralne `clearTimers()` + resolve pending delay promise |
+| Socket cleanup | ✅ | Idempotent z guard flag |
+| Listener unsubscribe | ✅ | `onStateUpdate/onConnectionEvent` zwracają cleanup fn |
+| `characteristicCache` | ✅ | Bounded Map — stały zbiór ~30 characteristics |
 | `.unref()` na timerach | ✅ | Nie blokuje process exit |
-| Operation queue drain | ✅ | Queue drains naturally; no orphaned promises possible |
 
-### 4.5 Logowanie
+### 5.4 Protokół MIIO/MIOT — szczegóły
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Log levels | ✅ | `debug`: diagnostics, suppressed errors; `info`: connection events, recovery; `warn`: failures, disconnects; `error`: config validation |
-| Token w logach | ✅ | Nigdy nie logowany — walidacja w `platform.ts:61-69` |
-| IP masking | ✅ | `maskDeviceAddressInLogs` → `10.10.*.*` pattern |
-| Connection lifecycle | ✅ | Czytelne: `Connected to "X" @ IP!` / `Disconnected from "X" @ IP (code ...)` / `Reconnected to "X" @ IP.` |
-| Suppressed errors | ✅ | Diagnostyczne `process.emitWarning()` z context tag, np. `[miio-transport:socket]` |
+**Szyfrowanie (AES-128-CBC):**
+```
+key = MD5(token)
+iv  = MD5(key || token)
+```
+Standard protokołu Xiaomi — implementacja poprawna.
 
-### 4.6 Polling i wydajność
+**LED mapping — asymetria MIOT vs Legacy:**
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Dual-frequency polling | ✅ | Operation (10s default) + Sensor (30s default) — optymalny podział |
-| Keep-alive | ✅ | 60s background heartbeat |
-| Dedup characteristic updates | ✅ | `characteristicCache` zapobiega duplicate `updateCharacteristic` calls |
-| MIOT batch reads | ✅ | Jeden `get_properties` call z wieloma property descriptorami |
-| Legacy reads | ⚠️ | 13 równoległych `get_prop` calls — poprawne, ale może być zbyt agresywne na starych urządzeniach |
-| Protocol caching | ✅ | Wykryty protocol mode (`miot`/`legacy`) cachowany na czas życia transport |
+| Mode | Property | Value | Code result |
+|------|----------|-------|-------------|
+| MIOT | `led` (siid:6, piid:1) | 0=bright, 1=dim, 2=off | `toNumber(v) !== 2` → OK |
+| Legacy | `led` ("on"/"off") | "on"/"off" | `toBoolean(v)` → OK |
+| Legacy | `led_b` (fallback) | 0=bright, 1=dim, 2=off | `toBoolean(0) = false` → ⚠️ bug |
 
-### Ocena jakości kodu: **9.5/10**
+Jeśli `led` nie jest dostępny a `led_b` zwraca `0`, LED jest błędnie raportowany jako wyłączony.
 
----
+**`set_level_fan` w MIOT — batch SET:**
+```typescript
+send([
+  { did, siid: 2, piid: 5, value: 2 },      // mode = favorite
+  { did, siid: 10, piid: 10, value: level }, // fan level
+]);
+```
+Poprawne — jednocześnie ustawia tryb favorite i poziom wentylatora. Zgodne z README i protokołem MIOT.
 
-## 5. Security & Supply Chain
+### 5.5 Logowanie
 
-### 5.1 Wrażliwe dane
+| Aspekt | Status |
+|--------|--------|
+| Token nigdy nie logowany | ✅ |
+| IP masking (`maskDeviceAddressInLogs`) | ✅ |
+| Poziomy: debug/info/warn/error | ✅ |
+| Suppressed errors: `process.emitWarning` z context tagiem | ✅ |
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Token w logach | ✅ | Nigdy nie logowany |
-| Token walidacja | ✅ | Regex `^[0-9a-fA-F]{32}$` w kodzie i schema |
-| Token w pamięci | ✅ | Przechowywany jako `Buffer` (16 bytes z hex-decode) |
-| IP masking w logach | ✅ | Opcjonalne `maskDeviceAddressInLogs` |
-| SerialNumber | ⚠️ | Zawiera raw IP (`miap-10-0-0-1`) nawet z maskowaniem włączonym — lokalny exposure |
-| Config schema | ✅ | `"pattern"` walidacja tokena na poziomie UI |
-
-### 5.2 Komunikacja z urządzeniem
-
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Protokół | UDP 54321 | MIIO standard — brak TLS, ale to wymóg protokołu Xiaomi |
-| Szyfrowanie | AES-128-CBC | key = MD5(token), iv = MD5(key + token) — standard MIIO |
-| Static IV | ⚠️ | IV nie zmienia się per-message — ograniczenie protokołu, nie kodu |
-| Handshake | ✅ | Standard MIIO z device stamp + timeout |
-| Message ID | ✅ | Incrementing ID z wraparound at 2^31-1 |
-| Replay window | ✅ | Response filtering by expected message ID |
-| README hardening | ✅ | Sekcja "Network hardening" z VLAN/firewall/ACL recommendations |
-| Checksum | ✅ | MD5 checksum w header (standard MIIO) |
-
-### 5.3 Dependencies
-
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Runtime deps | **0** | Absolutnie żadnych — złoty standard |
-| Dev deps | 5 | `@biomejs/biome`, `@types/node`, `@vitest/coverage-v8`, `typescript`, `vitest` + homebridge (for types) |
-| `npm audit` | ✅ | 0 vulnerabilities (zweryfikowane) |
-| `package-lock.json` | ✅ | lockfileVersion 3, present in repo |
-| `engine-strict=true` | ✅ | w `.npmrc` — wymusza engine check |
-| No native addons | ✅ | Pure JS — brak problemów z node-gyp |
-
-### 5.4 Supply chain automation
-
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Dependabot (npm) | ✅ | Weekly, 10 PR limit, `dependencies` label |
-| Dependabot (GitHub Actions) | ✅ | Weekly, 5 PR limit, `dependencies` + `github-actions` labels |
-| npm audit in CI | ✅ | `--audit-level=high` w `ci.yml:64` + `release.yml:27` |
-| SBOM generation | ✅ | CycloneDX w `supply-chain.yml` — artifact uploaded |
-| OSV Scanner | ✅ | `google/osv-scanner-action@v2.3.3` na lockfile |
-| npm provenance | ✅ | `NPM_CONFIG_PROVENANCE: "true"` w release workflow |
-| Pinned action tags | ⚠️ | `@v4` tags — rozważyć SHA pinning (tag hijacking protection) |
-| No secret leaks | ✅ | Secrets only in release workflow via `${{ secrets.* }}` |
-
-### 5.5 CI permissions (Least Privilege)
-
-| Workflow | Permissions | Status |
-|----------|-------------|--------|
-| ci.yml | `contents: read` | ✅ Minimal |
-| supply-chain.yml | `contents: read` | ✅ Minimal |
-| release.yml | `contents: write, issues: write, pull-requests: write, id-token: write` | ✅ Required for semantic-release + npm provenance |
-
-### Ocena security: **9/10**
+**Ocena jakości kodu: 9.5/10**
 
 ---
 
-## 6. Testy, CI/CD i automatyzacja
+## 6. Security & Supply Chain
 
-### 6.1 Testy
+### 6.1 Wrażliwe dane
 
-| Aspekt | Status | Komentarz |
-|--------|--------|-----------|
-| Framework | vitest v4 | Nowoczesny, szybki, ESM-native |
-| Pliki testowe | 9 | `test/` directory |
-| Testy łącznie | 84 | All passing (zweryfikowane) |
-| Pokrycie | **100%** | Statements, branches, functions, lines |
-| Threshold enforcement | ✅ | `vitest.config.ts` — build fails < 100% |
-| Coverage reporter | ✅ | `text` (terminal) + `lcov` (CI artifact) |
-| Test isolation | ✅ | `vi.restoreAllMocks()` w afterEach |
-| Fake timers | ✅ | `vi.useFakeTimers()` — testy nie czekają na real delays |
-| Test categories | See below | |
+| Aspekt | Status |
+|--------|--------|
+| Token w logach | ✅ Nigdy |
+| Token walidacja | ✅ Regex + UI schema pattern |
+| IP masking | ✅ + SerialNumber używa `displayAddress` |
 
-**Kategorie testów:**
-
-| Plik | Testy | Zakres |
-|------|-------|--------|
-| `mappers.test.ts` | 4 | Fan level mapping, AQI thresholds |
-| `mode-policy.test.ts` | 4 | Auto/night switch policy |
-| `device-api.test.ts` | 2 | Read/write device API contract |
-| `device-client-branches.test.ts` | 19 | Queue, retry, listeners, edge cases |
-| `network-scenarios.test.ts` | 7 | S1-S7: purifier restart, router restart, packet loss, HB restart, hot-reload, short/long Wi-Fi outage |
-| `reliability.test.ts` | 5 | Backoff computation, retryable errors, socket error handler |
-| `miio-transport-coverage.test.ts` | 20 | Protocol detection, batch/single reads, MIOT set mappings, handshake, encryption |
-| `miio-transport-reliability.test.ts` | 8 | Retryable error propagation, socket close idempotency, batch round-trip |
-| `accessory-platform-index.test.ts` | 15 | Service creation, config validation, characteristic updates, filter alerts, shutdown, AirPurifier service |
-
-### 6.2 CI Pipeline
-
-| Job | Zakres | Status |
-|-----|--------|--------|
-| `test` (matrix 5 configs) | lint + typecheck + test | ✅ Node 20/22/24 × HB 1.11.2, Node 22/24 × HB beta |
-| `audit` | `npm audit --audit-level=high` | ✅ |
-| `sbom` | CycloneDX SBOM generation + artifact | ✅ |
-| `osv-scanner` | Vulnerability scanning via OSV | ✅ |
-| Concurrency | `cancel-in-progress: true` | ✅ Saves CI minutes |
-| Coverage artifact | Upload on `full` lane | ✅ |
-| Cache | npm cache in `actions/setup-node` | ✅ |
-
-**Smoke lane**: Node 24 × HB beta runs only test, not coverage — pragmatic approach for pre-release testing.
-
-### 6.3 Release workflow
+### 6.2 Protokół
 
 | Aspekt | Status | Komentarz |
 |--------|--------|-----------|
-| semantic-release v24 | ✅ | `.releaserc.json` z 6 pluginami |
-| Conventional commits | ✅ | Wymagane przez commit-analyzer; opisane w CONTRIBUTING.md |
-| Auto changelog | ✅ | `@semantic-release/changelog` → `CHANGELOG.md` |
-| Auto npm publish | ✅ | `@semantic-release/npm` z `npmPublish: true` |
-| npm provenance | ✅ | `NPM_CONFIG_PROVENANCE: "true"` via env |
-| Git tag + commit | ✅ | `@semantic-release/git` z `[skip ci]` message |
-| GitHub release | ✅ | `@semantic-release/github` |
-| Pre-release gates | ✅ | `npm ci` → `npm audit` → `npm run check` (lint+typecheck+test) → release |
-| `prepublishOnly` | ✅ | `npm run lint && npm run typecheck && npm test && npm run build` |
-| `prepare` | ✅ | `npm run build` — auto-build on install |
+| AES-128-CBC | ✅ | Standard MIIO |
+| Static IV | ℹ️ | Ograniczenie protokołu, nie kodu |
+| Message ID filtering | ✅ | |
+| WAN exposure | ✅ Brak | Tylko LAN UDP 54321 |
+| README network hardening | ✅ | VLAN, ACL, egress blocking |
 
-### Ocena CI/CD: **10/10**
+### 6.3 Dependencies & Supply Chain
+
+| Aspekt | Status |
+|--------|--------|
+| Runtime deps | **0** |
+| `npm audit` | ✅ 0 vulnerabilities |
+| `package-lock.json` lockfileVersion 3 | ✅ |
+| `engine-strict=true` | ✅ |
+| Dependabot (npm + Actions) weekly | ✅ |
+| SBOM CycloneDX | ✅ |
+| OSV Scanner | ✅ |
+| npm provenance | ✅ |
+| SHA-pinned GitHub Actions | ✅ |
+| PoLP workflow permissions | ✅ |
+
+**Ocena security: 9.5/10**
 
 ---
 
-## 7. Lista krytycznych problemów (blokery publikacji npm)
+## 7. Testy i CI/CD
+
+### 7.1 Testy
+
+| Aspekt | Status |
+|--------|--------|
+| Framework: vitest v4 | ✅ |
+| 84 testy, 9 plików | ✅ |
+| Pokrycie 100% (statements/branches/functions/lines) | ✅ |
+| Fake timers (`vi.useFakeTimers`) | ✅ |
+| 7 scenariuszy network (S1-S7) | ✅ |
+| DI-based mocking przez interfejsy | ✅ |
+
+### 7.2 CI Pipeline
+
+| Job | Status |
+|-----|--------|
+| test (5 konfiguracji: Node 20/22/24 × HB 1.x/beta) | ✅ |
+| audit (`npm audit --audit-level=high`) | ✅ |
+| sbom (CycloneDX) | ✅ |
+| osv-scanner | ✅ |
+| cancel-in-progress concurrency | ✅ |
+
+### 7.3 Release
+
+| Aspekt | Status |
+|--------|--------|
+| semantic-release v24 z 6 pluginami | ✅ |
+| Conventional commits wymagane | ✅ |
+| Auto changelog + git tag + GitHub release | ✅ |
+| npm publish z provenance | ✅ |
+| Pre-release gates: audit → check → release | ✅ |
+| `check` script: lint + typecheck + test + build (v4) | ✅ |
+
+**Ocena CI/CD: 10/10**
+
+---
+
+## 8. Weryfikacja README vs Kod (szczegółowa)
+
+### 8.1 Pola konfiguracji
+
+| Pole | README domyślna | Kod domyślna | Opis README | Status |
+|------|----------------|-------------|------------|--------|
+| `enableAirQuality` | true | `normalizeBoolean(..., true)` | Expose AirQualitySensor | ✅ |
+| `enableTemperature` | true | `normalizeBoolean(..., true)` | Expose TemperatureSensor | ✅ |
+| `enableHumidity` | true | `normalizeBoolean(..., true)` | Expose HumiditySensor | ✅ |
+| `enableChildLockControl` | false | `normalizeBoolean(..., false)` | Expose Child Lock | ✅ |
+| `filterChangeThreshold` | 10, [0,100] | `normalizeThreshold` (10, clamp) | Filter warning % | ✅ |
+| `exposeFilterReplaceAlertSensor` | false | `normalizeBoolean(..., false)` | Contact sensor | ✅ |
+| `connectTimeoutMs` | 15000, min 100 | `normalizeTimeout(..., 15_000, 100)` | Handshake timeout | ✅ |
+| `operationTimeoutMs` | 15000, min 100 | `normalizeTimeout(..., 15_000, 100)` | Operation timeout | ✅ |
+| `reconnectDelayMs` | 15000 (max cap) | `maxDelayMs: reconnectDelayMs` | ~~Base delay~~ **Max delay cap (v4)** | ✅ |
+| `keepAliveIntervalMs` | 60000, min 1000 | `normalizeTimeout(..., 60_000, 1_000)` | Keep-alive interval | ✅ |
+| `operationPollIntervalMs` | 10000, min 1000 | `normalizeTimeout(..., 10_000, 1_000)` | Control poll interval | ✅ |
+| `sensorPollIntervalMs` | 30000, min 1000 | `normalizeTimeout(..., 30_000, 1_000)` | Sensor poll interval | ✅ |
+| `maskDeviceAddressInLogs` | false | `normalizeBoolean(..., false)` | IP masking | ✅ |
+
+### 8.2 Mapowania HomeKit
+
+| README twierdzenie | Kod | Status |
+|---|---|---|
+| AQI ≤35 = Excellent (1) | `aqi <= 35 → 1` | ✅ |
+| AQI 36–75 = Good (2) | `aqi <= 75 → 2` | ✅ |
+| AQI 76–115 = Fair (3) | `aqi <= 115 → 3` | ✅ |
+| AQI 116–150 = Poor (4) | `aqi <= 150 → 4` | ✅ |
+| AQI >150 = Inferior (5) | `else → 5` | ✅ |
+| AQI <0/NaN = UNKNOWN (0) | `!isFinite(aqi) \|\| aqi < 0 → 0` | ✅ |
+| PM2.5 = raw AQI clamped [0, 1000] | `Math.min(1000, Math.max(0, state.aqi))` | ✅ |
+| Mode AUTO: ON=auto, OFF=sleep | `resolveModeFromAutoSwitch` | ✅ |
+| Mode NIGHT: ON=sleep, OFF=auto | `resolveModeFromNightSwitch` | ✅ |
+| Mode ignored when power OFF | `null` return → `handleModeSwitch(null)` → skip | ✅ |
+| FilterLifeLevel = filter1_life | `state.filter1_life` | ✅ |
+| FilterChangeIndication ≤ threshold | `state.filter1_life <= filterChangeThreshold` | ✅ |
+| CONTACT_NOT_DETECTED = alert | `filter1_life <= threshold ? contactNotDetected` | ✅ |
+| RotationSpeed → favorite mode | MIOT `set_level_fan`: mode=2 + fan level | ✅ |
+| AirPurifier (HB 2.x) / Switch (HB 1.x) | `Reflect.get(api.hap.Service, "AirPurifier")` | ✅ |
+| TargetAirPurifierState settable | `onSet: AUTO → "auto", MANUAL → "favorite"` | ✅ |
+| **Filter Replace Alert w features** | ~~Brakowało~~ **Dodano (v4)** | ✅ |
+
+### 8.3 `config.schema.json` vs `platform.ts` spójność
+
+Wszystkie wartości domyślne i minimalne są w pełnej synchronizacji. ✅
+
+---
+
+## 9. Lista krytycznych problemów (blokery npm)
 
 **Brak krytycznych blokerów.** Projekt jest gotowy do publikacji na npm.
 
-Weryfikacja:
-- ✅ `npm run lint` — 0 errors, 0 warnings
-- ✅ `npm run typecheck` — clean
-- ✅ `npm test` — 84/84 passed, 100% coverage
-- ✅ `npm run build` — clean compilation
-- ✅ `npm audit` — 0 vulnerabilities
-- ✅ `npm pack --dry-run` — 34 files, 32 kB (142 kB unpacked), correct content
-
 ---
 
-## 8. Lista usprawnień (priorytetyzowana)
+## 10. Lista usprawnień (po v4)
 
-### HIGH priority
+### HIGH priority (nowe po v4)
 
-| # | Usprawnienie | Uzasadnienie |
-|---|-------------|--------------|
-| H1 | SerialNumber powinien respektować `maskDeviceAddressInLogs` | `air-purifier.ts:74` używa raw `address` zamiast `displayAddress` dla serial. Niespójne z intencją maskowania. Fix: `this.buildSerialNumber(displayAddress)` zamiast `this.buildSerialNumber(address)`. Albo: użyj hash(address) aby serial był unikalny ale nie ujawniał IP. |
-| H2 | Dodać `TargetAirPurifierState.onSet` handler | W native AirPurifier service, zmiana trybu auto/manual z poziomu HomeKit powinna działać. Handler powinien mapować AUTO→`setMode("auto")`, MANUAL→keep current fan level (favorite mode). |
-| H3 | Bug report template — brak pola wersji pluginu | Pole `plugin_version` w `bug_report.yml` znacząco przyspiesza triage. |
+| # | Usprawnienie | Uzasadnienie | Plik |
+|---|-------------|--------------|------|
+| H1 | `CurrentAirPurifierState.IDLE` dla `mode === "idle"` | Gdy power=on ale mode=idle, HomeKit powinien widzieć IDLE (1) zamiast PURIFYING_AIR (2) | `air-purifier.ts:392-395` |
 
 ### MEDIUM priority
 
-| # | Usprawnienie | Uzasadnienie |
-|---|-------------|--------------|
-| M1 | SHA pinning GitHub Actions | Tag `@v4` może być re-pointed. SHA pinning chroni przed supply-chain attacks na Actions. |
-| M2 | Dodać OpenSSF Scorecard action | Automatyczna ocena bezpieczeństwa repo, widoczna na npm i GitHub. |
-| M3 | Rozważyć batched legacy reads | `readViaLegacyBatch` wysyła N parallel calls. Niektóre legacy urządzenia wspierają multiple props w jednym `get_prop` call — można spróbować batch z fallback na individual. |
-| M4 | Dodać `CODEOWNERS` | Automatyczne review assignments; ważne gdy projekt zyska kontrybutorów. |
+| # | Usprawnienie | Uzasadnienie | Plik |
+|---|-------------|--------------|------|
+| M1 | Legacy LED `led_b` numeric fix | `toBoolean(0)=false` błędnie mapuje `led_b=0` (bright) jako off | `miio-transport.ts:458` |
+| M2 | Sequential/batched legacy reads | 13 parallel UDP calls może powodować packet loss na starszych HW | `miio-transport.ts:466-493` |
+| M3 | OpenSSF Scorecard action | Automatyczna ocena bezpieczeństwa repo | `.github/workflows/` |
+| M4 | Auto-label workflow | PR size labels, type labels | `.github/workflows/` |
 
 ### LOW priority
 
 | # | Usprawnienie | Uzasadnienie |
 |---|-------------|--------------|
-| L1 | Rozważyć migrację na platform plugin w v2.0 | Automatyczne discovery urządzeń, UI-based device management, shared transport dla wielu oczyszczaczy. |
-| L2 | `export =` → `export default` | Legacy CJS export syntax; `export default` jest bardziej idiomatyczne, ale wymaga zmian w module resolution. |
-| L3 | Dodać stale-bot lub auto-close workflow | Automatyczne zarządzanie stale issues po 90 dniach. |
-| L4 | Rozważyć dodanie `favorite` mode switch | Obecna logika mode switches obsługuje tylko auto/sleep. Użytkownicy z favorite mode (manual fan level) mogą chcieć dedykowanego switcha. |
+| L1 | `config.schema.json` layout reorganizacja | Sekcja "Sensors & Alerts" zawiera timeout/polling settings — oddzielić |
+| L2 | `EDEVICEUNAVAILABLE` retry reduction | 8 retries przy niezgodnym modelu = zbędne opóźnienie |
+| L3 | Platform plugin migration (v2.0) | Multi-device management, auto-discovery |
+| L4 | Stale bot / auto-close | Automatyczne zarządzanie issues |
+| L5 | `favorite` mode switch | Dedykowany switch dla manual/favorite mode |
 
 ---
 
-## 9. Sugestie zmian w plikach
+## 11. Sugestie konkretnych zmian (niezaimplementowane)
 
-### 9.1 `air-purifier.ts` — SerialNumber masking fix
+### 11.1 `air-purifier.ts` — `CurrentAirPurifierState.IDLE` (H1)
 
 ```typescript
-// Obecne (line 73-75):
-.setCharacteristic(
-  this.api.hap.Characteristic.SerialNumber,
-  this.buildSerialNumber(address),
-);
+// Obecne (air-purifier.ts:392-395):
+state.power
+  ? this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
+  : this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE
 
 // Zalecane:
-.setCharacteristic(
-  this.api.hap.Characteristic.SerialNumber,
-  this.buildSerialNumber(displayAddress),
-);
+state.power
+  ? state.mode === "idle"
+    ? this.api.hap.Characteristic.CurrentAirPurifierState.IDLE
+    : this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
+  : this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE
 ```
 
-### 9.2 `bug_report.yml` — dodanie pola wersji pluginu
-
-```yaml
-- type: input
-  id: plugin_version
-  attributes: {label: Plugin version}
-  validations: {required: true}
-```
-
-### 9.3 GitHub Actions — SHA pinning (example)
-
-```yaml
-# Obecne:
-- uses: actions/checkout@v4
-
-# Zalecane (przykładowy SHA — zweryfikować aktualny):
-- uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-```
-
-### 9.4 Opcjonalne: `TargetAirPurifierState.onSet` handler
+### 11.2 `miio-transport.ts` — Legacy LED `led_b` numeric encoding (M1)
 
 ```typescript
-// W bindHandlers(), w bloku `this.usesNativePurifierService`:
-this.purifierService
-  .getCharacteristic(this.api.hap.Characteristic.TargetAirPurifierState)
-  .onSet(async (value: CharacteristicValue) => {
-    const isAuto = Number(value) === this.api.hap.Characteristic.TargetAirPurifierState.AUTO;
-    await this.client.setMode(isAuto ? "auto" : "favorite");
-  });
+// Obecne (line 458):
+led: toBoolean(valueByKey.get("led")),
+
+// Zalecane — obsługa numerycznych wartości led_b (0=bright, 1=dim, 2=off):
+led: (() => {
+  const v = valueByKey.get("led");
+  if (typeof v === "number") return v !== 2;  // 0/1=on, 2=off
+  return toBoolean(v);                         // "on"/"off" → standard
+})(),
+```
+
+### 11.3 `config.schema.json` — Reorganizacja layout (L1)
+
+```json
+{
+  "type": "section",
+  "title": "Sensors & Alerts",
+  "expandable": true,
+  "expanded": false,
+  "items": ["filterChangeThreshold", "exposeFilterReplaceAlertSensor", "enableChildLockControl"]
+},
+{
+  "type": "section",
+  "title": "Privacy & Timing",
+  "expandable": true,
+  "expanded": false,
+  "items": [
+    "maskDeviceAddressInLogs",
+    "connectTimeoutMs", "operationTimeoutMs", "reconnectDelayMs",
+    "keepAliveIntervalMs", "operationPollIntervalMs", "sensorPollIntervalMs"
+  ]
+}
 ```
 
 ---
 
-## 10. Ocena zgodności ze standardami Homebridge 1.x i 2.x
+## 12. Ocena finalna Homebridge compliance
 
 | Kryterium | Ocena | Komentarz |
 |-----------|-------|-----------|
-| Rejestracja | 10/10 | Poprawne `registerAccessory` z matching aliasami |
-| Lifecycle | 10/10 | Init, shutdown, timer cleanup — wzorcowe |
-| Error handling | 10/10 | Graceful degradation, retry with backoff, isolated listener errors |
-| Config validation | 10/10 | Walidacja token (regex + hex), model (whitelist), timeoutów (clamp), threshold (normalize) |
-| Config schema | 9/10 | Kompletny z layout — rozważyć dodanie `TargetAirPurifierState` onSet |
-| HomeKit mapping | 9/10 | Kompletne z fallbackami; brak `TargetAirPurifierState.onSet` |
-| Reconnect stability | 10/10 | Exponential backoff + jitter, connection events, tested w 7 scenariuszach |
-| Version compatibility | 10/10 | Dynamiczna detekcja services, peerDeps=engines, CI matrix |
-| **Łączna ocena** | **9.8/10** | |
+| Rejestracja | 10/10 | |
+| Lifecycle | 10/10 | |
+| Error handling | 10/10 | |
+| Config validation | 10/10 | |
+| Config schema / UI | 9/10 | Layout do reorganizacji |
+| HomeKit mapping | 9/10 | `CurrentAirPurifierState.IDLE` niezaimplementowane |
+| Reconnect stability | 10/10 | 7 scenariuszy testowych |
+| Version compatibility | 10/10 | Dynamic detection, CI matrix |
+| **Łączna ocena** | **9.75/10** | |
 
 ---
 
-## 11. Checklista „gotowe do npm"
+## 13. Checklista „gotowe do npm"
 
-### Metadata i pakiet
+### Metadata
 
 | Element | Status |
 |---------|--------|
-| `package.json` name: `homebridge-xiaomi-air-purifier-modern` | ✅ |
-| `package.json` version: `1.0.0` (managed by semantic-release) | ✅ |
-| `package.json` description | ✅ |
-| `package.json` main: `dist/index.js` | ✅ |
-| `package.json` types: `dist/index.d.ts` | ✅ |
-| `package.json` files: dist, config.schema.json, docs | ✅ |
-| `package.json` keywords (15) | ✅ |
-| `package.json` engines (Node + Homebridge) | ✅ |
-| `package.json` peerDependencies | ✅ |
-| `package.json` homepage / repository / bugs | ✅ |
-| `package.json` license: MIT | ✅ |
-| `package.json` author: TaKeN | ✅ |
-| `package.json` displayName | ✅ |
-| `package.json` type: commonjs | ✅ |
-| `package.json` prepublishOnly | ✅ |
-| `package.json` prepare | ✅ |
-| config.schema.json (pluginAlias, pluginType, schema, layout) | ✅ |
+| `name`, `version`, `description` | ✅ |
+| `main`, `types`, `files` | ✅ |
+| `keywords` (15), `engines`, `peerDependencies` | ✅ |
+| `homepage`, `repository`, `bugs` | ✅ |
+| `license`, `author`, `displayName` | ✅ |
+| `prepublishOnly`, `check` (lint+typecheck+test+build) | ✅ |
+| `config.schema.json` (pluginAlias, pluginType, schema, layout) | ✅ |
 
 ### Dokumentacja
 
 | Element | Status |
 |---------|--------|
-| LICENSE (MIT) | ✅ |
-| README.md (install, config, troubleshooting, development) | ✅ |
-| CHANGELOG.md (Keep a Changelog format) | ✅ |
-| CONTRIBUTING.md (conventional commits, local checks, PR process) | ✅ |
-| CODE_OF_CONDUCT.md (Contributor Covenant 2.1) | ✅ |
-| SECURITY.md (vulnerability reporting, SLA) | ✅ |
-| RELEASE_CHECKLIST.md | ✅ |
+| LICENSE / README / CHANGELOG | ✅ |
+| CONTRIBUTING / CODE_OF_CONDUCT / SECURITY | ✅ |
+| Issue templates / PR template / CODEOWNERS | ✅ |
 
 ### Infrastruktura
 
 | Element | Status |
 |---------|--------|
-| .editorconfig | ✅ |
-| .gitignore (node_modules, dist, coverage, *.tgz) | ✅ |
-| .npmrc (engine-strict=true) | ✅ |
-| package-lock.json (lockfileVersion 3) | ✅ |
-| tsconfig.json (strict + advanced checks) | ✅ |
-| tsconfig.test.json (extends, includes test/) | ✅ |
+| tsconfig (strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes) | ✅ |
 | biome.json (recommended + noExplicitAny: error) | ✅ |
-| vitest.config.ts (100% threshold, v8 provider) | ✅ |
-| .releaserc.json (6 plugins) | ✅ |
+| vitest.config.ts (100% threshold, v8) | ✅ |
+| `.releaserc.json` (6 plugins) / `.npmrc` (engine-strict) | ✅ |
 
 ### CI/CD
 
 | Element | Status |
 |---------|--------|
-| CI workflow (matrix test) | ✅ |
-| Release workflow (semantic-release + provenance) | ✅ |
-| Supply chain workflow (SBOM + OSV) | ✅ |
-| Dependabot (npm + GitHub Actions) | ✅ |
-| Issue templates (bug + feature + config) | ✅ |
-| PR template (summary + checklist) | ✅ |
+| CI matrix (Node 20/22/24 × HB 1.x/2.x) | ✅ |
+| Release (semantic-release + npm provenance) | ✅ |
+| Supply chain (SBOM + OSV) | ✅ |
+| Dependabot (npm + Actions) + SHA pinning | ✅ |
 
-### Weryfikacja build/test
+### Build/test
 
 | Element | Status |
 |---------|--------|
-| `npm run lint` — clean | ✅ |
-| `npm run typecheck` — clean | ✅ |
-| `npm test` — 84/84, 100% coverage | ✅ |
-| `npm run build` — clean | ✅ |
-| `npm audit` — 0 vulnerabilities | ✅ |
-| `npm pack --dry-run` — 34 files, 32 kB | ✅ |
+| lint / typecheck / test (84/84, 100%) / build | ✅ |
+| `npm audit` 0 vulnerabilities | ✅ |
 | Zero runtime dependencies | ✅ |
-| Source maps included in dist | ✅ |
+| Source maps w dist | ✅ |
 
 ### Opcjonalne (nie blokujące)
 
 | Element | Status | Priorytet |
 |---------|--------|-----------|
-| SHA-pinned GitHub Actions | ❌ | Medium |
-| OpenSSF Scorecard action | ❌ | Medium |
-| CODEOWNERS | ❌ | Medium |
-| Stale bot / auto-labels | ❌ | Low |
-| `TargetAirPurifierState.onSet` | ❌ | High (UX) |
+| `CurrentAirPurifierState.IDLE` | ❌ | High (UX) |
+| Legacy LED `led_b` fix | ❌ | Medium |
+| OpenSSF Scorecard | ❌ | Medium |
+| Auto-labels | ❌ | Low |
+| Platform plugin (v2.0) | ❌ | Low (future) |
 
 ---
 
-## 12. Szczegółowa analiza kodu — wyróżnione wzorce
+## 14. Zmiany wprowadzone w audycie v4
 
-### 12.1 Operation Queue (device-client.ts:177-197)
-
-```
-enqueueOperation() → serializes all transport access
-├── previous.catch() → suppresses prior error (keeps queue alive)
-├── await operation() → executes current
-└── finally: release() → unblocks next queued item
-```
-
-Wzorzec jest poprawny i bezpieczny. Gwarantuje że nigdy nie dojdzie do równoczesnego dostępu do UDP socket. Testy potwierdzają odporność na rejected operations (`device-client-branches.test.ts:466-508`).
-
-### 12.2 Protocol Auto-Detection (miio-transport.ts:301-325)
-
-```
-detectProtocolMode()
-├── try MIOT probe (get_properties + MIOT_POWER_PROBE) → "miot"
-├── try Legacy probe (get_prop + "power") → "legacy"
-└── both fail → null (falls back to "legacy" in caller)
-```
-
-Pragmatyczne podejście — MIOT preferred (batch reads, newer protocol), z graceful degradation do legacy API.
-
-### 12.3 Characteristic Cache Dedup (air-purifier.ts:562-578)
-
-```
-updateCharacteristicIfNeeded(service, characteristic, value)
-├── build cache key: "serviceUUID:subtype:characteristicUUID"
-├── compare with cached value
-├── if same → skip (no HomeKit push)
-└── if different → cache + updateCharacteristic()
-```
-
-Eliminuje unnecessary HomeKit notifications, zmniejszając overhead na 10-sekundowym polling cyklu.
-
-### 12.4 Homebridge 1.x/2.x Compatibility Pattern
-
-```
-const AirPurifierService = Reflect.get(api.hap.Service, "AirPurifier");
-this.usesNativePurifierService = Boolean(AirPurifierService);
-
-// HB 2.x: AirPurifier service with Active, RotationSpeed, etc.
-// HB 1.x: Switch fallback with On characteristic
-```
-
-Czyste, dynamiczne rozwiązanie bez hard-coded version checks.
+| Zmiana | Plik | Typ |
+|--------|------|-----|
+| Fix opisu `reconnectDelayMs`: "Base delay" → "Maximum delay cap" | `README.md:94` | Doc fix |
+| Dodano wiersz "Filter Replace Alert" do tabeli features | `README.md:26` | Doc fix |
+| Dodano `npm run build` do skryptu `check` | `package.json:55` | Tool fix |
+| Dodano dropdown `model` w bug report template | `.github/ISSUE_TEMPLATE/bug_report.yml` | DX fix |
 
 ---
 
-## 13. Podsumowanie końcowe
+## 15. Podsumowanie końcowe
 
-**Projekt jest gotowy do publikacji na npm.** Jakość kodu, architektury, testów i infrastruktury CI/CD jest na poziomie znacznie powyżej przeciętnej w ekosystemie Homebridge.
-
-### Kluczowe statystyki
+**Projekt jest gotowy do publikacji na npm.**
 
 | Metryka | Wartość |
 |---------|---------|
-| Source code | 2085 linii (8 plików) |
-| Test code | 3703 linii (9 plików, 84 testy) |
-| Test:Source ratio | 1.78x |
-| Coverage | 100% (statements, branches, functions, lines) |
+| Linie kodu (src) | ~2100 |
+| Linie testów | ~3700 |
+| Test:Source ratio | ~1.78× |
+| Pokrycie | 100% |
 | Runtime dependencies | 0 |
-| npm vulnerabilities | 0 |
-| Package size | 32 kB (142 kB unpacked) |
-| CI matrix | 5 configurations |
-| Supported Node versions | 20, 22, 24 |
-| Supported Homebridge | 1.11.1+ / 2.x |
+| Vulnerabilities | 0 |
+| CI configurations | 5 |
+| Node versions | 20, 22, 24 |
+| Homebridge | 1.11.1+ / 2.x |
 
-### Kluczowe zalecenia na przyszłość
+### Rekomendacje priorytetowe
 
-1. **H1** — Fix SerialNumber masking inconsistency (quick fix)
-2. **H2** — Add `TargetAirPurifierState.onSet` for native AirPurifier UX
-3. **M1** — SHA-pin GitHub Actions for supply-chain hardening
-4. **L1** — Migrate to platform plugin in v2.0 for multi-device UX
+1. **H1** — `CurrentAirPurifierState.IDLE` dla `mode === "idle"` (UX improvement)
+2. **M1** — Fix legacy LED `led_b` numeric encoding (potential bug na starszych HW)
+3. **M2** — Rozważyć sequential legacy reads (reliability na starszych urządzeniach)
+4. **L1** — Reorganizacja `config.schema.json` layout
+5. **L3** — Planować migrację na `platform` plugin w v2.0
 
-**Ocena ogólna: 9.5/10** — profesjonalny, produkcyjny projekt OSS, gotowy do publikacji.
+**Ocena ogólna: 9.6/10** — profesjonalny, produkcyjny projekt OSS gotowy do publikacji.
