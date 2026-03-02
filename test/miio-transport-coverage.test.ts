@@ -46,11 +46,11 @@ const emptyState: DeviceState = {
   purify_volume: 0,
 };
 
-const createTransport = () =>
+const createTransport = (model = "zhimi.airpurifier.4") =>
   new ModernMiioTransport({
     address: "127.0.0.1",
     token: "00112233445566778899aabbccddeeff",
-    model: "zhimi.airpurifier.4",
+    model,
     connectTimeoutMs: 20,
     operationTimeoutMs: 20,
   });
@@ -160,6 +160,137 @@ describe("ModernMiioTransport coverage", () => {
     await transport.close();
   });
 
+  it("falls back to legacy set_buzzer on zhimi.airpurifier.pro for -5001", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "legacy";
+    const call = vi
+      .spyOn(internals, "call")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("command error"), { code: "-5001" }),
+      )
+      .mockResolvedValueOnce(null);
+
+    await internals.setProperty("set_buzzer_volume", [100]);
+
+    expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
+    expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
+
+    call
+      .mockRejectedValueOnce(
+        Object.assign(new Error("command error"), { code: "-5001" }),
+      )
+      .mockResolvedValueOnce(null);
+    await internals.setProperty("set_buzzer_volume", [0]);
+    expect(call).toHaveBeenNthCalledWith(3, "set_buzzer_volume", [0]);
+    expect(call).toHaveBeenNthCalledWith(4, "set_buzzer", ["off"]);
+
+    call
+      .mockRejectedValueOnce(
+        Object.assign(new Error("command error"), { code: "-5001" }),
+      )
+      .mockResolvedValueOnce(null);
+    await internals.setProperty("set_buzzer_volume", ["off"]);
+    expect(call).toHaveBeenNthCalledWith(5, "set_buzzer_volume", ["off"]);
+    expect(call).toHaveBeenNthCalledWith(6, "set_buzzer", ["off"]);
+
+    await transport.close();
+  });
+
+  it("does not fallback buzzer command for non-pro model and rethrows", async () => {
+    const transport = createTransport("zhimi.airpurifier.4");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "legacy";
+    const error = Object.assign(new Error("command error"), { code: "-5001" });
+    vi.spyOn(internals, "call").mockRejectedValue(error);
+
+    await expect(internals.setProperty("set_buzzer_volume", [0])).rejects.toBe(
+      error,
+    );
+
+    await transport.close();
+  });
+
+  it("does not fallback buzzer command when pro returns non--5001", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "legacy";
+    const error = Object.assign(new Error("command error"), { code: "-42" });
+    vi.spyOn(internals, "call").mockRejectedValue(error);
+
+    await expect(
+      internals.setProperty("set_buzzer_volume", [100]),
+    ).rejects.toBe(error);
+
+    await transport.close();
+  });
+
+  it("does not fallback buzzer command when code is missing", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "legacy";
+    const error = new Error("command error");
+    vi.spyOn(internals, "call").mockRejectedValue(error);
+
+    await expect(
+      internals.setProperty("set_buzzer_volume", [100]),
+    ).rejects.toBe(error);
+
+    await transport.close();
+  });
+
+  it("does not fallback for different method even on pro model", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "legacy";
+    const error = Object.assign(new Error("command error"), { code: "-5001" });
+    vi.spyOn(internals, "call").mockRejectedValue(error);
+
+    await expect(internals.setProperty("set_led", ["on"])).rejects.toBe(error);
+
+    await transport.close();
+  });
+
   it("covers readViaMiot/readViaLegacy conversion and unavailable-core errors", async () => {
     const transport = createTransport();
     const internals = transport as unknown as {
@@ -203,6 +334,17 @@ describe("ModernMiioTransport coverage", () => {
     );
     const legacy = await internals.readViaLegacy(["power"]);
     expect(legacy.mode).toBe("idle");
+
+    vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+      new Map([
+        ["power", true],
+        ["fan_level", 2],
+        ["mode", "auto"],
+        ["buzzer_volume", "on"],
+      ]),
+    );
+    const legacyBuzzerBoolean = await internals.readViaLegacy(["power"]);
+    expect(legacyBuzzerBoolean.buzzer_volume).toBe(1);
 
     vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(new Map());
     await expect(internals.readViaLegacy(["power"])).rejects.toMatchObject({

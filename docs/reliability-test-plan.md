@@ -59,6 +59,6 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
 ## How to run
 
 ```bash
-env -u npm_config_http_proxy -u npm_config_https_proxy npm exec biome check .
-env -u npm_config_http_proxy -u npm_config_https_proxy npm exec -- vitest --coverage
+npm exec biome check .
+npm exec -- vitest --coverage
 ```

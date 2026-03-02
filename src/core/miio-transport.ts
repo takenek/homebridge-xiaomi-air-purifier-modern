@@ -80,6 +80,14 @@ const toLegacyLed = (value: unknown): boolean => {
   return toBoolean(value);
 };
 const toNumber = (value: unknown): number => {
+  if (value === true || value === "on") {
+    return 1;
+  }
+
+  if (value === false || value === "off") {
+    return 0;
+  }
+
   if (typeof value === "number") {
     return value;
   }
@@ -149,7 +157,7 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   filter1_life: ["filter1_life", "filter_life"],
   child_lock: ["child_lock"],
   led: ["led", "led_b"],
-  buzzer_volume: ["buzzer_volume"],
+  buzzer_volume: ["buzzer_volume", "buzzer"],
   motor1_speed: ["motor1_speed"],
   use_time: ["use_time"],
   purify_volume: ["purify_volume"],
@@ -271,7 +279,39 @@ export class ModernMiioTransport implements MiioTransport {
       this.protocolMode = "legacy";
     }
 
-    await this.call(method, params);
+    await this.callWithLegacyBuzzerFallback(method, params);
+  }
+
+  private shouldFallbackToLegacyBuzzer(
+    method: string,
+    error: unknown,
+  ): boolean {
+    if (method !== "set_buzzer_volume") {
+      return false;
+    }
+
+    const modelAllowsFallback = this.options.model === "zhimi.airpurifier.pro";
+    if (!modelAllowsFallback || !(error instanceof Error)) {
+      return false;
+    }
+
+    const miioCode = String(Reflect.get(error, "code") ?? "");
+    return miioCode === "-5001";
+  }
+
+  private async callWithLegacyBuzzerFallback(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<void> {
+    try {
+      await this.call(method, params);
+    } catch (error: unknown) {
+      if (!this.shouldFallbackToLegacyBuzzer(method, error)) {
+        throw error;
+      }
+
+      await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
+    }
   }
 
   public async close(): Promise<void> {
