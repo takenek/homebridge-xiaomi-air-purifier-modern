@@ -211,7 +211,6 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       this.api,
       this.log,
       name,
-      address,
       displayAddress,
       client,
       model,

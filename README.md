@@ -19,7 +19,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
-| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`) |
+| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`). MIOT models use a boolean buzzer flag; legacy models receive a volume value (100/0). |
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
