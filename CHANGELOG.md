@@ -31,7 +31,7 @@ Initial public release.
 - **Config validation** — strict 32-char hex token regex, supported model enum, timeout normalization with floor clamping.
 - **Config schema** for Homebridge UI with 3 expandable sections (Sensors, Alerts & Controls, Privacy & Timing).
 - **Zero runtime dependencies** — only `node:crypto` and `node:dgram`.
-- **92 tests** across 9 test suites, 100% coverage enforced (statements, branches, functions, lines) via vitest v4 + v8 provider.
+- **97 tests** across 9 test suites, 100% coverage enforced (statements, branches, functions, lines) via vitest v4 + v8 provider.
 - **CI matrix** — Node 20/22/24 × Homebridge 1.11.2 / beta (2.x), with full and smoke lanes.
 - **Supply chain security** — SBOM (CycloneDX), OSV Scanner, OpenSSF Scorecard, npm audit in CI, SHA-pinned GitHub Actions.
 - **Semantic release** with `@semantic-release/changelog`, npm publish with provenance (`NPM_CONFIG_PROVENANCE`).

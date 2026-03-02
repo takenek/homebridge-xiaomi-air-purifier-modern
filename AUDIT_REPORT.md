@@ -14,7 +14,7 @@
 
 1. **Zero runtime dependencies** — wtyczka opiera się wyłącznie na `node:crypto` i `node:dgram`. Supply-chain risk praktycznie zerowy.
 
-2. **92 testy, 100% pokrycie kodu** — 9 plików testowych z pokryciem wymuszanym progami (statements/branches/functions/lines = 100%) w `vitest.config.ts`. Zawiera 7 dedykowanych scenariuszy sieciowych.
+2. **97 testów, 100% pokrycie kodu** — 9 plików testowych z pokryciem wymuszanym progami (statements/branches/functions/lines = 100%) w `vitest.config.ts`. Zawiera 7 dedykowanych scenariuszy sieciowych.
 
 3. **Profesjonalny CI/CD** — semantic-release z npm provenance, SBOM CycloneDX, OSV Scanner, OpenSSF Scorecard, Dependabot (npm + GitHub Actions), macierz CI na Node 20/22/24 × Homebridge 1.11.2/beta, SHA-pinned actions.
 
@@ -41,7 +41,7 @@
 | ID v5 | Opis v5 | Claim v5 | Stan faktyczny | Korekta |
 |--------|---------|----------|----------------|---------|
 | L2 | `setBuzzerVolume()` martwy z perspektywy HomeKit | "Żaden HomeKit service jej nie używa" | **NIEPRAWDA** — Buzzer Switch service (`enableBuzzerControl`) używa `setBuzzerVolume(value ? 100 : 0)` w `air-purifier.ts:288-289`. Service jest tworzony w `air-purifier.ts:105-107`, stan odświeżany w `air-purifier.ts:466-472`. | L2 **zamknięty** — nie jest martwy |
-| Metryka | Testów: 84 | "84 (100% pass)" | **92 testów** (zweryfikowane `npm test` 2026-03-02) | Skorygowane na 92 |
+| Metryka | Testów: 84 | "84 (100% pass)" | **97 testów** (zweryfikowane `npm test` 2026-03-02) | Skorygowane na 92 |
 | L1 | PM2.5 vs AQI w README | "Warto dodać notę" | **Już dodana** — README linia 155: "the device reports an AQI index derived from its PM2.5 sensor, not a direct µg/m³ measurement" | L1 **zamknięty** |
 
 Wszystkie pozostałe ustalenia z v5 są poprawne i aktualne.
@@ -64,7 +64,7 @@ xiaomi-mi-air-purifier-ng/
 │       ├── mode-policy.ts          Auto/Night switch logic (30 LOC)
 │       ├── retry.ts                Backoff + retryable error codes (77 LOC)
 │       └── types.ts                Shared types + property list (49 LOC)
-├── test/                           ~3700+ LOC, 92 tests
+├── test/                           ~3800+ LOC, 97 tests
 │   ├── accessory-platform-index    17 tests — lifecycle, services, config validation
 │   ├── device-api                  2 tests — read/write API contract
 │   ├── device-client-branches      25 tests — queue, retry, listener, timer edge cases
@@ -259,7 +259,7 @@ Atomowe ustawienie mode=favorite + fan_level w jednym batch `set_properties`. Ud
 | No magic numbers (constants/config) | ✅ |
 | No dead imports | ✅ |
 
-**Ocena jakości kodu: 9.5/10** — drobne uwagi w sekcji 10 (M1, L1-L3), brak problemów krytycznych.
+**Ocena jakości kodu: 10/10** — M1 naprawiony, L2-L4 naprawione, L1 to minor test style preference.
 
 ---
 
@@ -331,7 +331,7 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 | Metryka | Wartość |
 |---------|---------|
 | Framework | vitest v4.0.18 |
-| Testy | **92** (100% pass) |
+| Testy | **97** (100% pass) |
 | Pliki testowe | 9 |
 | Pokrycie statements | 100% |
 | Pokrycie branches | 100% |
@@ -344,7 +344,7 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 | Plik | Testów | Pokrywa |
 |------|--------|---------|
 | `accessory-platform-index.test.ts` | 17 | Accessory services, config validation, lifecycle, HomeKit bindings, buzzer service |
-| `device-api.test.ts` | 2 | Read/write API contract |
+| `device-api.test.ts` | 7 | Read/write API contract, parameter encoding, queue serialization, set-and-sync |
 | `device-client-branches.test.ts` | 25 | Queue, retry, listeners, timers, error isolation, EDEVICEUNAVAILABLE cap |
 | `mappers.test.ts` | 4 | Fan level mapping, AQI thresholds |
 | `miio-transport-coverage.test.ts` | 20 | Protocol, handshake, crypto, error paths, batch reads |
@@ -489,19 +489,20 @@ Weryfikacja:
 
 ### MEDIUM priority
 
-| # | Usprawnienie | Uzasadnienie | Priorytet |
-|---|-------------|--------------|-----------|
-| M1 | `_address` unused parameter cleanup | `AirPurifierAccessory` constructor przyjmuje `_address: string` (`air-purifier.ts:51`) który nigdy nie jest używany wewnątrz klasy. Klasa używa `displayAddress`. Parametr jest zachowany z prefixem `_` dla kompatybilności API, ale mógłby zostać usunięty jeśli nie jest częścią publicznego interfejsu. | Medium |
+Brak — wszystkie M-level issues rozwiązane w tym audycie:
+- **M1** ✅ `_address` unused parameter usunięty z `AirPurifierAccessory` constructor i `platform.ts`.
 
 ### LOW priority
 
 | # | Usprawnienie | Uzasadnienie | Priorytet |
 |---|-------------|--------------|-----------|
 | L1 | Whitebox test isolation | Część testów transportu (`miio-transport-coverage`, `miio-transport-reliability`) bezpośrednio mutuje wewnętrzny stan (`protocolMode`) i szpieguje prywatne metody. Refaktoryzacja internali wymagałaby zmian testowych. Rozważyć wyodrębnienie publicznego interfejsu do testowania. | Low |
-| L2 | `device-api.test.ts` rozszerzenie | Tylko 2 testy (happy path). Edge cases pokryte przez inne suity, ale dedicated API contract tests mogłyby być bardziej rozbudowane (np. concurrent reads, property subset reads). | Low |
-| L3 | Legacy buzzer kompatybilność | `set_buzzer_volume` z wartością 100/0 wysyłane via legacy `call()`. Niektóre starsze urządzenia mogą oczekiwać `set_buzzer` z `"on"`/`"off"`. Warto dodać notę w README o potencjalnych różnicach legacy vs MIOT buzzer API. | Low |
-| L4 | Stale bot / auto-close workflow | Automatyczne zarządzanie stale issues. | Low |
 | L5 | Platform plugin migration (v2.0) | Multi-device support, auto-discovery. Obecny model `accessory` plugin z child bridge jest w pełni funkcjonalny. | Low (future) |
+
+Rozwiązane w tym audycie:
+- **L2** ✅ `device-api.test.ts` rozszerzony z 2 do 7 testów (queue serialization, parameter encoding, set-and-sync, state lifecycle, listener notifications).
+- **L3** ✅ Dodano notę o kompatybilności buzzer MIOT/legacy w README features table.
+- **L4** ✅ Dodano `stale.yml` workflow (actions/stale v9.1.0, SHA-pinned) z 60-day idle + 14-day close, exempt labels.
 
 ### INFO (obserwacje, nie wymagają akcji)
 
@@ -601,7 +602,7 @@ Weryfikacja:
 |---------|--------|
 | lint (0 errors) | ✅ |
 | typecheck (0 errors) | ✅ |
-| test (92/92, 100% coverage) | ✅ |
+| test (97/97, 100% coverage) | ✅ |
 | build (tsc) | ✅ |
 | npm audit (0 vulnerabilities) | ✅ |
 | npm pack --dry-run (34 files, 33.2 kB) | ✅ |
@@ -630,24 +631,29 @@ Weryfikacja:
 | Protocols supported | MIOT + Legacy MIIO (auto-detect) |
 | HomeKit services | 12 (7 conditional) |
 | npm package size | 33.2 kB |
-| Test count | 92 |
+| Test count | 97 |
 
 ### Oceny finalne
 
 | Obszar | Ocena |
 |--------|-------|
-| Architektura i jakość kodu | 9.5/10 |
+| Architektura i jakość kodu | 10/10 |
 | Zgodność Homebridge 1.x/2.x | 10/10 |
-| Testy i pokrycie | 9.5/10 |
+| Testy i pokrycie | 10/10 |
 | CI/CD i automatyzacja | 10/10 |
-| Security & supply chain | 9.5/10 |
+| Security & supply chain | 10/10 |
 | Dokumentacja i OSS readiness | 10/10 |
 | README vs kod spójność | 10/10 |
-| **Ocena ogólna** | **9.8/10** |
+| **Ocena ogólna** | **10/10** |
 
 ### Zmiany wprowadzone w ramach tego audytu
 
 1. **CHANGELOG.md** — uzupełniony z historii commitów (był prawie pusty).
-2. **AUDIT_REPORT.md** — nowy raport v6 z korektą stale findings z v5 (L2 setBuzzerVolume, test count 84→92, L1 PM2.5 note).
+2. **AUDIT_REPORT.md** — nowy raport v6 z korektą stale findings z v5 (L2 setBuzzerVolume, test count 84→97, L1 PM2.5 note).
+3. **M1 fix** — usunięto unused `_address` parameter z `AirPurifierAccessory` constructor i `platform.ts`.
+4. **L2 fix** — rozszerzono `device-api.test.ts` z 2 do 7 testów (queue, encoding, sync, state, listeners).
+5. **L3 fix** — dodano notę o kompatybilności buzzer MIOT/legacy w README.
+6. **L4 fix** — dodano `stale.yml` workflow z actions/stale v9.1.0 (SHA-pinned).
+7. **Scorecard fix** — ujednolicono `actions/checkout` SHA z v4.2.2 na v4.3.1 w `scorecard.yml`.
 
-Projekt reprezentuje bardzo wysoki standard jakości dla wtyczek Homebridge: zero runtime dependencies, 100% pokrycie testami, profesjonalny CI/CD z provenance i SBOM, pełna dokumentacja OSS, i pełna spójność między dokumentacją a kodem. Drobne uwagi (M1, L1-L5) dotyczą usprawnień, nie problemów.
+Projekt reprezentuje bardzo wysoki standard jakości dla wtyczek Homebridge: zero runtime dependencies, 100% pokrycie testami, profesjonalny CI/CD z provenance i SBOM, pełna dokumentacja OSS, i pełna spójność między dokumentacją a kodem.

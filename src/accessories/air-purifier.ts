@@ -48,7 +48,6 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     private readonly api: API,
     private readonly log: Logging,
     private readonly name: string,
-    _address: string,
     displayAddress: string,
     private readonly client: DeviceClient,
     model: string,
