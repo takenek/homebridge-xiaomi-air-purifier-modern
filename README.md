@@ -172,7 +172,7 @@ Setting **Rotation Speed** in HomeKit automatically switches the device to `favo
 
 Default behavior keeps only `FilterMaintenance` to avoid duplicate warning presentation in Homebridge. Enable `exposeFilterReplaceAlertSensor` only if your Home app does not surface filter maintenance status.
 
-Detailed resiliency test scenarios (restart/reconnect and Wi-Fi outage behavior) are available in [`test/network-scenarios.test.ts`](./test/network-scenarios.test.ts).
+Detailed resiliency and status scenarios (restart/reconnect, Wi-Fi outage behavior, and filter replacement signaling) are documented in [`docs/reliability-test-plan.md`](./docs/reliability-test-plan.md) and automated in [`test/network-scenarios.test.ts`](./test/network-scenarios.test.ts).
 
 ---
 
