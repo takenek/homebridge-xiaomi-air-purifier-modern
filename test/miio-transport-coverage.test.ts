@@ -331,6 +331,32 @@ describe("ModernMiioTransport coverage", () => {
     await transport.close();
   });
 
+  it("falls back to legacy write when miot set_properties returns non-zero for pro", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      trySetViaMiot: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<boolean>;
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "miot";
+    vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
+    const call = vi.spyOn(internals, "call").mockResolvedValueOnce(null);
+
+    await internals.setProperty("set_power", ["off"]);
+
+    expect(call).toHaveBeenCalledWith("set_power", ["off"]);
+    expect(internals.protocolMode).toBe("miot");
+    await transport.close();
+  });
+
   it("rethrows miot set_properties error for non-pro power", async () => {
     const transport = createTransport("zhimi.airpurifier.4");
     const internals = transport as unknown as {
@@ -378,7 +404,31 @@ describe("ModernMiioTransport coverage", () => {
     await transport.close();
   });
 
-  it("retries legacy set_power after pro -5001 fallback", async () => {
+  it("does not fallback when thrown value is not Error instance", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      trySetViaMiot: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<boolean>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "miot";
+    vi.spyOn(internals, "trySetViaMiot").mockRejectedValueOnce("-5001");
+
+    await expect(internals.setProperty("set_power", ["on"])).rejects.toBe(
+      "-5001",
+    );
+
+    await transport.close();
+  });
+
+  it("rethrows legacy set_power -5001 for pro model", async () => {
     const transport = createTransport("zhimi.airpurifier.pro");
     const internals = transport as unknown as {
       protocolMode: "unknown" | "miot" | "legacy";
@@ -390,17 +440,15 @@ describe("ModernMiioTransport coverage", () => {
     };
 
     internals.protocolMode = "legacy";
-    const call = vi
-      .spyOn(internals, "call")
-      .mockRejectedValueOnce(
-        Object.assign(new Error("command error"), { code: "-5001" }),
-      )
-      .mockResolvedValueOnce(null);
+    const error = Object.assign(new Error("command error"), { code: "-5001" });
+    const call = vi.spyOn(internals, "call").mockRejectedValueOnce(error);
 
-    await internals.setProperty("set_power", ["off"]);
+    await expect(internals.setProperty("set_power", ["off"])).rejects.toBe(
+      error,
+    );
 
-    expect(call).toHaveBeenNthCalledWith(1, "set_power", ["off"]);
-    expect(call).toHaveBeenNthCalledWith(2, "set_power", ["off"]);
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith("set_power", ["off"]);
     await transport.close();
   });
   it("does not fallback for different method even on pro model", async () => {

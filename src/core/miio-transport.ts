@@ -276,30 +276,50 @@ export class ModernMiioTransport implements MiioTransport {
       try {
         ok = await this.trySetViaMiot(method, params);
       } catch (error: unknown) {
-        if (!this.shouldFallbackToLegacyCommand(method, error)) {
+        if (!this.shouldFallbackToLegacyWrite(method, error)) {
           throw error;
         }
+
+        await this.callWithLegacyFallback(method, params);
+        return;
       }
 
       if (ok) {
         return;
       }
+
+      if (this.shouldFallbackToLegacyWrite(method)) {
+        await this.callWithLegacyFallback(method, params);
+        return;
+      }
+
       this.protocolMode = "legacy";
     }
 
-    await this.callWithLegacyBuzzerFallback(method, params);
+    await this.callWithLegacyFallback(method, params);
   }
 
-  private shouldFallbackToLegacyCommand(
+  private shouldFallbackToLegacyWrite(method: string): boolean;
+  private shouldFallbackToLegacyWrite(method: string, error: unknown): boolean;
+  private shouldFallbackToLegacyWrite(
     method: string,
-    error: unknown,
+    error?: unknown,
   ): boolean {
-    if (method !== "set_buzzer_volume" && method !== "set_power") {
+    const methodEligible =
+      method === "set_buzzer_volume" || method === "set_power";
+    if (!methodEligible) {
       return false;
     }
 
-    const modelAllowsFallback = this.options.model === "zhimi.airpurifier.pro";
-    if (!modelAllowsFallback || !(error instanceof Error)) {
+    if (this.options.model !== "zhimi.airpurifier.pro") {
+      return false;
+    }
+
+    if (error === undefined) {
+      return true;
+    }
+
+    if (!(error instanceof Error)) {
       return false;
     }
 
@@ -307,20 +327,20 @@ export class ModernMiioTransport implements MiioTransport {
     return miioCode === "-5001";
   }
 
-  private async callWithLegacyBuzzerFallback(
+  private async callWithLegacyFallback(
     method: string,
     params: readonly unknown[],
   ): Promise<void> {
+    if (method === "set_power") {
+      await this.call(method, params);
+      return;
+    }
+
     try {
       await this.call(method, params);
     } catch (error: unknown) {
-      if (!this.shouldFallbackToLegacyCommand(method, error)) {
+      if (!this.shouldFallbackToLegacyWrite(method, error)) {
         throw error;
-      }
-
-      if (method === "set_power") {
-        await this.call(method, params);
-        return;
       }
 
       await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
