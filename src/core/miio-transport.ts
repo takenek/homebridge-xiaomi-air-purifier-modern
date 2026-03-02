@@ -272,7 +272,15 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (this.protocolMode === "miot") {
-      const ok = await this.trySetViaMiot(method, params);
+      let ok = false;
+      try {
+        ok = await this.trySetViaMiot(method, params);
+      } catch (error: unknown) {
+        if (!this.shouldFallbackToLegacyBuzzer(method, error)) {
+          throw error;
+        }
+      }
+
       if (ok) {
         return;
       }

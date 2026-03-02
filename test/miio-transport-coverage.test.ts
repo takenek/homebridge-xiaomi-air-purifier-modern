@@ -271,6 +271,63 @@ describe("ModernMiioTransport coverage", () => {
     await transport.close();
   });
 
+  it("falls back from miot set_properties error for pro buzzer", async () => {
+    const transport = createTransport("zhimi.airpurifier.pro");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      trySetViaMiot: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<boolean>;
+      call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    internals.protocolMode = "miot";
+    vi.spyOn(internals, "trySetViaMiot").mockRejectedValueOnce(
+      Object.assign(new Error("command error"), { code: "-5001" }),
+    );
+    const call = vi
+      .spyOn(internals, "call")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("command error"), { code: "-5001" }),
+      )
+      .mockResolvedValueOnce(null);
+
+    await internals.setProperty("set_buzzer_volume", [1]);
+
+    expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [1]);
+    expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
+    await transport.close();
+  });
+
+  it("rethrows miot set_properties error for non-pro buzzer", async () => {
+    const transport = createTransport("zhimi.airpurifier.4");
+    const internals = transport as unknown as {
+      protocolMode: "unknown" | "miot" | "legacy";
+      trySetViaMiot: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<boolean>;
+      setProperty: (
+        method: string,
+        params: readonly unknown[],
+      ) => Promise<void>;
+    };
+
+    const error = Object.assign(new Error("command error"), { code: "-5001" });
+    internals.protocolMode = "miot";
+    vi.spyOn(internals, "trySetViaMiot").mockRejectedValueOnce(error);
+
+    await expect(internals.setProperty("set_buzzer_volume", [1])).rejects.toBe(
+      error,
+    );
+    await transport.close();
+  });
+
   it("does not fallback for different method even on pro model", async () => {
     const transport = createTransport("zhimi.airpurifier.pro");
     const internals = transport as unknown as {
