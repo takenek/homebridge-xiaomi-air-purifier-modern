@@ -7,6 +7,11 @@ This plugin uses automated Vitest scenarios to validate reconnect behavior and H
 When purifier power is OFF, mode switches are not exposed as independently available controls.
 State reconciliation keeps HomeKit characteristics aligned with the single source of truth (`DeviceClient.state`) and avoids creating extra switch accessories in OFF state transitions.
 
+## Model-specific write fallback
+
+For `zhimi.airpurifier.pro`, MIOT write commands can return `-5001` for `set_power` and `set_buzzer_volume` on selected firmware builds.
+The transport now falls back to legacy write commands for those operations to avoid HomeKit write failures while preserving strict error behavior for other models.
+
 ## Automated scenarios
 
 All scenarios below are covered in tests (`test/network-scenarios.test.ts` and accessory sync tests).

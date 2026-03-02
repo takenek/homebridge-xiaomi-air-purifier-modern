@@ -276,7 +276,7 @@ export class ModernMiioTransport implements MiioTransport {
       try {
         ok = await this.trySetViaMiot(method, params);
       } catch (error: unknown) {
-        if (!this.shouldFallbackToLegacyBuzzer(method, error)) {
+        if (!this.shouldFallbackToLegacyCommand(method, error)) {
           throw error;
         }
       }
@@ -290,11 +290,11 @@ export class ModernMiioTransport implements MiioTransport {
     await this.callWithLegacyBuzzerFallback(method, params);
   }
 
-  private shouldFallbackToLegacyBuzzer(
+  private shouldFallbackToLegacyCommand(
     method: string,
     error: unknown,
   ): boolean {
-    if (method !== "set_buzzer_volume") {
+    if (method !== "set_buzzer_volume" && method !== "set_power") {
       return false;
     }
 
@@ -314,8 +314,13 @@ export class ModernMiioTransport implements MiioTransport {
     try {
       await this.call(method, params);
     } catch (error: unknown) {
-      if (!this.shouldFallbackToLegacyBuzzer(method, error)) {
+      if (!this.shouldFallbackToLegacyCommand(method, error)) {
         throw error;
+      }
+
+      if (method === "set_power") {
+        await this.call(method, params);
+        return;
       }
 
       await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
