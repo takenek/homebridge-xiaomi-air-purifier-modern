@@ -1438,21 +1438,20 @@ describe("config.schema.json", () => {
     expect(conditionFn({ model: "zhimi.airpurifier.4" })).toBe(true);
     expect(conditionFn({ model: "zhimi.airpurifier.2h" })).toBe(true);
 
-    // The condition should be safe when model is undefined (try/catch)
+    // The condition should be safe when model is undefined or missing
     expect(conditionFn({})).toBe(true);
     expect(conditionFn({ model: undefined })).toBe(true);
+    // null model should also not crash
+    expect(conditionFn(null)).toBe(false);
 
-    // The schema property itself also has a condition for UI renderers
-    // that read conditions from the schema definition
-    const propCondition =
-      schema.schema.properties.enableBuzzerControl.condition;
-    expect(propCondition).toBeDefined();
-    const propConditionFn = new Function("model", propCondition.functionBody);
-    expect(propConditionFn({ model: "zhimi.airpurifier.pro" })).toBe(false);
-    expect(propConditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
-    expect(propConditionFn({})).toBe(true);
+    // The schema property must NOT have a non-standard condition keyword,
+    // because non-standard keywords can cause homebridge-config-ui-x to
+    // fall back to the raw JSON editor where conditions have no effect.
+    expect(
+      schema.schema.properties.enableBuzzerControl.condition,
+    ).toBeUndefined();
 
-    // Verify the description no longer mentions "Not supported" since the field is now hidden
+    // Verify the description does not mention "Not supported" since the field is hidden via layout
     expect(
       schema.schema.properties.enableBuzzerControl.description,
     ).not.toContain("Not supported");

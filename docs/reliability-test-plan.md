@@ -58,11 +58,10 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
 
 ## Buzzer control on zhimi.airpurifier.pro
 
-The `zhimi.airpurifier.pro` model does not support buzzer control. The plugin enforces this at three levels:
+The `zhimi.airpurifier.pro` model does not support buzzer control. The plugin enforces this at two levels:
 
-1. **Schema property level** — a `condition` on the `enableBuzzerControl` property definition ensures UI renderers that read conditions from the schema hide the field.
-2. **Layout level** — a `condition` with `try/catch` in the `Alerts & Controls` section hides the toggle when the pro model is selected. Uses bracket notation (`model['model']`) and try/catch for compatibility across homebridge-config-ui-x versions.
-3. **Runtime level** — `platform.ts` force-disables `enableBuzzerControl` when `model === 'zhimi.airpurifier.pro'` and logs a warning if the user explicitly set it to `true` in JSON config.
+1. **Layout level** — a `condition.functionBody` in the `Alerts & Controls` layout section hides the buzzer toggle when the pro model is selected. The condition is placed only in the layout (not on the schema property) because non-standard keywords on schema properties can cause homebridge-config-ui-x to fall back to the raw JSON editor where conditions have no effect.
+2. **Runtime level** — `platform.ts` force-disables `enableBuzzerControl` when `model === 'zhimi.airpurifier.pro'` and logs a warning if the user explicitly set it to `true` in JSON config.
 
 ## How to run
 

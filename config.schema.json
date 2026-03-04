@@ -76,10 +76,7 @@
         "title": "Buzzer",
         "type": "boolean",
         "default": false,
-        "description": "Expose Buzzer on/off switch service in HomeKit.",
-        "condition": {
-          "functionBody": "try { return model['model'] !== 'zhimi.airpurifier.pro'; } catch(e) { return true; }"
-        }
+        "description": "Expose Buzzer on/off switch service in HomeKit."
       },
       "connectTimeoutMs": {
         "title": "Connect Timeout (ms)",
@@ -188,7 +185,7 @@
         {
           "key": "enableBuzzerControl",
           "condition": {
-            "functionBody": "try { return model['model'] !== 'zhimi.airpurifier.pro'; } catch(e) { return true; }"
+            "functionBody": "return !!(model && model.model !== 'zhimi.airpurifier.pro');"
           }
         }
       ]
