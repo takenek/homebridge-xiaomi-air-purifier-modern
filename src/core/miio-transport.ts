@@ -790,7 +790,27 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (method === "set_buzzer_volume") {
-      return send([{ did, siid: 5, piid: 1, value: toNumber(params[0]) > 0 }]);
+      const enabled = toNumber(params[0]) > 0;
+      const miotCandidates: ReadonlyArray<MiotValueResult> = [
+        { did, siid: 5, piid: 1, value: enabled },
+        { did, siid: 5, piid: 2, value: enabled ? 100 : 0 },
+        { did, siid: 6, piid: 1, value: enabled },
+        { did, siid: 6, piid: 2, value: enabled ? 100 : 0 },
+      ];
+
+      for (const candidate of miotCandidates) {
+        try {
+          if (await send([candidate])) {
+            return true;
+          }
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      return false;
     }
 
     if (method === "set_level_fan") {
