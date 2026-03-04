@@ -185,7 +185,7 @@
         {
           "key": "enableBuzzerControl",
           "condition": {
-            "functionBody": "return model.model !== 'zhimi.airpurifier.pro';"
+            "functionBody": "return model !== 'zhimi.airpurifier.pro';"
           }
         }
       ]
