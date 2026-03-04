@@ -446,20 +446,28 @@ export class ModernMiioTransport implements MiioTransport {
             return;
           }
 
-          dynamicFallbackCalls.push(
-            {
+          const onOffPayloads: Array<readonly unknown[]> = [
+            [enabled ? "on" : "off"],
+            [enabled],
+            [enabled ? 1 : 0],
+          ];
+
+          const isVolumeAlias = new Set([
+            "buzzer_volume",
+            "sound_volume",
+            "volume",
+          ]).has(alias);
+          if (isVolumeAlias) {
+            onOffPayloads.unshift([enabled ? 100 : 0]);
+            onOffPayloads.push([enabled ? "100" : "0"]);
+          }
+
+          onOffPayloads.forEach((payload) => {
+            dynamicFallbackCalls.push({
               method: dynamicMethod,
-              params: [enabled ? "on" : "off"],
-            },
-            {
-              method: dynamicMethod,
-              params: [enabled],
-            },
-            {
-              method: dynamicMethod,
-              params: [enabled ? 1 : 0],
-            },
-          );
+              params: payload,
+            });
+          });
         });
       };
       try {

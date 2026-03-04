@@ -19,6 +19,7 @@ The `zhimi.airpurifier.pro` model is a hybrid device: it supports MIOT protocol 
 6. **Buzzer value conversion**: The `buzzer` property alias (`"on"`/`"off"` strings or boolean) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter, both in MIOT supplement reads and legacy reads.
 7. **Command-error reconciliation for Pro**: If buzzer write payloads return command errors, the transport verifies aliases via `get_prop` both before dynamic alias writes and once again after they fail. If either probe confirms that state already matches the requested target, the command is treated as successful. This prevents false HomeKit write failures on firmware variants that apply the state despite returning `-5001` for the setter call.
 8. **Post-write state verification on Pro**: Some Pro firmware variants acknowledge a buzzer setter call but do not actually change the state. After each successful legacy buzzer write attempt (including dynamic `set_<alias>` calls), the plugin immediately probes buzzer aliases (`get_prop`) and only exits when observed state matches requested on/off target; otherwise it continues fallback variants.
+9. **Dynamic volume payload compatibility**: Dynamic `set_<alias>` calls for volume-like aliases (`buzzer_volume`, `sound_volume`, `volume`) now try `100/0` (and string numeric forms) in addition to `on/off`, boolean, and `1/0`, covering firmware that accepts disable via `0` but requires full-range enable via `100`.
 
 This makes the buzzer switch work correctly in HomeKit for both `pro` and `3h`/`4` models.
 
