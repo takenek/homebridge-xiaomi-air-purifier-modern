@@ -2415,3 +2415,43 @@ it("readViaLegacy converts buzzer 'on'/'off' values via toBuzzerVolume", async (
 
   await transport.close();
 });
+
+it("setViaLegacy for Pro continues dynamic fallbacks when acknowledged write does not change state", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  vi.spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("set_buzzer_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer no-arg unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound string unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute string unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice string unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone string unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone numeric unsupported"))
+    .mockResolvedValueOnce(["off", "", "", "", "", "", "", ""])
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["off", "", "", "", "", "", "", ""])
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""]);
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  await transport.close();
+});
