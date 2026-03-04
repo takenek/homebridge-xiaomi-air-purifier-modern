@@ -92,6 +92,12 @@ const toNumber = (value: unknown): number => {
   return 0;
 };
 
+const toBuzzerVolume = (value: unknown): number => {
+  if (value === "on" || value === true) return 100;
+  if (value === "off" || value === false) return 0;
+  return toNumber(value);
+};
+
 const toMode = (value: unknown): DeviceState["mode"] => {
   if (
     value === "auto" ||
@@ -149,7 +155,7 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   filter1_life: ["filter1_life", "filter_life"],
   child_lock: ["child_lock"],
   led: ["led", "led_b"],
-  buzzer_volume: ["buzzer_volume"],
+  buzzer_volume: ["buzzer_volume", "buzzer"],
   motor1_speed: ["motor1_speed"],
   use_time: ["use_time"],
   purify_volume: ["purify_volume"],
@@ -264,11 +270,39 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (this.protocolMode === "miot") {
-      const ok = await this.trySetViaMiot(method, params);
-      if (ok) {
-        return;
+      try {
+        const ok = await this.trySetViaMiot(method, params);
+        if (ok) {
+          return;
+        }
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
       }
       this.protocolMode = "legacy";
+    }
+
+    await this.setViaLegacy(method, params);
+  }
+
+  private async setViaLegacy(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<void> {
+    if (method === "set_buzzer_volume") {
+      try {
+        await this.call(method, params);
+        return;
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
+        await this.call("set_buzzer", [
+          toNumber(params[0]) > 0 ? "on" : "off",
+        ]);
+        return;
+      }
     }
 
     await this.call(method, params);
@@ -461,7 +495,7 @@ export class ModernMiioTransport implements MiioTransport {
       filter1_life: toNumber(valueByKey.get("filter1_life")),
       child_lock: toBoolean(valueByKey.get("child_lock")),
       led: toLegacyLed(valueByKey.get("led")),
-      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
+      buzzer_volume: toBuzzerVolume(valueByKey.get("buzzer_volume")),
       motor1_speed: toNumber(valueByKey.get("motor1_speed")),
       use_time: toNumber(valueByKey.get("use_time")),
       purify_volume: toNumber(valueByKey.get("purify_volume")),

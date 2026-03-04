@@ -1032,3 +1032,225 @@ it("covers final protocol mode branches in getProperties and setProperty", async
 
   await transport.close();
 });
+
+it("falls back to legacy when trySetViaMiot throws a non-retryable error", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setProperty: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "trySetViaMiot").mockRejectedValueOnce(
+    new Error("MIIO error -5001: command error"),
+  );
+  const call = vi.spyOn(internals, "call").mockResolvedValue(null);
+
+  await internals.setProperty("set_power", ["on"]);
+  expect(internals.protocolMode).toBe("legacy");
+  expect(call).toHaveBeenCalledWith("set_power", ["on"]);
+
+  await transport.close();
+});
+
+it("re-throws retryable error from trySetViaMiot without falling back to legacy", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setProperty: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  internals.protocolMode = "miot";
+  const retryable = Object.assign(new Error("timeout"), {
+    code: "ETIMEDOUT",
+  });
+  vi.spyOn(internals, "trySetViaMiot").mockRejectedValueOnce(retryable);
+  const call = vi.spyOn(internals, "call").mockResolvedValue(null);
+
+  await expect(internals.setProperty("set_power", ["on"])).rejects.toBe(
+    retryable,
+  );
+  expect(internals.protocolMode).toBe("miot");
+  expect(call).not.toHaveBeenCalled();
+
+  await transport.close();
+});
+
+it("setViaLegacy falls back from set_buzzer_volume to set_buzzer for pro model", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setProperty: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+    setViaLegacy: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  // When set_buzzer_volume fails with command error, fall back to set_buzzer
+  const call = vi
+    .spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("command error"))
+    .mockResolvedValueOnce(null);
+
+  await internals.setViaLegacy("set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
+
+  // Turn off buzzer
+  call
+    .mockRejectedValueOnce(new Error("command error"))
+    .mockResolvedValueOnce(null);
+  await internals.setViaLegacy("set_buzzer_volume", [0]);
+  expect(call).toHaveBeenNthCalledWith(4, "set_buzzer", ["off"]);
+
+  await transport.close();
+});
+
+it("setViaLegacy succeeds directly with set_buzzer_volume when supported", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  const call = vi.spyOn(internals, "call").mockResolvedValue(null);
+  await internals.setViaLegacy("set_buzzer_volume", [50]);
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call).toHaveBeenCalledWith("set_buzzer_volume", [50]);
+
+  await transport.close();
+});
+
+it("setViaLegacy re-throws retryable error from set_buzzer_volume without fallback", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  const retryable = Object.assign(new Error("timeout"), {
+    code: "ETIMEDOUT",
+  });
+  vi.spyOn(internals, "call").mockRejectedValueOnce(retryable);
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).rejects.toBe(retryable);
+
+  await transport.close();
+});
+
+it("setViaLegacy passes non-buzzer methods through directly", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<void>;
+  };
+
+  const call = vi.spyOn(internals, "call").mockResolvedValue(null);
+  await internals.setViaLegacy("set_led", ["on"]);
+  expect(call).toHaveBeenCalledWith("set_led", ["on"]);
+
+  await transport.close();
+});
+
+it("readViaLegacy converts buzzer 'on'/'off' values via toBuzzerVolume", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacy: (props: readonly string[]) => Promise<DeviceState>;
+  };
+
+  // Test "on" → 100
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 2],
+      ["mode", "auto"],
+      ["buzzer_volume", "on"],
+    ]),
+  );
+  const onState = await internals.readViaLegacy(["power"]);
+  expect(onState.buzzer_volume).toBe(100);
+
+  // Test "off" → 0
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 2],
+      ["mode", "auto"],
+      ["buzzer_volume", "off"],
+    ]),
+  );
+  const offState = await internals.readViaLegacy(["power"]);
+  expect(offState.buzzer_volume).toBe(0);
+
+  // Test true → 100
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 2],
+      ["mode", "auto"],
+      ["buzzer_volume", true],
+    ]),
+  );
+  const trueState = await internals.readViaLegacy(["power"]);
+  expect(trueState.buzzer_volume).toBe(100);
+
+  // Test false → 0
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 2],
+      ["mode", "auto"],
+      ["buzzer_volume", false],
+    ]),
+  );
+  const falseState = await internals.readViaLegacy(["power"]);
+  expect(falseState.buzzer_volume).toBe(0);
+
+  // Test numeric 50 still works
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 2],
+      ["mode", "auto"],
+      ["buzzer_volume", 50],
+    ]),
+  );
+  const numericState = await internals.readViaLegacy(["power"]);
+  expect(numericState.buzzer_volume).toBe(50);
+
+  await transport.close();
+});
