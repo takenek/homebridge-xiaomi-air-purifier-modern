@@ -205,9 +205,8 @@ const baseAccessoryState = {
 
 class FakeClient {
   public state: typeof baseAccessoryState | null = { ...baseAccessoryState };
-  public readonly listeners: Array<
-    (state: typeof baseAccessoryState) => void
-  > = [];
+  public readonly listeners: Array<(state: typeof baseAccessoryState) => void> =
+    [];
   public readonly connectionListeners: Array<
     (event: { state: "connected" | "disconnected" | "reconnected" }) => void
   > = [];
@@ -464,16 +463,16 @@ describe("network/status scenarios", () => {
     // Find the FilterMaintenance service
     const filterService = accessory
       .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).UUID.startsWith("Filter:"),
+      .find((service) =>
+        (service as unknown as FakeService).UUID.startsWith("Filter:"),
       ) as unknown as FakeService;
     expect(filterService).toBeDefined();
     const filterUpdate = filterService.updates.find(
-      (u) => u.characteristic === hap.Characteristic.FilterChangeIndication.UUID,
+      (u) =>
+        u.characteristic === hap.Characteristic.FilterChangeIndication.UUID,
     );
     expect(filterUpdate).toBeDefined();
-    expect(filterUpdate!.value).toBe(
+    expect(filterUpdate?.value).toBe(
       hap.Characteristic.FilterChangeIndication.CHANGE_FILTER,
     );
   });
@@ -503,9 +502,8 @@ describe("network/status scenarios", () => {
 
     const filterService = accessory
       .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).UUID.startsWith("Filter:"),
+      .find((service) =>
+        (service as unknown as FakeService).UUID.startsWith("Filter:"),
       ) as unknown as FakeService;
     expect(filterService).toBeDefined();
 

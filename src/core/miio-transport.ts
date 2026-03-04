@@ -298,9 +298,7 @@ export class ModernMiioTransport implements MiioTransport {
         if (isRetryableError(error)) {
           throw error;
         }
-        await this.call("set_buzzer", [
-          toNumber(params[0]) > 0 ? "on" : "off",
-        ]);
+        await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
         return;
       }
     }
