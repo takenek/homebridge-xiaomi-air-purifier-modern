@@ -293,6 +293,7 @@ export class ModernMiioTransport implements MiioTransport {
     params: readonly unknown[],
   ): Promise<void> {
     if (method === "set_buzzer_volume") {
+      const enabled = toNumber(params[0]) > 0;
       try {
         await this.call(method, params);
         return;
@@ -300,9 +301,27 @@ export class ModernMiioTransport implements MiioTransport {
         if (isRetryableError(error)) {
           throw error;
         }
-        await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
-        return;
       }
+
+      const fallbackParams: readonly unknown[][] = [
+        [enabled ? "on" : "off"],
+        [enabled],
+        [enabled ? 1 : 0],
+      ];
+      let lastFallbackError: unknown;
+      for (const fallbackParam of fallbackParams) {
+        try {
+          await this.call("set_buzzer", fallbackParam);
+          return;
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+          lastFallbackError = error;
+        }
+      }
+
+      throw lastFallbackError;
     }
 
     await this.call(method, params);
