@@ -14,7 +14,6 @@ const legacyEmptyState: DeviceState = {
   filter1_life: 0,
   child_lock: false,
   led: false,
-  buzzer_volume: 0,
   motor1_speed: 0,
   use_time: 0,
   purify_volume: 0,
@@ -317,7 +316,6 @@ it("uses MIOT batch read to minimize round-trips", async () => {
     filter1_life: 70,
     child_lock: false,
     led: true,
-    buzzer_volume: 50,
     motor1_speed: 1200,
     use_time: 30,
     purify_volume: 400,
@@ -377,7 +375,7 @@ it("falls back to per-property MIOT reads when batch query is unsupported", asyn
 
   const firstCallParams = call.mock.calls[0]?.[1] as unknown[];
   expect(firstCallParams.length).toBeGreaterThan(1);
-  expect(call).toHaveBeenCalledTimes(14);
+  expect(call).toHaveBeenCalledTimes(13);
   expect(state.power).toBe(true);
   expect(state.fan_level).toBe(7);
   expect(state.mode).toBe("sleep");

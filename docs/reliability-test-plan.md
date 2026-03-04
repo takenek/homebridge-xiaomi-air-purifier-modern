@@ -46,15 +46,15 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
    - **When** polling continues and network later recovers.
    - **Then** plugin stays alive, logs degraded state, and fully resynchronizes on successful command/status call.
 
-8. **Filter life drops to 4%**
-   - **Given** `filter1_life` falls to replacement threshold.
+8. **[S8] Filter life drops to 4%**
+   - **Given** `filter1_life` falls to replacement threshold (e.g. 4%).
    - **When** accessory state refresh runs.
    - **Then** `FilterChangeIndication` is set to `1` (`CHANGE_FILTER`).
 
-9. **Filter replacement (4% -> 100%)**
+9. **[S9] Filter replacement (4% -> 100%)**
    - **Given** filter replacement is completed and `filter1_life` returns to 100.
    - **When** next state refresh runs.
-   - **Then** `FilterChangeIndication` is reset to `0` (`FILTER_OK`).
+   - **Then** `FilterChangeIndication` is reset from `1` to `0` (`FILTER_OK`).
 
 ## How to run
 

@@ -17,7 +17,6 @@ const state: DeviceState = {
   filter1_life: 90,
   child_lock: false,
   led: true,
-  buzzer_volume: 60,
   motor1_speed: 1234,
   use_time: 12,
   purify_volume: 34,
@@ -204,7 +203,6 @@ describe("device client uncovered branches", () => {
     await client.setChildLock(false);
     await client.setLed(true);
     await client.setLed(false);
-    await client.setBuzzerVolume(42);
 
     expect(transport.setCalls).toEqual([
       { method: "set_power", params: ["on"] },
@@ -215,7 +213,6 @@ describe("device client uncovered branches", () => {
       { method: "set_child_lock", params: ["off"] },
       { method: "set_led", params: ["on"] },
       { method: "set_led", params: ["off"] },
-      { method: "set_buzzer_volume", params: [42] },
     ]);
 
     await client.shutdown();

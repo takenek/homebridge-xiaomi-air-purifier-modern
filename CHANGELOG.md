@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
+
+### Added
+
+- **Filter status test scenarios** — S8 (filter life drops to 4% triggers `FilterChangeIndication = CHANGE_FILTER`) and S9 (filter replacement 4%→100% resets `FilterChangeIndication = FILTER_OK`) added to automated network/status scenario suite.
+
 ## [1.0.0] — 2026-03-02
 
 Initial public release.
@@ -19,7 +27,7 @@ Initial public release.
 - **Air Quality Sensor** — AQI mapped to HomeKit `AirQuality` enum (Excellent / Good / Fair / Poor / Inferior) with PM2.5 Density. Configurable via `enableAirQuality` (default `true`).
 - **Temperature and Humidity sensors** — configurable via `enableTemperature` and `enableHumidity` (default `true`).
 - **Child Lock switch** — optional, controlled by `enableChildLockControl` (default `false`).
-- **Buzzer switch** — optional on/off control via `enableBuzzerControl` (default `false`).
+
 - **LED Night Mode switch** — toggle LED indicator on/off.
 - **Mode AUTO ON/OFF and Mode NIGHT ON/OFF switches** — dedicated mode controls with guard logic (writes ignored when power is OFF).
 - **Filter Maintenance service** — `FilterLifeLevel` + `FilterChangeIndication` with configurable threshold (`filterChangeThreshold`, default `10`%).

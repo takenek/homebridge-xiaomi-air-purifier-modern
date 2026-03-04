@@ -40,7 +40,6 @@ const emptyState: DeviceState = {
   filter1_life: 0,
   child_lock: false,
   led: false,
-  buzzer_volume: 0,
   motor1_speed: 0,
   use_time: 0,
   purify_volume: 0,
@@ -541,9 +540,6 @@ it("covers trySetViaMiot command mappings and send() result branches", async () 
     true,
   );
   await expect(internals.trySetViaMiot("set_led", ["off"])).resolves.toBe(true);
-  await expect(
-    internals.trySetViaMiot("set_buzzer_volume", [20]),
-  ).resolves.toBe(true);
   await expect(internals.trySetViaMiot("set_level_fan", [0])).resolves.toBe(
     true,
   );
