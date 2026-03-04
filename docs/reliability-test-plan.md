@@ -16,6 +16,7 @@ The `zhimi.airpurifier.pro` model is a hybrid device: it supports MIOT protocol 
 3. **Per-call legacy fallback for writes**: When a MIOT `set_properties` call fails for a specific property, the transport falls back to the legacy `call()` method for that command only, **without permanently switching the protocol mode**. This prevents hybrid devices from losing MIOT read capability after a single write failure.
 4. **Buzzer legacy chain**: In legacy mode, if `set_buzzer_volume` fails (command error), the transport now retries additional Pro-specific `set_buzzer_volume` payload variants (`"on"/"off"`, boolean, numeric) before trying `set_buzzer` (`"on"/"off"`, boolean, numeric, and no-arg), then `set_sound` variants, then `set_mute` variants (inverse semantics). This addresses firmware variants that expose only `set_buzzer_volume` but reject `100/0` payloads.
 5. **Buzzer value conversion**: The `buzzer` property alias (`"on"`/`"off"` strings or boolean) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter, both in MIOT supplement reads and legacy reads.
+6. **Command-error reconciliation for Pro**: If all buzzer write payloads return command errors but the immediately probed alias state already matches the requested state, the command is treated as successful. This prevents false HomeKit write failures on firmware variants that apply the state despite returning `-5001` for the setter call.
 
 This makes the buzzer switch work correctly in HomeKit for both `pro` and `3h`/`4` models.
 

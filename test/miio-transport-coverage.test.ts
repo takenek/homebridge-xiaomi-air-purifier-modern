@@ -1608,6 +1608,160 @@ it("setViaLegacy handles non-array dynamic probe response", async () => {
   await transport.close();
 });
 
+it("setViaLegacy treats Pro command-error writes as success when probe already matches target state", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  const call = vi
+    .spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("set_buzzer_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer no-arg unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound string unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute string unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice string unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone string unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone numeric unsupported"))
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""])
+    .mockRejectedValueOnce(new Error("dynamic set_buzzer failed"))
+    .mockRejectedValueOnce(new Error("dynamic bool unsupported"))
+    .mockRejectedValueOnce(new Error("dynamic numeric unsupported"));
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  expect(call).toHaveBeenNthCalledWith(21, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
+
+  await transport.close();
+});
+
+it("setViaLegacy verifies Pro buzzer state via mute alias semantics", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  vi.spyOn(internals, "call").mockImplementation(async (method: string) => {
+    if (method === "get_prop") {
+      return ["", "", "", "", "", "off", "", ""];
+    }
+
+    throw new Error(`${method} unsupported`);
+  });
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  await transport.close();
+});
+
+it("setViaLegacy verifies Pro buzzer state via sound_volume alias", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  vi.spyOn(internals, "call").mockImplementation(async (method: string) => {
+    if (method === "get_prop") {
+      return ["", "", "", 20, "", "", "", ""];
+    }
+
+    throw new Error(`${method} unsupported`);
+  });
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  await transport.close();
+});
+
+it("setViaLegacy verifies Pro buzzer state via sound_volume and volume aliases", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  vi.spyOn(internals, "call").mockImplementation(async (method: string) => {
+    if (method === "get_prop") {
+      return ["", "", "", "", 50, "", "", ""];
+    }
+
+    throw new Error(`${method} unsupported`);
+  });
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  await transport.close();
+});
+
+it("setViaLegacy keeps failing on Pro when probe state does not match requested buzzer state", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  const finalError = new Error("dynamic numeric unsupported");
+  vi.spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("set_buzzer_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer_volume numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer string unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_buzzer no-arg unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound string unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute string unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute bool unsupported"))
+    .mockRejectedValueOnce(new Error("set_mute numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_sound_volume unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice string unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone string unsupported"))
+    .mockRejectedValueOnce(new Error("set_voice numeric unsupported"))
+    .mockRejectedValueOnce(new Error("set_key_tone numeric unsupported"))
+    .mockResolvedValueOnce(["off", "", "", "", "", "", "", ""])
+    .mockRejectedValueOnce(new Error("dynamic set_buzzer failed"))
+    .mockRejectedValueOnce(new Error("dynamic bool unsupported"))
+    .mockRejectedValueOnce(finalError);
+
+  await expect(internals.setViaLegacy("set_buzzer_volume", [100])).rejects.toBe(
+    finalError,
+  );
+  await transport.close();
+});
+
 it("setViaLegacy applies dynamic mute alias with OFF semantics", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {

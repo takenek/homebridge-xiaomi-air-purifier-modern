@@ -98,6 +98,22 @@ const toBuzzerVolume = (value: unknown): number => {
   return toNumber(value);
 };
 
+const isBuzzerEnabledFromAlias = (alias: string, value: unknown): boolean => {
+  if (alias === "mute") {
+    return !toBoolean(value);
+  }
+
+  if (alias === "buzzer_volume" || alias === "sound_volume") {
+    return toBuzzerVolume(value) > 0;
+  }
+
+  if (alias === "volume") {
+    return toNumber(value) > 0;
+  }
+
+  return toBoolean(value);
+};
+
 const toMode = (value: unknown): DeviceState["mode"] => {
   if (
     value === "auto" ||
@@ -355,6 +371,7 @@ export class ModernMiioTransport implements MiioTransport {
         method: string;
         params: readonly unknown[];
       }> = [];
+      const observedAliases = new Map<string, unknown>();
       try {
         const raw = await this.call("get_prop", buzzerCandidateAliases);
         const values = Array.isArray(raw) ? raw : [];
@@ -367,6 +384,7 @@ export class ModernMiioTransport implements MiioTransport {
           if (!alias) {
             return;
           }
+          observedAliases.set(alias, value);
 
           const dynamicMethod = `set_${alias}`;
           if (alias === "mute") {
@@ -413,6 +431,14 @@ export class ModernMiioTransport implements MiioTransport {
             throw error;
           }
           lastFallbackError = error;
+        }
+      }
+
+      if (this.options.model === "zhimi.airpurifier.pro") {
+        for (const [alias, value] of observedAliases) {
+          if (isBuzzerEnabledFromAlias(alias, value) === enabled) {
+            return;
+          }
         }
       }
 
