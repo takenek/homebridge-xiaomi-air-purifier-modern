@@ -9,11 +9,12 @@ State reconciliation keeps HomeKit characteristics aligned with the single sourc
 
 ## Buzzer control: pro model compatibility
 
-The `zhimi.airpurifier.pro` model uses the legacy `set_buzzer` command with `"on"`/`"off"` string params instead of the newer `set_buzzer_volume` command with a numeric volume. The transport layer handles this transparently:
+The `zhimi.airpurifier.pro` model uses the legacy MIIO protocol and the `set_buzzer` command with `"on"`/`"off"` string params instead of the newer MIOT protocol or `set_buzzer_volume` with a numeric volume. The transport layer handles this transparently:
 
-1. When MIOT `set_properties` fails with a non-retryable error, the transport falls back to legacy mode (instead of propagating the error).
-2. In legacy mode, if `set_buzzer_volume` fails (command error), the transport automatically retries with `set_buzzer` and `"on"`/`"off"`.
-3. For reading, the `buzzer` property alias (`"on"`/`"off"` strings) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter.
+1. **Protocol detection**: The Pro model is in the `LEGACY_PREFERRED_MODELS` set, so the MIOT probe is skipped entirely during protocol detection. This prevents cascading `-5001` command errors that overwhelm the device when MIOT commands are sent to a legacy-only device.
+2. **MIOT probe item code validation**: For non-legacy-preferred models, the MIOT detection probe now also validates the item response code (`code === 0`), preventing false MIOT detection when a device responds to `get_properties` but returns error codes in individual items.
+3. In legacy mode, if `set_buzzer_volume` fails (command error), the transport automatically retries with `set_buzzer` and `"on"`/`"off"`.
+4. For reading, the `buzzer` property alias (`"on"`/`"off"` strings) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter.
 
 This makes the buzzer switch work correctly in HomeKit for both `pro` and `3h`/`4` models.
 
@@ -69,6 +70,10 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
 ## How to run
 
 ```bash
-env -u npm_config_http_proxy -u npm_config_https_proxy npm exec biome check .
-env -u npm_config_http_proxy -u npm_config_https_proxy npm exec -- vitest --coverage
+npm install
+npm run lint          # biome check
+npm run typecheck     # tsc --noEmit
+npm test              # vitest --coverage (requires 100% coverage)
 ```
+
+All 9 scenarios are automated and run as part of the standard `npm test` suite. No manual testing steps are required.

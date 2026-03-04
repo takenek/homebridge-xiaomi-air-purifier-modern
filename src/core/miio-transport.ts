@@ -63,6 +63,13 @@ class MiioCommandError extends Error {
 const MIIO_PORT = 54321;
 const MIIO_MAGIC = 0x2131;
 
+/**
+ * Models that are known to use the legacy MIIO protocol only.
+ * These models skip the MIOT probe during protocol detection to avoid
+ * cascading -5001 errors that can overwhelm the device.
+ */
+const LEGACY_PREFERRED_MODELS = new Set(["zhimi.airpurifier.pro"]);
+
 const toMd5 = (...chunks: Buffer[]): Buffer => {
   const hash = createHash("md5");
   for (const chunk of chunks) {
@@ -336,16 +343,21 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   private async detectProtocolMode(): Promise<"miot" | "legacy" | null> {
-    const probe = MIOT_POWER_PROBE;
-    try {
-      const result = await this.call("get_properties", [probe]);
-      /* c8 ignore start -- always true for well-formed MIOT responses; guard exists for malformed firmware replies. */
-      if (Array.isArray(result) && result.length > 0) {
-        /* c8 ignore stop */
-        return "miot";
+    if (!LEGACY_PREFERRED_MODELS.has(this.options.model)) {
+      const probe = MIOT_POWER_PROBE;
+      try {
+        const result = await this.call("get_properties", [probe]);
+        /* c8 ignore start -- always true for well-formed MIOT responses; guard exists for malformed firmware replies. */
+        if (Array.isArray(result) && result.length > 0) {
+          /* c8 ignore stop */
+          const item = result[0] as MiotValueResult;
+          if ((item.code ?? 0) === 0) {
+            return "miot";
+          }
+        }
+      } catch (error: unknown) {
+        this.reportSuppressedError("detect-miot", error);
       }
-    } catch (error: unknown) {
-      this.reportSuppressedError("detect-miot", error);
     }
 
     try {
