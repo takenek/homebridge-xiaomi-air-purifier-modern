@@ -181,7 +181,18 @@
         },
         {
           "key": "enableChildLockControl"
-        },
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Buzzer",
+      "expandable": true,
+      "expanded": false,
+      "condition": {
+        "functionBody": "const selectedModel = typeof model === 'string' ? model : model?.model; return selectedModel !== 'zhimi.airpurifier.pro';"
+      },
+      "items": [
         {
           "key": "enableBuzzerControl",
           "condition": {
