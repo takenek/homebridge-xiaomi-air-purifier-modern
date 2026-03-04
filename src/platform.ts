@@ -21,6 +21,9 @@ const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
   "zhimi.airpurifier.pro",
 ];
 const VALID_MODELS = new Set<AirPurifierModel>(SUPPORTED_MODELS);
+const BUZZER_UNSUPPORTED_MODELS = new Set<AirPurifierModel>([
+  "zhimi.airpurifier.pro",
+]);
 
 type XiaomiAccessoryConfig = AccessoryConfig & {
   address?: string;
@@ -178,10 +181,17 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       typedConfig.enableChildLockControl,
       false,
     );
-    const enableBuzzerControl = normalizeBoolean(
+    const requestedBuzzerControl = normalizeBoolean(
       typedConfig.enableBuzzerControl,
       false,
     );
+    const enableBuzzerControl =
+      requestedBuzzerControl && !BUZZER_UNSUPPORTED_MODELS.has(model);
+    if (requestedBuzzerControl && !enableBuzzerControl) {
+      this.log.warn(
+        `Buzzer control is disabled for model ${model} due to known firmware incompatibility.`,
+      );
+    }
     const maskDeviceAddressInLogs = normalizeBoolean(
       typedConfig.maskDeviceAddressInLogs,
       false,
