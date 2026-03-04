@@ -9,12 +9,13 @@ State reconciliation keeps HomeKit characteristics aligned with the single sourc
 
 ## Buzzer control: pro model compatibility
 
-The `zhimi.airpurifier.pro` model uses the legacy MIIO protocol and the `set_buzzer` command with `"on"`/`"off"` string params instead of the newer MIOT protocol or `set_buzzer_volume` with a numeric volume. The transport layer handles this transparently:
+The `zhimi.airpurifier.pro` model is a hybrid device: it supports MIOT protocol for reading most properties but requires legacy MIIO commands for certain writes (notably buzzer control). The transport layer handles this transparently:
 
-1. **Protocol detection**: The Pro model is in the `LEGACY_PREFERRED_MODELS` set, so the MIOT probe is skipped entirely during protocol detection. This prevents cascading `-5001` command errors that overwhelm the device when MIOT commands are sent to a legacy-only device.
-2. **MIOT probe item code validation**: For non-legacy-preferred models, the MIOT detection probe now also validates the item response code (`code === 0`), preventing false MIOT detection when a device responds to `get_properties` but returns error codes in individual items.
-3. In legacy mode, if `set_buzzer_volume` fails (command error), the transport automatically retries with `set_buzzer` and `"on"`/`"off"`.
-4. For reading, the `buzzer` property alias (`"on"`/`"off"` strings) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter.
+1. **Protocol detection**: The Pro model responds to the MIOT `get_properties` probe with `code: 0` for core properties (power, mode, etc.), so it is correctly detected as MIOT-capable. The probe validates the response item code (`code === 0`) before confirming MIOT mode.
+2. **Hybrid read**: After the MIOT batch read, any properties that were not returned (e.g. `buzzer_volume` on the Pro model) are automatically supplemented via a small legacy `get_prop` batch call. This ensures complete state reads without requiring a full legacy property batch (which some devices reject with `-5001`).
+3. **Per-call legacy fallback for writes**: When a MIOT `set_properties` call fails for a specific property, the transport falls back to the legacy `call()` method for that command only, **without permanently switching the protocol mode**. This prevents hybrid devices from losing MIOT read capability after a single write failure.
+4. **Buzzer legacy chain**: In legacy mode, if `set_buzzer_volume` fails (command error), the transport automatically retries with `set_buzzer` and `"on"`/`"off"`.
+5. **Buzzer value conversion**: The `buzzer` property alias (`"on"`/`"off"` strings or boolean) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter, both in MIOT supplement reads and legacy reads.
 
 This makes the buzzer switch work correctly in HomeKit for both `pro` and `3h`/`4` models.
 
@@ -57,12 +58,12 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
    - **When** polling continues and network later recovers.
    - **Then** plugin stays alive, logs degraded state, and fully resynchronizes on successful command/status call.
 
-8. **Filter life drops to 4%**
+8. **[S8] Filter life drops to 4%**
    - **Given** `filter1_life` falls to replacement threshold.
    - **When** accessory state refresh runs.
    - **Then** `FilterChangeIndication` is set to `1` (`CHANGE_FILTER`).
 
-9. **Filter replacement (4% -> 100%)**
+9. **[S9] Filter replacement (4% -> 100%)**
    - **Given** filter replacement is completed and `filter1_life` returns to 100.
    - **When** next state refresh runs.
    - **Then** `FilterChangeIndication` is reset to `0` (`FILTER_OK`).
