@@ -1408,3 +1408,39 @@ describe("platform and index", () => {
     }).not.toThrow();
   });
 });
+
+describe("config.schema.json", () => {
+  it("hides enableBuzzerControl in the UI layout when model is zhimi.airpurifier.pro", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const schemaPath = path.resolve(__dirname, "..", "config.schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
+
+    // Find the enableBuzzerControl item in the layout
+    const alertsSection = schema.layout.find(
+      (section: { title?: string }) => section.title === "Alerts & Controls",
+    );
+    expect(alertsSection).toBeDefined();
+
+    const buzzerItem = alertsSection.items.find(
+      (item: { key?: string }) => item.key === "enableBuzzerControl",
+    );
+    expect(buzzerItem).toBeDefined();
+    expect(buzzerItem.condition).toBeDefined();
+
+    // The condition function should hide buzzer for zhimi.airpurifier.pro
+    const conditionFn = new Function(
+      "model",
+      buzzerItem.condition.functionBody,
+    );
+    expect(conditionFn({ model: "zhimi.airpurifier.pro" })).toBe(false);
+    expect(conditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
+    expect(conditionFn({ model: "zhimi.airpurifier.4" })).toBe(true);
+    expect(conditionFn({ model: "zhimi.airpurifier.2h" })).toBe(true);
+
+    // Verify the description no longer mentions "Not supported" since the field is now hidden
+    expect(
+      schema.schema.properties.enableBuzzerControl.description,
+    ).not.toContain("Not supported");
+  });
+});
