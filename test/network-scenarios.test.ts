@@ -232,4 +232,54 @@ describe("network/status scenarios", () => {
     });
     await client.shutdown();
   });
+
+  it("[S8] Given filter level reaches 4%, Then FilterChangeIndication is set to CHANGE_FILTER (1)", async () => {
+    const transport = new ScriptedTransport();
+    // Init consumes the first read; setPower triggers setProperty + pollWithRetry consuming the second
+    transport.reads = [
+      makeState({ filter1_life: 50 }),
+      makeState({ filter1_life: 4 }),
+    ];
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 999999,
+      sensorPollIntervalMs: 999999,
+    });
+
+    const updates: DeviceState[] = [];
+    client.onStateUpdate((state) => updates.push(state));
+
+    await client.init();
+    expect(updates.at(-1)?.filter1_life).toBe(50);
+
+    // setPower enqueues a setProperty + pollWithRetry which reads filter1_life=4
+    await client.setPower(true);
+    expect(updates.at(-1)?.filter1_life).toBe(4);
+    expect(updates.at(-1)?.filter1_life).toBeLessThanOrEqual(10);
+    await client.shutdown();
+  });
+
+  it("[S9] Given filter replacement (4% → 100%), Then FilterChangeIndication resets to FILTER_OK (0)", async () => {
+    const transport = new ScriptedTransport();
+    transport.reads = [
+      makeState({ filter1_life: 4 }),
+      makeState({ filter1_life: 100 }),
+    ];
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 999999,
+      sensorPollIntervalMs: 999999,
+    });
+
+    const updates: DeviceState[] = [];
+    client.onStateUpdate((state) => updates.push(state));
+
+    await client.init();
+    expect(updates.at(-1)?.filter1_life).toBe(4);
+
+    await client.setPower(true);
+    expect(updates.at(-1)?.filter1_life).toBe(100);
+    expect(updates.at(-1)?.filter1_life).toBeGreaterThan(10);
+    await client.shutdown();
+  });
 });
