@@ -19,7 +19,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
-| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`). MIOT models use a boolean buzzer flag; legacy models receive a volume value (100/0). **Not available on `zhimi.airpurifier.pro`** — the option is silently ignored for this model. |
+| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`). MIOT models use a boolean buzzer flag; legacy models receive a volume value (100/0). **Not available on `zhimi.airpurifier.pro`** — the option is hidden from the Homebridge UI and force-disabled at runtime. |
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
@@ -89,7 +89,7 @@ Each purifier is configured as a separate accessory entry:
 | `enableTemperature` | boolean | No | Expose Temperature Sensor service (default `true`) |
 | `enableHumidity` | boolean | No | Expose Humidity Sensor service (default `true`) |
 | `enableChildLockControl` | boolean | No | Expose Child Lock switch service (default `false`) |
-| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`). **Not supported on `zhimi.airpurifier.pro`** — the setting is ignored and a warning is logged. |
+| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`). **Not available on `zhimi.airpurifier.pro`** — the option is hidden from the Homebridge UI for this model, force-disabled at runtime, and a warning is logged if explicitly set in JSON config. |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
