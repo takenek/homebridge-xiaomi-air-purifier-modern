@@ -307,8 +307,17 @@ export class ModernMiioTransport implements MiioTransport {
       const fallbackCalls: Array<{
         method: string;
         params: readonly unknown[];
-      }> = [
-        { method, params },
+      }> = [{ method, params }];
+
+      if (this.options.model === "zhimi.airpurifier.pro") {
+        fallbackCalls.push(
+          { method, params: [enabled ? "on" : "off"] },
+          { method, params: [enabled] },
+          { method, params: [enabled ? 1 : 0] },
+        );
+      }
+
+      fallbackCalls.push(
         { method: "set_buzzer", params: [enabled ? "on" : "off"] },
         { method: "set_buzzer", params: [enabled] },
         { method: "set_buzzer", params: [enabled ? 1 : 0] },
@@ -325,7 +334,7 @@ export class ModernMiioTransport implements MiioTransport {
         { method: "set_key_tone", params: [enabled ? "on" : "off"] },
         { method: "set_voice", params: [enabled ? 1 : 0] },
         { method: "set_key_tone", params: [enabled ? 1 : 0] },
-      ];
+      );
 
       let lastFallbackError: unknown;
       for (const fallbackCall of fallbackCalls) {

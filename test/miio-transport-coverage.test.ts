@@ -1121,6 +1121,44 @@ it("re-throws retryable error from trySetViaMiot without falling back to legacy"
   await transport.close();
 });
 
+it("setViaLegacy tries pro-specific set_buzzer_volume payload variants before set_buzzer", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  const call = vi
+    .spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("numeric volume unsupported"))
+    .mockResolvedValueOnce(null);
+
+  await internals.setViaLegacy("set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["on"]);
+
+  await transport.close();
+});
+
+it("setViaLegacy uses OFF payload variant for pro-specific set_buzzer_volume fallback", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  const call = vi
+    .spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("numeric volume unsupported"))
+    .mockResolvedValueOnce(null);
+
+  await internals.setViaLegacy("set_buzzer_volume", [0]);
+  expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [0]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["off"]);
+
+  await transport.close();
+});
+
 it("setViaLegacy falls back from set_buzzer_volume to set_buzzer string payload", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
@@ -1770,7 +1808,7 @@ it("Pro model end-to-end: MIOT set for buzzer fails, falls back to legacy set_bu
   // protocolMode stays "miot" (no permanent switch)
   expect(internals.protocolMode).toBe("miot");
   expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
-  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["on"]);
 
   await transport.close();
 });
