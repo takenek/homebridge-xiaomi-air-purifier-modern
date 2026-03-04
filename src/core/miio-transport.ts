@@ -73,7 +73,11 @@ const toMd5 = (...chunks: Buffer[]): Buffer => {
 };
 
 const toBoolean = (value: unknown): boolean =>
-  value === "on" || value === true || value === 1;
+  value === "on" ||
+  value === true ||
+  value === 1 ||
+  value === "1" ||
+  value === "true";
 const toLegacyLed = (value: unknown): boolean => {
   // led_b uses numeric encoding: 0=bright(on), 1=dim(on), 2=off
   if (typeof value === "number") return value !== 2;
@@ -446,20 +450,28 @@ export class ModernMiioTransport implements MiioTransport {
             return;
           }
 
-          dynamicFallbackCalls.push(
-            {
+          const onOffPayloads: Array<readonly unknown[]> = [
+            [enabled ? "on" : "off"],
+            [enabled],
+            [enabled ? 1 : 0],
+          ];
+
+          const isVolumeAlias = new Set([
+            "buzzer_volume",
+            "sound_volume",
+            "volume",
+          ]).has(alias);
+          if (isVolumeAlias) {
+            onOffPayloads.unshift([enabled ? 100 : 0]);
+            onOffPayloads.push([enabled ? "100" : "0"]);
+          }
+
+          onOffPayloads.forEach((payload) => {
+            dynamicFallbackCalls.push({
               method: dynamicMethod,
-              params: [enabled ? "on" : "off"],
-            },
-            {
-              method: dynamicMethod,
-              params: [enabled],
-            },
-            {
-              method: dynamicMethod,
-              params: [enabled ? 1 : 0],
-            },
-          );
+              params: payload,
+            });
+          });
         });
       };
       try {
@@ -473,7 +485,18 @@ export class ModernMiioTransport implements MiioTransport {
       for (const fallbackCall of dynamicFallbackCalls) {
         try {
           await this.call(fallbackCall.method, fallbackCall.params);
-          return;
+          if (this.options.model !== "zhimi.airpurifier.pro") {
+            return;
+          }
+
+          const aliases = await probeBuzzerState();
+          if (stateMatchesEnabled(aliases)) {
+            return;
+          }
+
+          lastFallbackError = new Error(
+            `Buzzer command ${fallbackCall.method} acknowledged but state remained unchanged`,
+          );
         } catch (error: unknown) {
           if (isRetryableError(error)) {
             throw error;
