@@ -55,6 +55,15 @@ const createTransport = () =>
     operationTimeoutMs: 20,
   });
 
+const createProTransport = () =>
+  new ModernMiioTransport({
+    address: "127.0.0.1",
+    token: "00112233445566778899aabbccddeeff",
+    model: "zhimi.airpurifier.pro",
+    connectTimeoutMs: 20,
+    operationTimeoutMs: 20,
+  });
+
 describe("ModernMiioTransport coverage", () => {
   it("validates token and supports logger-based suppressed error reporting", async () => {
     expect(
@@ -458,8 +467,21 @@ it("covers detectProtocolMode outcomes and legacy batch parsing", async () => {
     ) => Promise<Map<string, unknown>>;
   };
 
+  // MIOT probe with code 0 (default) → detects miot
   vi.spyOn(internals, "call").mockResolvedValueOnce([{}]);
   await expect(internals.detectProtocolMode()).resolves.toBe("miot");
+
+  // MIOT probe with explicit code 0 → detects miot
+  vi.spyOn(internals, "call").mockResolvedValueOnce([
+    { did: "0", siid: 2, piid: 2, code: 0, value: true },
+  ]);
+  await expect(internals.detectProtocolMode()).resolves.toBe("miot");
+
+  // MIOT probe with non-zero item code → falls to legacy
+  vi.spyOn(internals, "call")
+    .mockResolvedValueOnce([{ did: "0", siid: 2, piid: 2, code: -5001 }])
+    .mockResolvedValueOnce(["on"]);
+  await expect(internals.detectProtocolMode()).resolves.toBe("legacy");
 
   vi.spyOn(internals, "call")
     .mockRejectedValueOnce(new Error("miot-fail"))
@@ -1158,6 +1180,73 @@ it("setViaLegacy passes non-buzzer methods through directly", async () => {
   const call = vi.spyOn(internals, "call").mockResolvedValue(null);
   await internals.setViaLegacy("set_led", ["on"]);
   expect(call).toHaveBeenCalledWith("set_led", ["on"]);
+
+  await transport.close();
+});
+
+it("skips MIOT probe for legacy-preferred models (Pro) and detects legacy directly", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+  };
+
+  // Pro model should skip MIOT probe, only call get_prop for legacy detection
+  const call = vi.spyOn(internals, "call").mockResolvedValueOnce(["on"]);
+  await expect(internals.detectProtocolMode()).resolves.toBe("legacy");
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call).toHaveBeenCalledWith("get_prop", ["power"]);
+
+  await transport.close();
+});
+
+it("returns null for Pro model when legacy detection also fails", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+  };
+
+  vi.spyOn(internals, "call").mockRejectedValueOnce(new Error("legacy-fail"));
+  await expect(internals.detectProtocolMode()).resolves.toBeNull();
+
+  await transport.close();
+});
+
+it("returns null for Pro model when legacy get_prop returns non-array", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+  };
+
+  vi.spyOn(internals, "call").mockResolvedValueOnce("not-array");
+  await expect(internals.detectProtocolMode()).resolves.toBeNull();
+
+  await transport.close();
+});
+
+it("Pro model end-to-end: setProperty goes through legacy path for buzzer", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  // Detect as legacy
+  vi.spyOn(internals, "detectProtocolMode").mockResolvedValue("legacy");
+  const call = vi
+    .spyOn(internals, "call")
+    // set_buzzer_volume fails → falls back to set_buzzer
+    .mockRejectedValueOnce(new Error("command error"))
+    .mockResolvedValueOnce(null);
+
+  await internals.setProperty("set_buzzer_volume", [100]);
+  expect(internals.protocolMode).toBe("legacy");
+  expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
 
   await transport.close();
 });
