@@ -1428,7 +1428,7 @@ describe("config.schema.json", () => {
     expect(buzzerItem).toBeDefined();
     expect(buzzerItem.condition).toBeDefined();
 
-    // The condition function should hide buzzer for zhimi.airpurifier.pro
+    // The layout condition function should hide buzzer for zhimi.airpurifier.pro
     const conditionFn = new Function(
       "model",
       buzzerItem.condition.functionBody,
@@ -1437,6 +1437,20 @@ describe("config.schema.json", () => {
     expect(conditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
     expect(conditionFn({ model: "zhimi.airpurifier.4" })).toBe(true);
     expect(conditionFn({ model: "zhimi.airpurifier.2h" })).toBe(true);
+
+    // The condition should be safe when model is undefined (try/catch)
+    expect(conditionFn({})).toBe(true);
+    expect(conditionFn({ model: undefined })).toBe(true);
+
+    // The schema property itself also has a condition for UI renderers
+    // that read conditions from the schema definition
+    const propCondition =
+      schema.schema.properties.enableBuzzerControl.condition;
+    expect(propCondition).toBeDefined();
+    const propConditionFn = new Function("model", propCondition.functionBody);
+    expect(propConditionFn({ model: "zhimi.airpurifier.pro" })).toBe(false);
+    expect(propConditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
+    expect(propConditionFn({})).toBe(true);
 
     // Verify the description no longer mentions "Not supported" since the field is now hidden
     expect(
