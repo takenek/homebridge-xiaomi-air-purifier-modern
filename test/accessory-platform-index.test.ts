@@ -1210,6 +1210,25 @@ describe("platform and index", () => {
       .map((service) => (service as unknown as FakeService).name);
     expect(buzzerServices).toContain("Switch:Buzzer");
 
+    const pluginProWithBuzzer = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "BuzzerDisabledForPro",
+        address: "1.1.1.11",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.pro",
+        enableBuzzerControl: true,
+      } as never,
+      api as never,
+    );
+    const proServices = pluginProWithBuzzer
+      .getServices()
+      .map((service) => (service as unknown as FakeService).name);
+    expect(proServices).not.toContain("Switch:Buzzer");
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Buzzer control is disabled for model zhimi.airpurifier.pro due to known firmware incompatibility.",
+    );
+
     const maskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
       logger as never,
       {
