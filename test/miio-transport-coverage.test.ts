@@ -1203,11 +1203,22 @@ it("setViaLegacy tries pro-specific set_buzzer_volume payload variants before se
   const call = vi
     .spyOn(internals, "call")
     .mockRejectedValueOnce(new Error("numeric volume unsupported"))
-    .mockResolvedValueOnce(null);
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""]);
 
   await internals.setViaLegacy("set_buzzer_volume", [100]);
   expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
   expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["on"]);
+  expect(call).toHaveBeenNthCalledWith(3, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
 
   await transport.close();
 });
@@ -1222,11 +1233,22 @@ it("setViaLegacy uses OFF payload variant for pro-specific set_buzzer_volume fal
   const call = vi
     .spyOn(internals, "call")
     .mockRejectedValueOnce(new Error("numeric volume unsupported"))
-    .mockResolvedValueOnce(null);
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["off", "", "", "", "", "", "", ""]);
 
   await internals.setViaLegacy("set_buzzer_volume", [0]);
   expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [0]);
   expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["off"]);
+  expect(call).toHaveBeenNthCalledWith(3, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
 
   await transport.close();
 });
@@ -1253,7 +1275,8 @@ it("setViaLegacy falls back from set_buzzer_volume to set_buzzer string payload"
   // Turn off buzzer
   call
     .mockRejectedValueOnce(new Error("command error"))
-    .mockResolvedValueOnce(null);
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""]);
   await internals.setViaLegacy("set_buzzer_volume", [0]);
   expect(call).toHaveBeenNthCalledWith(4, "set_buzzer", ["off"]);
 
@@ -1677,6 +1700,51 @@ it("setViaLegacy handles non-array dynamic probe response", async () => {
   await expect(internals.setViaLegacy("set_buzzer_volume", [100])).rejects.toBe(
     finalError,
   );
+
+  await transport.close();
+});
+
+it("setViaLegacy on Pro continues fallback chain when first command succeeds but state stays unchanged", async () => {
+  const transport = createProTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
+  };
+
+  const call = vi
+    .spyOn(internals, "call")
+    // set_buzzer_volume reports success but state is still off
+    .mockResolvedValueOnce(["ok"])
+    .mockResolvedValueOnce(["off", "", "", "", "", "", "", ""])
+    // fallback command applies new state
+    .mockResolvedValueOnce(["ok"])
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""]);
+
+  await expect(
+    internals.setViaLegacy("set_buzzer_volume", [100]),
+  ).resolves.toBeUndefined();
+  expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
+  expect(call).toHaveBeenNthCalledWith(2, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
+  expect(call).toHaveBeenNthCalledWith(3, "set_buzzer_volume", ["on"]);
+  expect(call).toHaveBeenNthCalledWith(4, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
 
   await transport.close();
 });
@@ -2154,15 +2222,26 @@ it("Pro model end-to-end: MIOT set for buzzer fails, falls back to legacy set_bu
   vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
   const call = vi
     .spyOn(internals, "call")
-    // set_buzzer_volume fails → falls back to set_buzzer
+    // set_buzzer_volume fails → falls back to legacy payload variant then verify state
     .mockRejectedValueOnce(new Error("command error"))
-    .mockResolvedValueOnce(null);
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(["on", "", "", "", "", "", "", ""]);
 
   await internals.setProperty("set_buzzer_volume", [100]);
   // protocolMode stays "miot" (no permanent switch)
   expect(internals.protocolMode).toBe("miot");
   expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
   expect(call).toHaveBeenNthCalledWith(2, "set_buzzer_volume", ["on"]);
+  expect(call).toHaveBeenNthCalledWith(3, "get_prop", [
+    "buzzer",
+    "buzzer_volume",
+    "sound",
+    "sound_volume",
+    "volume",
+    "mute",
+    "voice",
+    "key_tone",
+  ]);
 
   await transport.close();
 });
