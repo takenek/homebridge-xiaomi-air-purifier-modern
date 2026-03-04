@@ -1410,51 +1410,34 @@ describe("platform and index", () => {
 });
 
 describe("config.schema.json", () => {
-  it("hides enableBuzzerControl in the UI layout when model is zhimi.airpurifier.pro", async () => {
+  it("does not expose enableBuzzerControl in the schema or layout", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const schemaPath = path.resolve(__dirname, "..", "config.schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
 
-    // Find the enableBuzzerControl item in the layout
-    const alertsSection = schema.layout.find(
-      (section: { title?: string }) => section.title === "Alerts & Controls",
-    );
-    expect(alertsSection).toBeDefined();
+    // enableBuzzerControl must not appear in schema properties
+    // (homebridge-config-ui-x does not support condition/functionBody for
+    // pluginType=accessory; the only reliable way to hide it for
+    // zhimi.airpurifier.pro is to remove it from the schema entirely)
+    expect(schema.schema.properties.enableBuzzerControl).toBeUndefined();
 
-    const buzzerItem = alertsSection.items.find(
-      (item: { key?: string }) => item.key === "enableBuzzerControl",
-    );
-    expect(buzzerItem).toBeDefined();
-    expect(buzzerItem.condition).toBeDefined();
-
-    // The layout condition function should hide buzzer for zhimi.airpurifier.pro
-    const conditionFn = new Function(
-      "model",
-      buzzerItem.condition.functionBody,
-    );
-    expect(conditionFn({ model: "zhimi.airpurifier.pro" })).toBe(false);
-    expect(conditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
-    expect(conditionFn({ model: "zhimi.airpurifier.4" })).toBe(true);
-    expect(conditionFn({ model: "zhimi.airpurifier.2h" })).toBe(true);
-
-    // The condition should be safe when model is undefined (try/catch)
-    expect(conditionFn({})).toBe(true);
-    expect(conditionFn({ model: undefined })).toBe(true);
-
-    // The schema property itself also has a condition for UI renderers
-    // that read conditions from the schema definition
-    const propCondition =
-      schema.schema.properties.enableBuzzerControl.condition;
-    expect(propCondition).toBeDefined();
-    const propConditionFn = new Function("model", propCondition.functionBody);
-    expect(propConditionFn({ model: "zhimi.airpurifier.pro" })).toBe(false);
-    expect(propConditionFn({ model: "zhimi.airpurifier.3h" })).toBe(true);
-    expect(propConditionFn({})).toBe(true);
-
-    // Verify the description no longer mentions "Not supported" since the field is now hidden
-    expect(
-      schema.schema.properties.enableBuzzerControl.description,
-    ).not.toContain("Not supported");
+    // enableBuzzerControl must not appear in any layout section
+    const allLayoutKeys: string[] = [];
+    for (const item of schema.layout) {
+      if (item.key) {
+        allLayoutKeys.push(item.key);
+      }
+      if (Array.isArray(item.items)) {
+        for (const sub of item.items) {
+          if (typeof sub === "string") {
+            allLayoutKeys.push(sub);
+          } else if (sub.key) {
+            allLayoutKeys.push(sub.key);
+          }
+        }
+      }
+    }
+    expect(allLayoutKeys).not.toContain("enableBuzzerControl");
   });
 });
