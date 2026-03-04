@@ -575,6 +575,78 @@ it("covers trySetViaMiot command mappings and send() result branches", async () 
   await transport.close();
 });
 
+it("tries alternate MIOT buzzer mappings before falling back to legacy", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+  };
+
+  const call = vi
+    .spyOn(internals, "call")
+    .mockResolvedValueOnce([{ code: -4001 }])
+    .mockResolvedValueOnce([{ code: 0 }]);
+
+  await expect(
+    internals.trySetViaMiot("set_buzzer_volume", [100]),
+  ).resolves.toBe(true);
+
+  expect(call).toHaveBeenNthCalledWith(1, "set_properties", [
+    { did: "0", siid: 5, piid: 1, value: true },
+  ]);
+  expect(call).toHaveBeenNthCalledWith(2, "set_properties", [
+    { did: "0", siid: 5, piid: 2, value: 100 },
+  ]);
+
+  await transport.close();
+});
+
+it("returns false for buzzer MIOT write when all candidate mappings fail non-retryably", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+  };
+
+  vi.spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("candidate-1"))
+    .mockResolvedValueOnce([{ code: -4001 }])
+    .mockResolvedValueOnce([{ code: -4001 }])
+    .mockResolvedValueOnce([{ code: -4001 }]);
+
+  await expect(internals.trySetViaMiot("set_buzzer_volume", [0])).resolves.toBe(
+    false,
+  );
+
+  await transport.close();
+});
+
+it("rethrows retryable error while trying alternate buzzer MIOT mappings", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+  };
+
+  const timeout = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+  vi.spyOn(internals, "call").mockRejectedValueOnce(timeout);
+
+  await expect(
+    internals.trySetViaMiot("set_buzzer_volume", [100]),
+  ).rejects.toBe(timeout);
+
+  await transport.close();
+});
+
 it("covers close() catch branches and retryable MIOT batch errors", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
