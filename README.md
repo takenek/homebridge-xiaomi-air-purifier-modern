@@ -89,6 +89,7 @@ Each purifier is configured as a separate accessory entry:
 | `enableTemperature` | boolean | No | Expose Temperature Sensor service (default `true`) |
 | `enableHumidity` | boolean | No | Expose Humidity Sensor service (default `true`) |
 | `enableChildLockControl` | boolean | No | Expose Child Lock switch service (default `false`) |
+| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`, hidden in Homebridge UI for `zhimi.airpurifier.pro`) |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
@@ -100,7 +101,7 @@ Each purifier is configured as a separate accessory entry:
 | `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
 | `_bridge` | object | No | Optional child bridge configuration |
 
-> Note: The Homebridge UI no longer exposes a Buzzer toggle. Existing manual `enableBuzzerControl` config is still honored for supported models, but always ignored for `zhimi.airpurifier.pro`.
+> Note: The Homebridge UI shows the Buzzer toggle for supported models, but hides it when `model` is `zhimi.airpurifier.pro`. Runtime logic still enforces this restriction.
 
 ### Known model strings
 
