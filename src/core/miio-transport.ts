@@ -294,6 +294,16 @@ export class ModernMiioTransport implements MiioTransport {
   ): Promise<void> {
     if (method === "set_buzzer_volume") {
       const enabled = toNumber(params[0]) > 0;
+      const buzzerCandidateAliases = [
+        "buzzer",
+        "buzzer_volume",
+        "sound",
+        "sound_volume",
+        "volume",
+        "mute",
+        "voice",
+        "key_tone",
+      ];
       const fallbackCalls: Array<{
         method: string;
         params: readonly unknown[];
@@ -309,10 +319,83 @@ export class ModernMiioTransport implements MiioTransport {
         { method: "set_mute", params: [enabled ? "off" : "on"] },
         { method: "set_mute", params: [!enabled] },
         { method: "set_mute", params: [enabled ? 0 : 1] },
+        { method: "set_volume", params: [enabled ? 100 : 0] },
+        { method: "set_sound_volume", params: [enabled ? 100 : 0] },
+        { method: "set_voice", params: [enabled ? "on" : "off"] },
+        { method: "set_key_tone", params: [enabled ? "on" : "off"] },
+        { method: "set_voice", params: [enabled ? 1 : 0] },
+        { method: "set_key_tone", params: [enabled ? 1 : 0] },
       ];
 
       let lastFallbackError: unknown;
       for (const fallbackCall of fallbackCalls) {
+        try {
+          await this.call(fallbackCall.method, fallbackCall.params);
+          return;
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+          lastFallbackError = error;
+        }
+      }
+
+      // Probe which buzzer-related aliases are exposed by current firmware and
+      // derive additional set_<alias> calls dynamically.
+      const dynamicFallbackCalls: Array<{
+        method: string;
+        params: readonly unknown[];
+      }> = [];
+      try {
+        const raw = await this.call("get_prop", buzzerCandidateAliases);
+        const values = Array.isArray(raw) ? raw : [];
+        values.forEach((value, i) => {
+          if (value === undefined || value === null || value === "") {
+            return;
+          }
+
+          const alias = buzzerCandidateAliases[i];
+          if (!alias) {
+            return;
+          }
+
+          const dynamicMethod = `set_${alias}`;
+          if (alias === "mute") {
+            dynamicFallbackCalls.push({
+              method: dynamicMethod,
+              params: [enabled ? "off" : "on"],
+            });
+            dynamicFallbackCalls.push({
+              method: dynamicMethod,
+              params: [!enabled],
+            });
+            dynamicFallbackCalls.push({
+              method: dynamicMethod,
+              params: [enabled ? 0 : 1],
+            });
+            return;
+          }
+
+          dynamicFallbackCalls.push({
+            method: dynamicMethod,
+            params: [enabled ? "on" : "off"],
+          });
+          dynamicFallbackCalls.push({
+            method: dynamicMethod,
+            params: [enabled],
+          });
+          dynamicFallbackCalls.push({
+            method: dynamicMethod,
+            params: [enabled ? 1 : 0],
+          });
+        });
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
+      }
+
+      for (const fallbackCall of dynamicFallbackCalls) {
         try {
           await this.call(fallbackCall.method, fallbackCall.params);
           return;
