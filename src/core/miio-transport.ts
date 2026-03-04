@@ -293,16 +293,38 @@ export class ModernMiioTransport implements MiioTransport {
     params: readonly unknown[],
   ): Promise<void> {
     if (method === "set_buzzer_volume") {
-      try {
-        await this.call(method, params);
-        return;
-      } catch (error: unknown) {
-        if (isRetryableError(error)) {
-          throw error;
+      const enabled = toNumber(params[0]) > 0;
+      const fallbackCalls: Array<{
+        method: string;
+        params: readonly unknown[];
+      }> = [
+        { method, params },
+        { method: "set_buzzer", params: [enabled ? "on" : "off"] },
+        { method: "set_buzzer", params: [enabled] },
+        { method: "set_buzzer", params: [enabled ? 1 : 0] },
+        { method: "set_buzzer", params: [] },
+        { method: "set_sound", params: [enabled ? "on" : "off"] },
+        { method: "set_sound", params: [enabled] },
+        { method: "set_sound", params: [enabled ? 1 : 0] },
+        { method: "set_mute", params: [enabled ? "off" : "on"] },
+        { method: "set_mute", params: [!enabled] },
+        { method: "set_mute", params: [enabled ? 0 : 1] },
+      ];
+
+      let lastFallbackError: unknown;
+      for (const fallbackCall of fallbackCalls) {
+        try {
+          await this.call(fallbackCall.method, fallbackCall.params);
+          return;
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+          lastFallbackError = error;
         }
-        await this.call("set_buzzer", [toNumber(params[0]) > 0 ? "on" : "off"]);
-        return;
       }
+
+      throw lastFallbackError;
     }
 
     await this.call(method, params);
