@@ -473,7 +473,18 @@ export class ModernMiioTransport implements MiioTransport {
       for (const fallbackCall of dynamicFallbackCalls) {
         try {
           await this.call(fallbackCall.method, fallbackCall.params);
-          return;
+          if (this.options.model !== "zhimi.airpurifier.pro") {
+            return;
+          }
+
+          const aliases = await probeBuzzerState();
+          if (stateMatchesEnabled(aliases)) {
+            return;
+          }
+
+          lastFallbackError = new Error(
+            `Buzzer command ${fallbackCall.method} acknowledged but state remained unchanged`,
+          );
         } catch (error: unknown) {
           if (isRetryableError(error)) {
             throw error;
