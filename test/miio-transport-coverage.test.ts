@@ -1042,10 +1042,7 @@ it("falls back to legacy when trySetViaMiot throws a non-retryable error", async
       params: readonly unknown[],
     ) => Promise<boolean>;
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setProperty: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   internals.protocolMode = "miot";
@@ -1070,10 +1067,7 @@ it("re-throws retryable error from trySetViaMiot without falling back to legacy"
       params: readonly unknown[],
     ) => Promise<boolean>;
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setProperty: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   internals.protocolMode = "miot";
@@ -1097,14 +1091,8 @@ it("setViaLegacy falls back from set_buzzer_volume to set_buzzer for pro model",
   const internals = transport as unknown as {
     protocolMode: "unknown" | "miot" | "legacy";
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setProperty: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
-    setViaLegacy: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   // When set_buzzer_volume fails with command error, fall back to set_buzzer
@@ -1131,10 +1119,7 @@ it("setViaLegacy succeeds directly with set_buzzer_volume when supported", async
   const transport = createTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setViaLegacy: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   const call = vi.spyOn(internals, "call").mockResolvedValue(null);
@@ -1149,19 +1134,16 @@ it("setViaLegacy re-throws retryable error from set_buzzer_volume without fallba
   const transport = createTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setViaLegacy: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   const retryable = Object.assign(new Error("timeout"), {
     code: "ETIMEDOUT",
   });
   vi.spyOn(internals, "call").mockRejectedValueOnce(retryable);
-  await expect(
-    internals.setViaLegacy("set_buzzer_volume", [100]),
-  ).rejects.toBe(retryable);
+  await expect(internals.setViaLegacy("set_buzzer_volume", [100])).rejects.toBe(
+    retryable,
+  );
 
   await transport.close();
 });
@@ -1170,10 +1152,7 @@ it("setViaLegacy passes non-buzzer methods through directly", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
-    setViaLegacy: (
-      method: string,
-      params: readonly unknown[],
-    ) => Promise<void>;
+    setViaLegacy: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
   const call = vi.spyOn(internals, "call").mockResolvedValue(null);
