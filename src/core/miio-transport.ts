@@ -63,13 +63,6 @@ class MiioCommandError extends Error {
 const MIIO_PORT = 54321;
 const MIIO_MAGIC = 0x2131;
 
-/**
- * Models that are known to use the legacy MIIO protocol only.
- * These models skip the MIOT probe during protocol detection to avoid
- * cascading -5001 errors that can overwhelm the device.
- */
-const LEGACY_PREFERRED_MODELS = new Set(["zhimi.airpurifier.pro"]);
-
 const toMd5 = (...chunks: Buffer[]): Buffer => {
   const hash = createHash("md5");
   for (const chunk of chunks) {
@@ -287,7 +280,9 @@ export class ModernMiioTransport implements MiioTransport {
           throw error;
         }
       }
-      this.protocolMode = "legacy";
+      // Fall back to legacy for this call only; do NOT switch protocolMode
+      // permanently. Hybrid devices (e.g. zhimi.airpurifier.pro) support
+      // MIOT reads but may require legacy writes for specific properties.
     }
 
     await this.setViaLegacy(method, params);
@@ -343,21 +338,19 @@ export class ModernMiioTransport implements MiioTransport {
   }
 
   private async detectProtocolMode(): Promise<"miot" | "legacy" | null> {
-    if (!LEGACY_PREFERRED_MODELS.has(this.options.model)) {
-      const probe = MIOT_POWER_PROBE;
-      try {
-        const result = await this.call("get_properties", [probe]);
-        /* c8 ignore start -- always true for well-formed MIOT responses; guard exists for malformed firmware replies. */
-        if (Array.isArray(result) && result.length > 0) {
-          /* c8 ignore stop */
-          const item = result[0] as MiotValueResult;
-          if ((item.code ?? 0) === 0) {
-            return "miot";
-          }
+    const probe = MIOT_POWER_PROBE;
+    try {
+      const result = await this.call("get_properties", [probe]);
+      /* c8 ignore start -- always true for well-formed MIOT responses; guard exists for malformed firmware replies. */
+      if (Array.isArray(result) && result.length > 0) {
+        /* c8 ignore stop */
+        const item = result[0] as MiotValueResult;
+        if ((item.code ?? 0) === 0) {
+          return "miot";
         }
-      } catch (error: unknown) {
-        this.reportSuppressedError("detect-miot", error);
       }
+    } catch (error: unknown) {
+      this.reportSuppressedError("detect-miot", error);
     }
 
     try {
@@ -389,17 +382,35 @@ export class ModernMiioTransport implements MiioTransport {
       throw new Error("MIOT core properties unavailable");
     }
 
+    // Supplement missing properties via legacy protocol.
+    // Hybrid devices (e.g. zhimi.airpurifier.pro) support MIOT for most
+    // properties but may lack certain ones like buzzer_volume.
+    const missingProps = props.filter((p) => !valueByKey.has(p));
+    if (missingProps.length > 0) {
+      try {
+        const legacyValues = await this.readViaLegacyBatch(missingProps);
+        for (const [key, value] of legacyValues) {
+          valueByKey.set(key, value);
+        }
+      } catch (error: unknown) {
+        if (isRetryableError(error)) {
+          throw error;
+        }
+        // Legacy supplement failed; use defaults for missing properties
+      }
+    }
+
     return {
-      power: toBoolean(powerRaw),
-      fan_level: toNumber(fanLevelRaw),
-      mode: toMode(modeRaw),
+      power: toBoolean(valueByKey.get("power")),
+      fan_level: toNumber(valueByKey.get("fan_level")),
+      mode: toMode(valueByKey.get("mode")),
       temperature: toNumber(valueByKey.get("temperature")),
       humidity: toNumber(valueByKey.get("humidity")),
       aqi: toNumber(valueByKey.get("aqi")),
       filter1_life: toNumber(valueByKey.get("filter1_life")),
       child_lock: toBoolean(valueByKey.get("child_lock")),
       led: toNumber(valueByKey.get("led")) !== 2,
-      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
+      buzzer_volume: toBuzzerVolume(valueByKey.get("buzzer_volume")),
       motor1_speed: toNumber(valueByKey.get("motor1_speed")),
       use_time: toNumber(valueByKey.get("use_time")),
       purify_volume: toNumber(valueByKey.get("purify_volume")),

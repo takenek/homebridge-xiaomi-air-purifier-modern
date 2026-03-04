@@ -193,6 +193,8 @@ describe("ModernMiioTransport coverage", () => {
         ["led", 2],
       ]),
     );
+    // readViaMiot will try legacy supplement for missing properties
+    vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(new Map());
     const miot = await internals.readViaMiot();
     expect(miot.mode).toBe("favorite");
     expect(miot.led).toBe(false);
@@ -702,6 +704,9 @@ it("covers toMode direct string branch and legacy-empty fallback null path", asy
   const internals = transport as unknown as {
     readViaMiotBatch: () => Promise<Map<string, unknown>>;
     readViaMiot: () => Promise<DeviceState>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
     protocolMode: "unknown" | "miot" | "legacy";
     readViaLegacy: () => Promise<DeviceState>;
     getProperties: (props: readonly string[]) => Promise<DeviceState>;
@@ -714,6 +719,8 @@ it("covers toMode direct string branch and legacy-empty fallback null path", asy
       ["mode", "auto"],
     ]),
   );
+  // readViaMiot supplements missing props via legacy
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(new Map());
   const directMode = await internals.readViaMiot();
   expect(directMode.mode).toBe("auto");
 
@@ -959,6 +966,9 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
   const internals = transport as unknown as {
     readViaMiotBatch: () => Promise<Map<string, unknown>>;
     readViaMiot: () => Promise<DeviceState>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
     getProperties: (props: readonly string[]) => Promise<DeviceState>;
     protocolMode: "unknown" | "miot" | "legacy";
     readViaLegacy: (props: readonly string[]) => Promise<DeviceState>;
@@ -978,6 +988,8 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
       ["temperature", "NaN"],
     ]),
   );
+  // readViaMiot supplements missing props via legacy
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(new Map());
   const miot = await internals.readViaMiot();
   expect(miot.temperature).toBe(0);
 
@@ -1055,7 +1067,7 @@ it("covers final protocol mode branches in getProperties and setProperty", async
   await transport.close();
 });
 
-it("falls back to legacy when trySetViaMiot throws a non-retryable error", async () => {
+it("falls back to legacy for current call when trySetViaMiot throws a non-retryable error (keeps miot mode)", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
     protocolMode: "unknown" | "miot" | "legacy";
@@ -1074,7 +1086,8 @@ it("falls back to legacy when trySetViaMiot throws a non-retryable error", async
   const call = vi.spyOn(internals, "call").mockResolvedValue(null);
 
   await internals.setProperty("set_power", ["on"]);
-  expect(internals.protocolMode).toBe("legacy");
+  // protocolMode stays "miot" (no permanent switch)
+  expect(internals.protocolMode).toBe("miot");
   expect(call).toHaveBeenCalledWith("set_power", ["on"]);
 
   await transport.close();
@@ -1184,59 +1197,79 @@ it("setViaLegacy passes non-buzzer methods through directly", async () => {
   await transport.close();
 });
 
-it("skips MIOT probe for legacy-preferred models (Pro) and detects legacy directly", async () => {
+it("Pro model detects as MIOT when probe item code is 0", async () => {
   const transport = createProTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
     detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
   };
 
-  // Pro model should skip MIOT probe, only call get_prop for legacy detection
-  const call = vi.spyOn(internals, "call").mockResolvedValueOnce(["on"]);
-  await expect(internals.detectProtocolMode()).resolves.toBe("legacy");
+  const call = vi
+    .spyOn(internals, "call")
+    .mockResolvedValueOnce([
+      { did: "0", siid: 2, piid: 2, code: 0, value: true },
+    ]);
+  await expect(internals.detectProtocolMode()).resolves.toBe("miot");
   expect(call).toHaveBeenCalledTimes(1);
-  expect(call).toHaveBeenCalledWith("get_prop", ["power"]);
+  expect(call).toHaveBeenCalledWith("get_properties", [
+    { did: "0", siid: 2, piid: 2 },
+  ]);
 
   await transport.close();
 });
 
-it("returns null for Pro model when legacy detection also fails", async () => {
+it("Pro model falls to legacy when MIOT probe item code is non-zero", async () => {
   const transport = createProTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
     detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
   };
 
-  vi.spyOn(internals, "call").mockRejectedValueOnce(new Error("legacy-fail"));
-  await expect(internals.detectProtocolMode()).resolves.toBeNull();
+  const call = vi
+    .spyOn(internals, "call")
+    // MIOT probe returns non-zero code
+    .mockResolvedValueOnce([
+      { did: "0", siid: 2, piid: 2, code: -5001, value: null },
+    ])
+    // Legacy probe succeeds
+    .mockResolvedValueOnce(["on"]);
+  await expect(internals.detectProtocolMode()).resolves.toBe("legacy");
+  expect(call).toHaveBeenCalledTimes(2);
 
   await transport.close();
 });
 
-it("returns null for Pro model when legacy get_prop returns non-array", async () => {
+it("returns null for Pro model when both MIOT and legacy detection fail", async () => {
   const transport = createProTransport();
   const internals = transport as unknown as {
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
     detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
   };
 
-  vi.spyOn(internals, "call").mockResolvedValueOnce("not-array");
+  vi.spyOn(internals, "call")
+    .mockRejectedValueOnce(new Error("miot-fail"))
+    .mockRejectedValueOnce(new Error("legacy-fail"));
   await expect(internals.detectProtocolMode()).resolves.toBeNull();
 
   await transport.close();
 });
 
-it("Pro model end-to-end: setProperty goes through legacy path for buzzer", async () => {
+it("Pro model end-to-end: MIOT set for buzzer fails, falls back to legacy set_buzzer", async () => {
   const transport = createProTransport();
   const internals = transport as unknown as {
     protocolMode: "unknown" | "miot" | "legacy";
     detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
     call: (method: string, params: readonly unknown[]) => Promise<unknown>;
     setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
   };
 
-  // Detect as legacy
-  vi.spyOn(internals, "detectProtocolMode").mockResolvedValue("legacy");
+  internals.protocolMode = "miot";
+  // MIOT set returns false (unsupported)
+  vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
   const call = vi
     .spyOn(internals, "call")
     // set_buzzer_volume fails → falls back to set_buzzer
@@ -1244,9 +1277,108 @@ it("Pro model end-to-end: setProperty goes through legacy path for buzzer", asyn
     .mockResolvedValueOnce(null);
 
   await internals.setProperty("set_buzzer_volume", [100]);
-  expect(internals.protocolMode).toBe("legacy");
+  // protocolMode stays "miot" (no permanent switch)
+  expect(internals.protocolMode).toBe("miot");
   expect(call).toHaveBeenNthCalledWith(1, "set_buzzer_volume", [100]);
   expect(call).toHaveBeenNthCalledWith(2, "set_buzzer", ["on"]);
+
+  await transport.close();
+});
+
+it("readViaMiot supplements missing props from legacy and converts buzzer via toBuzzerVolume", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    readViaMiotBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaMiot: () => Promise<DeviceState>;
+  };
+
+  // MIOT batch returns most properties but NOT buzzer_volume
+  vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 5],
+      ["mode", "auto"],
+      ["temperature", 22],
+      ["humidity", 45],
+      ["aqi", 15],
+      ["filter1_life", 80],
+      ["child_lock", false],
+      ["led", 0],
+      ["motor1_speed", 900],
+      ["use_time", 200],
+      ["purify_volume", 500],
+    ]),
+  );
+  // Legacy supplement returns buzzer value as "on"
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([["buzzer_volume", "on"]]),
+  );
+  const state = await internals.readViaMiot();
+  expect(state.buzzer_volume).toBe(100);
+  expect(state.power).toBe(true);
+
+  await transport.close();
+});
+
+it("readViaMiot rethrows retryable error from legacy supplement", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    readViaMiotBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaMiot: () => Promise<DeviceState>;
+  };
+
+  vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 5],
+      ["mode", "auto"],
+    ]),
+  );
+  const retryable = Object.assign(new Error("timeout"), {
+    code: "ETIMEDOUT",
+  });
+  vi.spyOn(internals, "readViaLegacyBatch").mockRejectedValue(retryable);
+  await expect(internals.readViaMiot()).rejects.toBe(retryable);
+
+  await transport.close();
+});
+
+it("readViaMiot ignores non-retryable legacy supplement errors", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    readViaMiotBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaMiot: () => Promise<DeviceState>;
+  };
+
+  vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", true],
+      ["fan_level", 5],
+      ["mode", "auto"],
+    ]),
+  );
+  vi.spyOn(internals, "readViaLegacyBatch").mockRejectedValue(
+    new Error("command error"),
+  );
+  // Should NOT throw - just use defaults for missing properties
+  const state = await internals.readViaMiot();
+  expect(state.power).toBe(true);
+  expect(state.buzzer_volume).toBe(0); // default
 
   await transport.close();
 });
