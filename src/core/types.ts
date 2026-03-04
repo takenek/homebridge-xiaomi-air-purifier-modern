@@ -17,7 +17,7 @@ export interface DeviceState {
   filter1_life: number;
   child_lock: boolean;
   led: boolean;
-  buzzer_volume: number;
+
   motor1_speed: number;
   use_time: number;
   purify_volume: number;
@@ -33,7 +33,7 @@ export const READ_PROPERTIES = [
   "filter1_life",
   "child_lock",
   "led",
-  "buzzer_volume",
+
   "motor1_speed",
   "use_time",
   "purify_volume",

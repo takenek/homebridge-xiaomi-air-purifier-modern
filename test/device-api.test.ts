@@ -12,7 +12,6 @@ const baseState: DeviceState = {
   filter1_life: 77,
   child_lock: false,
   led: true,
-  buzzer_volume: 50,
   motor1_speed: 890,
   use_time: 100,
   purify_volume: 200,
@@ -58,7 +57,7 @@ describe("device API read/write", () => {
     expect(state?.filter1_life).toBeTypeOf("number");
     expect(state?.child_lock).toBeTypeOf("boolean");
     expect(state?.led).toBeTypeOf("boolean");
-    expect(state?.buzzer_volume).toBeTypeOf("number");
+
     expect(state?.motor1_speed).toBeTypeOf("number");
     expect(state?.use_time).toBeTypeOf("number");
     expect(state?.purify_volume).toBeTypeOf("number");
@@ -77,7 +76,6 @@ describe("device API read/write", () => {
     await client.setMode("sleep");
     await client.setChildLock(true);
     await client.setLed(false);
-    await client.setBuzzerVolume(35);
 
     expect(transport.methods.map((entry) => entry.method)).toEqual([
       "set_power",
@@ -85,7 +83,6 @@ describe("device API read/write", () => {
       "set_mode",
       "set_child_lock",
       "set_led",
-      "set_buzzer_volume",
     ]);
     await client.shutdown();
   });
@@ -125,8 +122,6 @@ describe("device API read/write", () => {
     await client.setChildLock(false);
     await client.setLed(true);
     await client.setLed(false);
-    await client.setBuzzerVolume(0);
-    await client.setBuzzerVolume(100);
     await client.setFanLevel(1);
     await client.setFanLevel(16);
 
@@ -138,8 +133,7 @@ describe("device API read/write", () => {
         { method: "set_child_lock", params: ["off"] },
         { method: "set_led", params: ["on"] },
         { method: "set_led", params: ["off"] },
-        { method: "set_buzzer_volume", params: [0] },
-        { method: "set_buzzer_volume", params: [100] },
+
         { method: "set_level_fan", params: [1] },
         { method: "set_level_fan", params: [16] },
       ]),

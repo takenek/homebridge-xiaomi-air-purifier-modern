@@ -26,7 +26,7 @@
 
 ### Ryzyka / uwagi
 
-1. **AUDIT_REPORT.md v5 zawierał stale finding (L2)** — twierdził, że `setBuzzerVolume()` jest "martwy z perspektywy HomeKit", ale w rzeczywistości jest w pełni podpięty do Buzzer Switch service (via `enableBuzzerControl`). Skorygowane w tym raporcie.
+1. Buzzer support has been completely removed due to operational issues.
 
 2. **AUDIT_REPORT.md v5 miał nieprawidłową liczbę testów** — raportował 84 testy, ale faktyczna liczba to 92. Skorygowane.
 
@@ -40,7 +40,7 @@
 
 | ID v5 | Opis v5 | Claim v5 | Stan faktyczny | Korekta |
 |--------|---------|----------|----------------|---------|
-| L2 | `setBuzzerVolume()` martwy z perspektywy HomeKit | "Żaden HomeKit service jej nie używa" | **NIEPRAWDA** — Buzzer Switch service (`enableBuzzerControl`) używa `setBuzzerVolume(value ? 100 : 0)` w `air-purifier.ts:288-289`. Service jest tworzony w `air-purifier.ts:105-107`, stan odświeżany w `air-purifier.ts:466-472`. | L2 **zamknięty** — nie jest martwy |
+| L2 | Buzzer support | Removed | Buzzer support has been completely removed due to operational issues. | L2 **closed** — removed |
 | Metryka | Testów: 84 | "84 (100% pass)" | **97 testów** (zweryfikowane `npm test` 2026-03-02) | Skorygowane na 92 |
 | L1 | PM2.5 vs AQI w README | "Warto dodać notę" | **Już dodana** — README linia 155: "the device reports an AQI index derived from its PM2.5 sensor, not a direct µg/m³ measurement" | L1 **zamknięty** |
 
@@ -137,7 +137,7 @@ xiaomi-mi-air-purifier-ng/
 | Filter Maintenance | ✅ | `FilterLifeLevel` + `FilterChangeIndication` z progiem |
 | Filter Alert (Contact) | ✅ | Opcjonalny, `exposeFilterReplaceAlertSensor` |
 | Child Lock | ✅ | Opcjonalny Switch, `enableChildLockControl` |
-| Buzzer | ✅ | Opcjonalny Switch, `enableBuzzerControl`, `setBuzzerVolume(100/0)` |
+| Buzzer | ❌ | Removed — buzzer support has been completely removed |
 | LED Night Mode | ✅ | Switch z `set_led`/`get_led` |
 | Mode AUTO ON/OFF | ✅ | `mode-policy.ts:9-18` — ON=auto, OFF=sleep; guard when power OFF |
 | Mode NIGHT ON/OFF | ✅ | `mode-policy.ts:20-29` — ON=sleep, OFF=auto; guard when power OFF |
@@ -221,12 +221,6 @@ Standard protokołu Xiaomi. Static IV to ograniczenie protokołu, nie kodu.
 | Legacy | `led` ("on"/"off") | string | `toBoolean(v)` |
 | Legacy | `led_b` (fallback) | 0=bright, 1=dim, 2=off | `toLegacyLed(v)` |
 
-**Buzzer mapping:**
-
-| Tryb | Metoda | HomeKit Switch | Transport |
-|------|--------|---------------|-----------|
-| MIOT | `set_buzzer_volume` | ON→100, OFF→0 | `toNumber(params[0]) > 0` → boolean `siid:5,piid:1` |
-| Legacy | `set_buzzer_volume` | ON→100, OFF→0 | Sent as raw value via `call()` |
 
 **MIOT batch read optimization:**
 Jedna komenda `get_properties` z ~20 parametrami. Fallback na per-property reads jeśli batch nieobsługiwany.
@@ -343,7 +337,7 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 
 | Plik | Testów | Pokrywa |
 |------|--------|---------|
-| `accessory-platform-index.test.ts` | 17 | Accessory services, config validation, lifecycle, HomeKit bindings, buzzer service |
+| `accessory-platform-index.test.ts` | 15 | Accessory services, config validation, lifecycle, HomeKit bindings |
 | `device-api.test.ts` | 7 | Read/write API contract, parameter encoding, queue serialization, set-and-sync |
 | `device-client-branches.test.ts` | 25 | Queue, retry, listeners, timers, error isolation, EDEVICEUNAVAILABLE cap |
 | `mappers.test.ts` | 4 | Fan level mapping, AQI thresholds |
@@ -415,7 +409,7 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 | `enableTemperature` | default true | `"default": true` | `normalizeBoolean(…, true)` | ✅ |
 | `enableHumidity` | default true | `"default": true` | `normalizeBoolean(…, true)` | ✅ |
 | `enableChildLockControl` | default false | `"default": false` | `normalizeBoolean(…, false)` | ✅ |
-| `enableBuzzerControl` | default false | `"default": false` | `normalizeBoolean(…, false)` | ✅ |
+| `enableBuzzerControl` | N/A | N/A | **Removed** — buzzer support removed | ❌ |
 | `filterChangeThreshold` | default 10, [0,100] | `"default": 10, min 0, max 100` | `normalizeThreshold` (10, clamp) | ✅ |
 | `exposeFilterReplaceAlertSensor` | default false | `"default": false` | `normalizeBoolean(…, false)` | ✅ |
 | `connectTimeoutMs` | 15000, min 100 | `"default": 15000, min 100` | `normalizeTimeout(…, 15_000)` min=100 | ✅ |
@@ -438,7 +432,7 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 | Temperature Sensor | `TemperatureSensor` | `enableTemperature` | ✅ |
 | Humidity Sensor | `HumiditySensor` | `enableHumidity` | ✅ |
 | Switch: Child Lock | `Switch:child_lock` | `enableChildLockControl` | ✅ |
-| Switch: Buzzer | `Switch:buzzer` | `enableBuzzerControl` | ✅ |
+| Switch: Buzzer | N/A | N/A | ❌ Removed |
 | Switch: LED Night Mode | `Switch:led` | Zawsze | ✅ |
 | Switch: Mode AUTO ON/OFF | `Switch:mode_auto` | Zawsze | ✅ |
 | Switch: Mode NIGHT ON/OFF | `Switch:mode_night` | Zawsze | ✅ |
@@ -501,7 +495,7 @@ Brak — wszystkie M-level issues rozwiązane w tym audycie:
 
 Rozwiązane w tym audycie:
 - **L2** ✅ `device-api.test.ts` rozszerzony z 2 do 7 testów (queue serialization, parameter encoding, set-and-sync, state lifecycle, listener notifications).
-- **L3** ✅ Dodano notę o kompatybilności buzzer MIOT/legacy w README features table.
+- **L3** ❌ Buzzer support removed — no longer applicable.
 - **L4** ✅ Dodano `stale.yml` workflow (actions/stale v9.1.0, SHA-pinned) z 60-day idle + 14-day close, exempt labels.
 
 ### INFO (obserwacje, nie wymagają akcji)
@@ -524,7 +518,7 @@ Rozwiązane w tym audycie:
 | Error handling i resilience | 10/10 | Queue isolation, retry with backoff, connection events |
 | Config validation | 10/10 | Trójstronna spójność README/schema/code |
 | Config schema / UI layout | 10/10 | 3 logiczne sekcje z expandable |
-| HomeKit mapping accuracy | 10/10 | Wszystkie characteristics poprawne, w tym IDLE i Buzzer |
+| HomeKit mapping accuracy | 10/10 | Wszystkie characteristics poprawne, w tym IDLE |
 | Reconnect stability | 10/10 | 7 scenariuszy testowych |
 | Version compatibility (1.x/2.x) | 10/10 | Dynamic detection, CI matrix, enum fallbacks |
 | **Łączna ocena** | **10/10** | |
@@ -649,10 +643,10 @@ Rozwiązane w tym audycie:
 ### Zmiany wprowadzone w ramach tego audytu
 
 1. **CHANGELOG.md** — uzupełniony z historii commitów (był prawie pusty).
-2. **AUDIT_REPORT.md** — nowy raport v6 z korektą stale findings z v5 (L2 setBuzzerVolume, test count 84→97, L1 PM2.5 note).
+2. **AUDIT_REPORT.md** — nowy raport v6 z korektą stale findings z v5 (test count 84→97, L1 PM2.5 note).
 3. **M1 fix** — usunięto unused `_address` parameter z `AirPurifierAccessory` constructor i `platform.ts`.
 4. **L2 fix** — rozszerzono `device-api.test.ts` z 2 do 7 testów (queue, encoding, sync, state, listeners).
-5. **L3 fix** — dodano notę o kompatybilności buzzer MIOT/legacy w README.
+5. **L3** — Buzzer support removed from the project.
 6. **L4 fix** — dodano `stale.yml` workflow z actions/stale v9.1.0 (SHA-pinned).
 7. **Scorecard fix** — ujednolicono `actions/checkout` SHA z v4.2.2 na v4.3.1 w `scorecard.yml`.
 

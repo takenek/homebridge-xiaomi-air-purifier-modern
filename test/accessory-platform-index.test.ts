@@ -19,7 +19,6 @@ beforeEach(() => {
     filter1_life: 90,
     child_lock: false,
     led: true,
-    buzzer_volume: 50,
     motor1_speed: 1000,
     use_time: 10,
     purify_volume: 10,
@@ -195,7 +194,6 @@ const baseState = {
   filter1_life: 80,
   child_lock: false,
   led: true,
-  buzzer_volume: 30,
   motor1_speed: 600,
   use_time: 10,
   purify_volume: 20,
@@ -231,9 +229,7 @@ class FakeClient {
   public async setLed(value: boolean): Promise<void> {
     this.calls.push(`led:${value}`);
   }
-  public async setBuzzerVolume(volume: number): Promise<void> {
-    this.calls.push(`buzzer:${volume}`);
-  }
+
   public async setMode(value: string): Promise<void> {
     this.calls.push(`mode:${value}`);
   }
@@ -839,101 +835,6 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
-  it("exposes optional Buzzer switch that controls buzzer volume", async () => {
-    const api = makeApi();
-    const logger = makeLogger();
-    const client = new FakeClient();
-
-    const accessory = new AirPurifierAccessory(
-      api as never,
-      logger as never,
-      "Office",
-      "10.0.0.1",
-      client as never,
-      "zhimi.airpurifier.3h",
-      10,
-      {
-        enableAirQuality: true,
-        enableTemperature: true,
-        enableHumidity: true,
-        exposeFilterReplaceAlertSensor: false,
-        enableChildLockControl: false,
-        enableBuzzerControl: true,
-      },
-    );
-
-    const buzzerService = accessory
-      .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:Buzzer",
-      ) as unknown as FakeService;
-    expect(buzzerService).toBeDefined();
-
-    const buzzerSetter = buzzerService.getCharacteristic(
-      (api as unknown as { hap: { Characteristic: { On: { UUID: string } } } })
-        .hap.Characteristic.On,
-    ).onSetHandler;
-
-    await buzzerSetter?.(true);
-    await buzzerSetter?.(false);
-    expect(client.calls).toContain("buzzer:100");
-    expect(client.calls).toContain("buzzer:0");
-
-    // Verify buzzer state update from device state
-    client.state = { ...baseState, buzzer_volume: 50 };
-    for (const listener of client.listeners) {
-      listener(client.state);
-    }
-    expect(
-      buzzerService.updates.some(
-        (update) => update.characteristic === "on" && update.value === true,
-      ),
-    ).toBe(true);
-
-    client.state = { ...baseState, buzzer_volume: 0 };
-    for (const listener of client.listeners) {
-      listener(client.state);
-    }
-    expect(
-      buzzerService.updates.some(
-        (update) => update.characteristic === "on" && update.value === false,
-      ),
-    ).toBe(true);
-  });
-
-  it("does not expose Buzzer switch when enableBuzzerControl is false", () => {
-    const api = makeApi();
-    const logger = makeLogger();
-    const client = new FakeClient();
-
-    const accessory = new AirPurifierAccessory(
-      api as never,
-      logger as never,
-      "Office",
-      "10.0.0.1",
-      client as never,
-      "zhimi.airpurifier.3h",
-      10,
-      {
-        enableAirQuality: true,
-        enableTemperature: true,
-        enableHumidity: true,
-        exposeFilterReplaceAlertSensor: false,
-        enableChildLockControl: false,
-        enableBuzzerControl: false,
-      },
-    );
-
-    const buzzerService = accessory
-      .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:Buzzer",
-      );
-    expect(buzzerService).toBeUndefined();
-  });
-
   it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {
     const api = makeApi(false);
     const logger = makeLogger();
@@ -1192,23 +1093,6 @@ describe("platform and index", () => {
     expect(noAirServices).not.toContain("Temp:NoAirSensors Temperature");
     expect(noAirServices).not.toContain("Humidity:NoAirSensors Humidity");
     expect(noAirServices).not.toContain("Switch:Child Lock");
-    expect(noAirServices).not.toContain("Switch:Buzzer");
-
-    const pluginWithBuzzer = new XiaomiAirPurifierAccessoryPlugin(
-      logger as never,
-      {
-        name: "BuzzerEnabled",
-        address: "1.1.1.10",
-        token: "00112233445566778899aabbccddeeff",
-        model: "zhimi.airpurifier.3h",
-        enableBuzzerControl: true,
-      } as never,
-      api as never,
-    );
-    const buzzerServices = pluginWithBuzzer
-      .getServices()
-      .map((service) => (service as unknown as FakeService).name);
-    expect(buzzerServices).toContain("Switch:Buzzer");
 
     const maskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
       logger as never,

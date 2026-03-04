@@ -133,10 +133,6 @@ export class DeviceClient {
     await this.enqueueSetAndSync("set_led", [enabled ? "on" : "off"]);
   }
 
-  public async setBuzzerVolume(volume: number): Promise<void> {
-    await this.enqueueSetAndSync("set_buzzer_volume", [volume]);
-  }
-
   private async enqueueSetAndSync(
     method: string,
     params: readonly unknown[],

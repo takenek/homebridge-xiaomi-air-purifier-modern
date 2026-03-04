@@ -133,7 +133,7 @@ const MIOT_MAP: Record<string, readonly MiotProperty[]> = {
   filter1_life: [{ did: MIOT_DID, siid: 4, piid: 3 }],
   child_lock: [{ did: MIOT_DID, siid: 7, piid: 1 }],
   led: [{ did: MIOT_DID, siid: 6, piid: 1 }],
-  buzzer_volume: [{ did: MIOT_DID, siid: 5, piid: 1 }],
+
   motor1_speed: [{ did: MIOT_DID, siid: 10, piid: 8 }],
   use_time: [{ did: MIOT_DID, siid: 4, piid: 2 }],
   purify_volume: [{ did: MIOT_DID, siid: 4, piid: 1 }],
@@ -149,7 +149,7 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   filter1_life: ["filter1_life", "filter_life"],
   child_lock: ["child_lock"],
   led: ["led", "led_b"],
-  buzzer_volume: ["buzzer_volume"],
+
   motor1_speed: ["motor1_speed"],
   use_time: ["use_time"],
   purify_volume: ["purify_volume"],
@@ -355,7 +355,6 @@ export class ModernMiioTransport implements MiioTransport {
       filter1_life: toNumber(valueByKey.get("filter1_life")),
       child_lock: toBoolean(valueByKey.get("child_lock")),
       led: toNumber(valueByKey.get("led")) !== 2,
-      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
       motor1_speed: toNumber(valueByKey.get("motor1_speed")),
       use_time: toNumber(valueByKey.get("use_time")),
       purify_volume: toNumber(valueByKey.get("purify_volume")),
@@ -461,7 +460,6 @@ export class ModernMiioTransport implements MiioTransport {
       filter1_life: toNumber(valueByKey.get("filter1_life")),
       child_lock: toBoolean(valueByKey.get("child_lock")),
       led: toLegacyLed(valueByKey.get("led")),
-      buzzer_volume: toNumber(valueByKey.get("buzzer_volume")),
       motor1_speed: toNumber(valueByKey.get("motor1_speed")),
       use_time: toNumber(valueByKey.get("use_time")),
       purify_volume: toNumber(valueByKey.get("purify_volume")),
@@ -571,10 +569,6 @@ export class ModernMiioTransport implements MiioTransport {
       return send([
         { did, siid: 6, piid: 1, value: params[0] === "on" ? 0 : 2 },
       ]);
-    }
-
-    if (method === "set_buzzer_volume") {
-      return send([{ did, siid: 5, piid: 1, value: toNumber(params[0]) > 0 }]);
     }
 
     if (method === "set_level_fan") {

@@ -19,7 +19,6 @@ const state: DeviceState = {
   filter1_life: 65,
   child_lock: false,
   led: true,
-  buzzer_volume: 40,
   motor1_speed: 700,
   use_time: 1234,
   purify_volume: 5678,
