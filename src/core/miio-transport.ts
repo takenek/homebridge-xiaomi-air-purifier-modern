@@ -372,7 +372,9 @@ export class ModernMiioTransport implements MiioTransport {
         params: readonly unknown[];
       }> = [];
       const observedAliases = new Map<string, unknown>();
-      try {
+      const probeBuzzerAliases = async (
+        includeDynamicCalls: boolean,
+      ): Promise<void> => {
         const raw = await this.call("get_prop", buzzerCandidateAliases);
         const values = Array.isArray(raw) ? raw : [];
         values.forEach((value, i) => {
@@ -386,36 +388,47 @@ export class ModernMiioTransport implements MiioTransport {
           }
           observedAliases.set(alias, value);
 
-          const dynamicMethod = `set_${alias}`;
-          if (alias === "mute") {
-            dynamicFallbackCalls.push({
-              method: dynamicMethod,
-              params: [enabled ? "off" : "on"],
-            });
-            dynamicFallbackCalls.push({
-              method: dynamicMethod,
-              params: [!enabled],
-            });
-            dynamicFallbackCalls.push({
-              method: dynamicMethod,
-              params: [enabled ? 0 : 1],
-            });
+          if (!includeDynamicCalls) {
             return;
           }
 
-          dynamicFallbackCalls.push({
-            method: dynamicMethod,
-            params: [enabled ? "on" : "off"],
-          });
-          dynamicFallbackCalls.push({
-            method: dynamicMethod,
-            params: [enabled],
-          });
-          dynamicFallbackCalls.push({
-            method: dynamicMethod,
-            params: [enabled ? 1 : 0],
-          });
+          const dynamicMethod = `set_${alias}`;
+          if (alias === "mute") {
+            dynamicFallbackCalls.push(
+              {
+                method: dynamicMethod,
+                params: [enabled ? "off" : "on"],
+              },
+              {
+                method: dynamicMethod,
+                params: [!enabled],
+              },
+              {
+                method: dynamicMethod,
+                params: [enabled ? 0 : 1],
+              },
+            );
+            return;
+          }
+
+          dynamicFallbackCalls.push(
+            {
+              method: dynamicMethod,
+              params: [enabled ? "on" : "off"],
+            },
+            {
+              method: dynamicMethod,
+              params: [enabled],
+            },
+            {
+              method: dynamicMethod,
+              params: [enabled ? 1 : 0],
+            },
+          );
         });
+      };
+      try {
+        await probeBuzzerAliases(true);
       } catch (error: unknown) {
         if (isRetryableError(error)) {
           throw error;
@@ -435,6 +448,14 @@ export class ModernMiioTransport implements MiioTransport {
       }
 
       if (this.options.model === "zhimi.airpurifier.pro") {
+        try {
+          await probeBuzzerAliases(false);
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+        }
+
         for (const [alias, value] of observedAliases) {
           if (isBuzzerEnabledFromAlias(alias, value) === enabled) {
             return;
