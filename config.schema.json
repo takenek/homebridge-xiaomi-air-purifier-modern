@@ -192,7 +192,10 @@
       "condition": "(model && model.model ? model.model : model) !== 'zhimi.airpurifier.pro'",
       "items": [
         {
-          "key": "enableBuzzerControl"
+          "key": "enableBuzzerControl",
+          "condition": {
+            "functionBody": "return model !== 'zhimi.airpurifier.pro';"
+          }
         }
       ]
     },
