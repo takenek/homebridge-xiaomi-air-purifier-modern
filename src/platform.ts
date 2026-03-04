@@ -178,10 +178,18 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
       typedConfig.enableChildLockControl,
       false,
     );
-    const enableBuzzerControl = normalizeBoolean(
-      typedConfig.enableBuzzerControl,
-      false,
-    );
+    const enableBuzzerControl =
+      model === "zhimi.airpurifier.pro"
+        ? false
+        : normalizeBoolean(typedConfig.enableBuzzerControl, false);
+    if (
+      model === "zhimi.airpurifier.pro" &&
+      typedConfig.enableBuzzerControl === true
+    ) {
+      this.log.warn(
+        "Buzzer control is not supported on zhimi.airpurifier.pro and has been disabled.",
+      );
+    }
     const maskDeviceAddressInLogs = normalizeBoolean(
       typedConfig.maskDeviceAddressInLogs,
       false,

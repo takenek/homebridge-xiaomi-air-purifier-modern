@@ -1210,6 +1210,46 @@ describe("platform and index", () => {
       .map((service) => (service as unknown as FakeService).name);
     expect(buzzerServices).toContain("Switch:Buzzer");
 
+    // Buzzer is forced off for zhimi.airpurifier.pro
+    const proBuzzerPlugin = new XiaomiAirPurifierAccessoryPlugin(
+      logger as never,
+      {
+        name: "ProBuzzer",
+        address: "1.1.1.11",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.pro",
+        enableBuzzerControl: true,
+      } as never,
+      api as never,
+    );
+    const proBuzzerServices = proBuzzerPlugin
+      .getServices()
+      .map((service) => (service as unknown as FakeService).name);
+    expect(proBuzzerServices).not.toContain("Switch:Buzzer");
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Buzzer control is not supported on zhimi.airpurifier.pro and has been disabled.",
+    );
+
+    // Pro model without explicitly enabling buzzer — no warning logged
+    const proNoBuzzerLogger = makeLogger();
+    const proNoBuzzerPlugin = new XiaomiAirPurifierAccessoryPlugin(
+      proNoBuzzerLogger as never,
+      {
+        name: "ProNoBuzzer",
+        address: "1.1.1.12",
+        token: "00112233445566778899aabbccddeeff",
+        model: "zhimi.airpurifier.pro",
+      } as never,
+      api as never,
+    );
+    const proNoBuzzerServices = proNoBuzzerPlugin
+      .getServices()
+      .map((service) => (service as unknown as FakeService).name);
+    expect(proNoBuzzerServices).not.toContain("Switch:Buzzer");
+    expect(proNoBuzzerLogger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("Buzzer control is not supported"),
+    );
+
     const maskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
       logger as never,
       {

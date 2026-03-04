@@ -19,7 +19,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
-| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`). MIOT models use a boolean buzzer flag; legacy models receive a volume value (100/0). |
+| Switch: Buzzer | Optional buzzer on/off (`enableBuzzerControl`). MIOT models use a boolean buzzer flag; legacy models receive a volume value (100/0). **Not available on `zhimi.airpurifier.pro`** — the option is silently ignored for this model. |
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
@@ -89,7 +89,7 @@ Each purifier is configured as a separate accessory entry:
 | `enableTemperature` | boolean | No | Expose Temperature Sensor service (default `true`) |
 | `enableHumidity` | boolean | No | Expose Humidity Sensor service (default `true`) |
 | `enableChildLockControl` | boolean | No | Expose Child Lock switch service (default `false`) |
-| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`) |
+| `enableBuzzerControl` | boolean | No | Expose Buzzer on/off switch service (default `false`). **Not supported on `zhimi.airpurifier.pro`** — the setting is ignored and a warning is logged. |
 | `filterChangeThreshold` | integer | No | Filter warning threshold in percent, warning is raised when `filter1_life` is at or below threshold (default `10`) |
 | `exposeFilterReplaceAlertSensor` | boolean | No | Adds optional HomeKit `Filter Replace Alert` contact sensor workaround for Home app visibility (default `false`) |
 | `connectTimeoutMs` | integer | No | MIIO handshake timeout in milliseconds (default `15000`) |
@@ -117,7 +117,8 @@ Each purifier is configured as a separate accessory entry:
 |-------|-------------------------|-------|
 | Mi Air Purifier 2H (`zhimi.airpurifier.2h`) | Validated | Covered by integration-style read/write tests. |
 | Mi Air Purifier 3 / 3H (`zhimi.airpurifier.3`, `zhimi.airpurifier.3h`) | Validated | Legacy + MIOT fallback paths validated. |
-| Mi Air Purifier 4 / Pro (`zhimi.airpurifier.4`, `zhimi.airpurifier.pro`) | Validated | Primary MIOT mode and fallback paths validated. |
+| Mi Air Purifier 4 (`zhimi.airpurifier.4`) | Validated | Primary MIOT mode and fallback paths validated. |
+| Mi Air Purifier Pro (`zhimi.airpurifier.pro`) | Validated | Primary MIOT mode validated. Buzzer control is not supported on this model and is automatically disabled. |
 | Other `zhimi.airpurifier.*` variants | Best effort | Transport supports MIOT + legacy probing, but behavior may differ by firmware branch. |
 
 ---
