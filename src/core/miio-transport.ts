@@ -324,6 +324,45 @@ export class ModernMiioTransport implements MiioTransport {
         method: string;
         params: readonly unknown[];
       }> = [{ method, params }];
+      const observeBuzzerAliases = async (): Promise<Map<string, unknown>> => {
+        const observedAliases = new Map<string, unknown>();
+        const raw = await this.call("get_prop", buzzerCandidateAliases);
+        const values = Array.isArray(raw) ? raw : [];
+        values.forEach((value, i) => {
+          if (value === undefined || value === null || value === "") {
+            return;
+          }
+
+          const alias = buzzerCandidateAliases[i];
+          if (!alias) {
+            return;
+          }
+
+          observedAliases.set(alias, value);
+        });
+
+        return observedAliases;
+      };
+      const probeBuzzerState = async (): Promise<Map<string, unknown>> => {
+        try {
+          return await observeBuzzerAliases();
+        } catch (error: unknown) {
+          if (isRetryableError(error)) {
+            throw error;
+          }
+
+          return new Map<string, unknown>();
+        }
+      };
+      const stateMatchesEnabled = (aliases: Map<string, unknown>): boolean => {
+        for (const [alias, value] of aliases) {
+          if (isBuzzerEnabledFromAlias(alias, value) === enabled) {
+            return true;
+          }
+        }
+
+        return false;
+      };
 
       if (this.options.model === "zhimi.airpurifier.pro") {
         fallbackCalls.push(
@@ -356,7 +395,18 @@ export class ModernMiioTransport implements MiioTransport {
       for (const fallbackCall of fallbackCalls) {
         try {
           await this.call(fallbackCall.method, fallbackCall.params);
-          return;
+          if (this.options.model !== "zhimi.airpurifier.pro") {
+            return;
+          }
+
+          const aliases = await probeBuzzerState();
+          if (stateMatchesEnabled(aliases)) {
+            return;
+          }
+
+          lastFallbackError = new Error(
+            `Buzzer command ${fallbackCall.method} acknowledged but state remained unchanged`,
+          );
         } catch (error: unknown) {
           if (isRetryableError(error)) {
             throw error;
@@ -372,25 +422,10 @@ export class ModernMiioTransport implements MiioTransport {
         params: readonly unknown[];
       }> = [];
       const observedAliases = new Map<string, unknown>();
-      const probeBuzzerAliases = async (
-        includeDynamicCalls: boolean,
-      ): Promise<void> => {
-        const raw = await this.call("get_prop", buzzerCandidateAliases);
-        const values = Array.isArray(raw) ? raw : [];
-        values.forEach((value, i) => {
-          if (value === undefined || value === null || value === "") {
-            return;
-          }
-
-          const alias = buzzerCandidateAliases[i];
-          if (!alias) {
-            return;
-          }
+      const probeBuzzerAliases = async (): Promise<void> => {
+        const aliases = await observeBuzzerAliases();
+        aliases.forEach((value, alias) => {
           observedAliases.set(alias, value);
-
-          if (!includeDynamicCalls) {
-            return;
-          }
 
           const dynamicMethod = `set_${alias}`;
           if (alias === "mute") {
@@ -428,7 +463,7 @@ export class ModernMiioTransport implements MiioTransport {
         });
       };
       try {
-        await probeBuzzerAliases(true);
+        await probeBuzzerAliases();
       } catch (error: unknown) {
         if (isRetryableError(error)) {
           throw error;
@@ -448,18 +483,14 @@ export class ModernMiioTransport implements MiioTransport {
       }
 
       if (this.options.model === "zhimi.airpurifier.pro") {
-        try {
-          await probeBuzzerAliases(false);
-        } catch (error: unknown) {
-          if (isRetryableError(error)) {
-            throw error;
-          }
+        const aliases = new Map(observedAliases);
+        const refreshedAliases = await probeBuzzerState();
+        for (const [alias, value] of refreshedAliases) {
+          aliases.set(alias, value);
         }
 
-        for (const [alias, value] of observedAliases) {
-          if (isBuzzerEnabledFromAlias(alias, value) === enabled) {
-            return;
-          }
+        if (stateMatchesEnabled(aliases)) {
+          return;
         }
       }
 
