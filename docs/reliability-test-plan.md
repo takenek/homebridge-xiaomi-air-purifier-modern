@@ -7,6 +7,16 @@ This plugin uses automated Vitest scenarios to validate reconnect behavior and H
 When purifier power is OFF, mode switches are not exposed as independently available controls.
 State reconciliation keeps HomeKit characteristics aligned with the single source of truth (`DeviceClient.state`) and avoids creating extra switch accessories in OFF state transitions.
 
+## Buzzer control: pro model compatibility
+
+The `zhimi.airpurifier.pro` model uses the legacy `set_buzzer` command with `"on"`/`"off"` string params instead of the newer `set_buzzer_volume` command with a numeric volume. The transport layer handles this transparently:
+
+1. When MIOT `set_properties` fails with a non-retryable error, the transport falls back to legacy mode (instead of propagating the error).
+2. In legacy mode, if `set_buzzer_volume` fails (command error), the transport automatically retries with `set_buzzer` and `"on"`/`"off"`.
+3. For reading, the `buzzer` property alias (`"on"`/`"off"` strings) is mapped to a numeric buzzer volume (100/0) via the `toBuzzerVolume` converter.
+
+This makes the buzzer switch work correctly in HomeKit for both `pro` and `3h`/`4` models.
+
 ## Automated scenarios
 
 All scenarios below are covered in tests (`test/network-scenarios.test.ts` and accessory sync tests).
