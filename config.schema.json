@@ -10,11 +10,11 @@
         "type": "array",
         "items": {
           "type": "object",
+          "required": ["name", "address", "token", "model"],
           "properties": {
             "name": {
               "title": "Name",
               "type": "string",
-              "required": true,
               "default": "Air Purifier",
               "placeholder": "Air Purifier",
               "description": "Display name for this accessory in HomeKit."
@@ -22,28 +22,40 @@
             "address": {
               "title": "IP Address",
               "type": "string",
-              "required": true,
               "format": "ipv4",
               "description": "LAN IP address of the air purifier."
             },
             "token": {
               "title": "Token",
               "type": "string",
-              "required": true,
               "pattern": "^[0-9a-fA-F]{32}$",
               "description": "32-character token in hexadecimal format (0-9, a-f)."
             },
             "model": {
               "title": "Model",
               "type": "string",
-              "required": true,
               "description": "Xiaomi model identifier. Check the README for supported models.",
-              "enum": [
-                "zhimi.airpurifier.2h",
-                "zhimi.airpurifier.3",
-                "zhimi.airpurifier.3h",
-                "zhimi.airpurifier.4",
-                "zhimi.airpurifier.pro"
+              "oneOf": [
+                {
+                  "title": "Mi Air Purifier 2H",
+                  "enum": ["zhimi.airpurifier.2h"]
+                },
+                {
+                  "title": "Mi Air Purifier 3",
+                  "enum": ["zhimi.airpurifier.3"]
+                },
+                {
+                  "title": "Mi Air Purifier 3H",
+                  "enum": ["zhimi.airpurifier.3h"]
+                },
+                {
+                  "title": "Mi Air Purifier 4",
+                  "enum": ["zhimi.airpurifier.4"]
+                },
+                {
+                  "title": "Mi Air Purifier Pro",
+                  "enum": ["zhimi.airpurifier.pro"]
+                }
               ]
             },
             "enableAirQuality": {
@@ -150,16 +162,17 @@
           "key": "devices[].model"
         },
         {
-          "type": "flex",
-          "flex-flow": "row wrap",
-          "items": ["devices[].address", "devices[].token"]
+          "key": "devices[].address"
+        },
+        {
+          "key": "devices[].token"
         },
         {
           "type": "help",
           "helpvalue": "Please check the README for instruction about how to get a <em>token</em>."
         },
         {
-          "type": "section",
+          "type": "fieldset",
           "title": "Sensors",
           "expandable": true,
           "expanded": true,
@@ -176,7 +189,7 @@
           ]
         },
         {
-          "type": "section",
+          "type": "fieldset",
           "title": "Alerts & Controls",
           "expandable": true,
           "expanded": false,
@@ -193,7 +206,7 @@
           ]
         },
         {
-          "type": "section",
+          "type": "fieldset",
           "title": "Privacy & Timing",
           "expandable": true,
           "expanded": false,
