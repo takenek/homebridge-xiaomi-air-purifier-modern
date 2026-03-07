@@ -51,7 +51,7 @@ export const isRetryableError = (error: unknown): boolean => {
     return false;
   }
 
-  const code = Reflect.get(error, "code");
+  const code = (error as unknown as { code?: unknown }).code;
   if (typeof code === "string") {
     return RETRYABLE_ERROR_CODES.has(code);
   }
@@ -67,7 +67,7 @@ export const effectiveMaxRetries = (
     return policyMaxRetries;
   }
 
-  const code = Reflect.get(error, "code");
+  const code = (error as unknown as { code?: unknown }).code;
   if (code === "EDEVICEUNAVAILABLE") {
     return Math.min(DEVICE_UNAVAILABLE_MAX_RETRIES, policyMaxRetries);
   }

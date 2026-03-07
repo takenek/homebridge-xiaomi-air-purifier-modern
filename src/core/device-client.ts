@@ -228,7 +228,7 @@ export class DeviceClient {
         attempt += 1;
         const code =
           error instanceof Error
-            ? String(Reflect.get(error, "code") ?? "UNKNOWN")
+            ? String((error as unknown as { code?: string }).code ?? "UNKNOWN")
             : "UNKNOWN";
         const message =
           error instanceof Error ? error.message : "Unknown error";

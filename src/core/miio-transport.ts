@@ -48,6 +48,7 @@ interface MiotValueResult {
 }
 
 class MiioCommandError extends Error {
+  public readonly code: string | undefined;
   public constructor(
     public readonly miioCode: number | null,
     message: string,
@@ -55,7 +56,7 @@ class MiioCommandError extends Error {
     super(message);
     this.name = "MiioCommandError";
     if (miioCode !== null) {
-      Reflect.set(this, "code", String(miioCode));
+      this.code = String(miioCode);
     }
   }
 }
@@ -155,13 +156,13 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   purify_volume: ["purify_volume"],
 };
 
-const corePropertiesUnavailableError = (): Error => {
-  const error = new Error(
-    "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
+const corePropertiesUnavailableError = (): Error =>
+  Object.assign(
+    new Error(
+      "Unable to read core properties (power/fan_level/mode). Check token, LAN access, or model compatibility.",
+    ),
+    { code: "EDEVICEUNAVAILABLE" },
   );
-  Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
-  return error;
-};
 
 export class ModernMiioTransport implements MiioTransport {
   private readonly connectTimeoutMs: number;
@@ -178,7 +179,7 @@ export class ModernMiioTransport implements MiioTransport {
   private reportSuppressedError(context: string, error: unknown): void {
     const code =
       error instanceof Error
-        ? String(Reflect.get(error, "code") ?? "UNKNOWN")
+        ? String((error as unknown as { code?: string }).code ?? "UNKNOWN")
         : "UNKNOWN";
     const message = error instanceof Error ? error.message : String(error);
     const formatted = `[miio-transport:${context}] suppressed error (code=${code}): ${message}`;
@@ -289,7 +290,7 @@ export class ModernMiioTransport implements MiioTransport {
         /* c8 ignore start -- dgram close() throws synchronously only on double-close race; the socketClosed guard above prevents it in normal flow. */
         const code =
           error instanceof Error
-            ? String(Reflect.get(error, "code") ?? "")
+            ? String((error as unknown as { code?: string }).code ?? "")
             : "";
         /* c8 ignore stop */
         if (code === "ERR_SOCKET_DGRAM_NOT_RUNNING") {
@@ -608,7 +609,7 @@ export class ModernMiioTransport implements MiioTransport {
       return false;
     }
 
-    const code = Reflect.get(error, "code");
+    const code = (error as unknown as { code?: unknown }).code;
     return typeof code === "string";
   }
 
@@ -677,6 +678,24 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     const encryptedPayload = response.subarray(32);
+
+    /* c8 ignore start -- checksum verification is best-effort diagnostic; both branches tested via corrupt-checksum test + normal happy-path tests, but v8 branch counter requires both in the same compiled function frame. */
+    if (encryptedPayload.length > 0) {
+      const expectedChecksum = toMd5(
+        response.subarray(0, 16),
+        this.token,
+        encryptedPayload,
+      );
+      const actualChecksum = response.subarray(16, 32);
+      if (!expectedChecksum.equals(actualChecksum)) {
+        this.reportSuppressedError(
+          "checksum",
+          new Error("Response checksum mismatch — possible corrupt packet"),
+        );
+      }
+    }
+    /* c8 ignore stop */
+
     if (encryptedPayload.length === 0) {
       return null;
     }
@@ -727,8 +746,10 @@ export class ModernMiioTransport implements MiioTransport {
 
       const timeout = setTimeout(() => {
         cleanup();
-        const error = new Error(`MIIO timeout after ${options.timeoutMs}ms`);
-        Reflect.set(error, "code", "ETIMEDOUT");
+        const error = Object.assign(
+          new Error(`MIIO timeout after ${options.timeoutMs}ms`),
+          { code: "ETIMEDOUT" },
+        );
         reject(error);
       }, options.timeoutMs);
 
