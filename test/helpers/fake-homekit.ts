@@ -43,6 +43,7 @@ export class FakeCharacteristic {
 export class FakeService {
   public readonly UUID: string;
   public readonly subtype: string | undefined;
+  public displayName: string;
   public updates: Array<{ characteristic: string; value: unknown }> = [];
   public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
     [];
@@ -54,6 +55,7 @@ export class FakeService {
   ) {
     this.UUID = name;
     this.subtype = subtype;
+    this.displayName = name;
   }
 
   public setCharacteristic(
@@ -82,6 +84,57 @@ export class FakeService {
   ): this {
     this.updates.push({ characteristic: characteristic.UUID, value });
     return this;
+  }
+}
+
+export class FakePlatformAccessory {
+  public readonly UUID: string;
+  public displayName: string;
+  public readonly services: FakeService[] = [];
+  public context: Record<string, unknown> = {};
+
+  public constructor(displayName: string, uuid: string) {
+    this.displayName = displayName;
+    this.UUID = uuid;
+  }
+
+  public addService(service: FakeService): FakeService {
+    this.services.push(service);
+    return service;
+  }
+
+  public removeService(service: FakeService): void {
+    const index = this.services.indexOf(service);
+    if (index >= 0) {
+      this.services.splice(index, 1);
+    }
+  }
+
+  public getService(serviceConstructor: unknown): FakeService | undefined {
+    return this.services.find(
+      (s) =>
+        s instanceof
+        (serviceConstructor as new (
+          ...args: unknown[]
+        ) => unknown),
+    );
+  }
+
+  public getServiceById(
+    serviceConstructor: unknown,
+    subtype: string,
+  ): FakeService | undefined {
+    return this.services.find(
+      (s) =>
+        s instanceof
+          (serviceConstructor as new (
+            ...args: unknown[]
+          ) => unknown) && s.subtype === subtype,
+    );
+  }
+
+  public updateDisplayName(name: string): void {
+    this.displayName = name;
   }
 }
 
@@ -117,6 +170,9 @@ export class FakeClient {
   }
   public async setMode(value: string): Promise<void> {
     this.calls.push(`mode:${value}`);
+  }
+  public async setFanLevel(value: number): Promise<void> {
+    this.calls.push(`fan:${value}`);
   }
 }
 
@@ -170,7 +226,8 @@ export const makeApi = (withConfiguredName = true) => {
           : {}),
         SerialNumber: { UUID: "serial" },
         On: { UUID: "on" },
-        AirQuality: { UUID: "airQuality" },
+        AirQuality: { UUID: "airQuality", UNKNOWN: 0 },
+        PM2_5Density: { UUID: "pm25" },
         CurrentTemperature: { UUID: "temp" },
         CurrentRelativeHumidity: { UUID: "humidity" },
         FilterLifeLevel: { UUID: "filterLife" },
@@ -185,6 +242,9 @@ export const makeApi = (withConfiguredName = true) => {
           CONTACT_DETECTED: 1,
         },
       },
+      uuid: {
+        generate: (input: string) => `uuid-${input}`,
+      },
     },
     on: (event: string, cb: () => void) => {
       const arr = events.get(event) ?? [];
@@ -196,13 +256,19 @@ export const makeApi = (withConfiguredName = true) => {
         cb();
       }
     },
-    registerAccessory: vi.fn(),
+    registerPlatformAccessories: vi.fn(),
+    unregisterPlatformAccessories: vi.fn(),
+    updatePlatformAccessories: vi.fn(),
+    platformAccessory: FakePlatformAccessory,
   };
 
   return api as unknown as {
     hap: unknown;
     on: (event: string, cb: () => void) => void;
     emit: (event: string) => void;
-    registerAccessory: ReturnType<typeof vi.fn>;
+    registerPlatformAccessories: ReturnType<typeof vi.fn>;
+    unregisterPlatformAccessories: ReturnType<typeof vi.fn>;
+    updatePlatformAccessories: ReturnType<typeof vi.fn>;
+    platformAccessory: typeof FakePlatformAccessory;
   };
 };

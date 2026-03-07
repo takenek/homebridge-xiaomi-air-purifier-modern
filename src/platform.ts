@@ -1,8 +1,9 @@
 import type {
-  AccessoryConfig,
-  AccessoryPlugin,
   API,
+  DynamicPlatformPlugin,
   Logging,
+  PlatformAccessory,
+  PlatformConfig,
 } from "homebridge";
 import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
@@ -10,7 +11,7 @@ import { ModernMiioTransport } from "./core/miio-transport";
 import { DEFAULT_RETRY_POLICY } from "./core/retry";
 import type { AirPurifierModel } from "./core/types";
 
-export const ACCESSORY_NAME = "XiaomiMiAirPurifier";
+export const PLATFORM_NAME = "XiaomiMiAirPurifier";
 export const PLUGIN_NAME = "homebridge-xiaomi-air-purifier-modern";
 
 const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
@@ -22,7 +23,8 @@ const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
 ];
 const VALID_MODELS = new Set<AirPurifierModel>(SUPPORTED_MODELS);
 
-type XiaomiAccessoryConfig = AccessoryConfig & {
+export interface DeviceConfig {
+  name?: string;
   address?: string;
   token?: string;
   model?: string;
@@ -38,11 +40,10 @@ type XiaomiAccessoryConfig = AccessoryConfig & {
   sensorPollIntervalMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
   enableChildLockControl?: boolean;
-
   maskDeviceAddressInLogs?: boolean;
-};
+}
 
-const maskAddress = (address: string): string => {
+export const maskAddress = (address: string): string => {
   const segments = address.split(".");
   if (segments.length !== 4) {
     return "[masked]";
@@ -51,7 +52,7 @@ const maskAddress = (address: string): string => {
   return `${segments[0]}.${segments[1]}.*.*`;
 };
 
-const assertString = (value: unknown, field: string): string => {
+export const assertString = (value: unknown, field: string): string => {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Invalid or missing config field: ${field}`);
   }
@@ -59,7 +60,7 @@ const assertString = (value: unknown, field: string): string => {
   return value;
 };
 
-const assertHexToken = (value: string): string => {
+export const assertHexToken = (value: string): string => {
   if (!/^[0-9a-fA-F]{32}$/.test(value)) {
     throw new Error(
       "Invalid config field: token must be a 32-character hexadecimal string.",
@@ -69,7 +70,10 @@ const assertHexToken = (value: string): string => {
   return value;
 };
 
-const normalizeModel = (value: string, log: Logging): AirPurifierModel => {
+export const normalizeModel = (
+  value: string,
+  log: Logging,
+): AirPurifierModel => {
   if (VALID_MODELS.has(value as AirPurifierModel)) {
     return value as AirPurifierModel;
   }
@@ -80,7 +84,7 @@ const normalizeModel = (value: string, log: Logging): AirPurifierModel => {
   );
 };
 
-const normalizeThreshold = (value: unknown): number => {
+export const normalizeThreshold = (value: unknown): number => {
   const numericValue =
     typeof value === "number"
       ? value
@@ -95,7 +99,7 @@ const normalizeThreshold = (value: unknown): number => {
   return Math.max(0, Math.min(100, Math.round(numericValue)));
 };
 
-const normalizeTimeout = (
+export const normalizeTimeout = (
   value: unknown,
   fallbackMs: number,
   minMs = 100,
@@ -107,7 +111,10 @@ const normalizeTimeout = (
   return Math.max(minMs, Math.round(value));
 };
 
-const normalizeBoolean = (value: unknown, fallback: boolean): boolean => {
+export const normalizeBoolean = (
+  value: unknown,
+  fallback: boolean,
+): boolean => {
   if (typeof value !== "boolean") {
     return fallback;
   }
@@ -115,77 +122,135 @@ const normalizeBoolean = (value: unknown, fallback: boolean): boolean => {
   return value;
 };
 
-export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
-  private readonly delegate: AirPurifierAccessory;
+export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
+  private readonly cachedAccessories: PlatformAccessory[] = [];
+  private readonly activeAccessoryUuids = new Set<string>();
+  private readonly devices: DeviceConfig[];
 
   public constructor(
     private readonly log: Logging,
-    config: AccessoryConfig,
+    config: PlatformConfig,
     private readonly api: API,
   ) {
-    const typedConfig = config as XiaomiAccessoryConfig;
-    const name = assertString(typedConfig.name, "name");
-    const address = assertString(typedConfig.address, "address");
-    const token = assertHexToken(assertString(typedConfig.token, "token"));
+    this.devices = Array.isArray(config.devices) ? config.devices : [];
+
+    this.log.debug(
+      "Platform initialized with %d device(s).",
+      this.devices.length,
+    );
+
+    this.api.on("didFinishLaunching", () => {
+      this.discoverDevices();
+    });
+  }
+
+  public configureAccessory(accessory: PlatformAccessory): void {
+    this.log.debug("Restoring cached accessory: %s", accessory.displayName);
+    this.cachedAccessories.push(accessory);
+  }
+
+  private discoverDevices(): void {
+    for (const deviceConfig of this.devices) {
+      try {
+        this.setupDevice(deviceConfig);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.error(`Failed to configure device: ${message}`);
+      }
+    }
+
+    const staleAccessories = this.cachedAccessories.filter(
+      (accessory) => !this.activeAccessoryUuids.has(accessory.UUID),
+    );
+    if (staleAccessories.length > 0) {
+      this.log.info(
+        "Removing %d stale cached accessory(ies).",
+        staleAccessories.length,
+      );
+      this.api.unregisterPlatformAccessories(
+        PLUGIN_NAME,
+        PLATFORM_NAME,
+        staleAccessories,
+      );
+    }
+  }
+
+  private setupDevice(deviceConfig: DeviceConfig): void {
+    const name = assertString(deviceConfig.name, "name");
+    const address = assertString(deviceConfig.address, "address");
+    const token = assertHexToken(assertString(deviceConfig.token, "token"));
     const model = normalizeModel(
-      assertString(typedConfig.model, "model"),
+      assertString(deviceConfig.model, "model"),
       this.log,
     );
     const filterChangeThreshold = normalizeThreshold(
-      typedConfig.filterChangeThreshold,
+      deviceConfig.filterChangeThreshold,
     );
     const enableAirQuality = normalizeBoolean(
-      typedConfig.enableAirQuality,
+      deviceConfig.enableAirQuality,
       true,
     );
     const enableTemperature = normalizeBoolean(
-      typedConfig.enableTemperature,
+      deviceConfig.enableTemperature,
       true,
     );
-    const enableHumidity = normalizeBoolean(typedConfig.enableHumidity, true);
+    const enableHumidity = normalizeBoolean(deviceConfig.enableHumidity, true);
     const connectTimeoutMs = normalizeTimeout(
-      typedConfig.connectTimeoutMs,
+      deviceConfig.connectTimeoutMs,
       15_000,
     );
     const operationTimeoutMs = normalizeTimeout(
-      typedConfig.operationTimeoutMs,
+      deviceConfig.operationTimeoutMs,
       15_000,
     );
     const reconnectDelayMs = normalizeTimeout(
-      typedConfig.reconnectDelayMs,
+      deviceConfig.reconnectDelayMs,
       15_000,
     );
     const keepAliveIntervalMs = normalizeTimeout(
-      typedConfig.keepAliveIntervalMs,
+      deviceConfig.keepAliveIntervalMs,
       60_000,
       1_000,
     );
     const operationPollIntervalMs = normalizeTimeout(
-      typedConfig.operationPollIntervalMs,
+      deviceConfig.operationPollIntervalMs,
       10_000,
       1_000,
     );
     const sensorPollIntervalMs = normalizeTimeout(
-      typedConfig.sensorPollIntervalMs,
+      deviceConfig.sensorPollIntervalMs,
       30_000,
       1_000,
     );
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
-      typedConfig.exposeFilterReplaceAlertSensor,
+      deviceConfig.exposeFilterReplaceAlertSensor,
       false,
     );
     const enableChildLockControl = normalizeBoolean(
-      typedConfig.enableChildLockControl,
+      deviceConfig.enableChildLockControl,
       false,
     );
 
     const maskDeviceAddressInLogs = normalizeBoolean(
-      typedConfig.maskDeviceAddressInLogs,
+      deviceConfig.maskDeviceAddressInLogs,
       false,
     );
     const displayAddress = maskDeviceAddressInLogs
       ? maskAddress(address)
       : address;
+
+    const uuid = this.api.hap.uuid.generate(`${PLUGIN_NAME}:${address}`);
+    this.activeAccessoryUuids.add(uuid);
+
+    let platformAccessory = this.cachedAccessories.find(
+      (acc) => acc.UUID === uuid,
+    );
+    let isNew = false;
+
+    if (!platformAccessory) {
+      platformAccessory = new this.api.platformAccessory(name, uuid);
+      isNew = true;
+    }
 
     const transport = new ModernMiioTransport({
       address,
@@ -204,7 +269,8 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
         maxDelayMs: reconnectDelayMs,
       },
     });
-    this.delegate = new AirPurifierAccessory(
+
+    new AirPurifierAccessory(
       this.api,
       this.log,
       name,
@@ -219,10 +285,17 @@ export class XiaomiAirPurifierAccessoryPlugin implements AccessoryPlugin {
         exposeFilterReplaceAlertSensor,
         enableChildLockControl,
       },
+      platformAccessory,
     );
-  }
 
-  public getServices() {
-    return this.delegate.getServices();
+    if (isNew) {
+      this.log.info("Registering new accessory: %s", name);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
+        platformAccessory,
+      ]);
+    } else {
+      this.log.info("Updating existing accessory: %s", name);
+      this.api.updatePlatformAccessories([platformAccessory]);
+    }
   }
 }

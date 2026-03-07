@@ -2,12 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
 import { ModernMiioTransport } from "../src/core/miio-transport";
 import {
-  ACCESSORY_NAME,
+  assertHexToken,
+  assertString,
+  maskAddress,
+  normalizeBoolean,
+  normalizeModel,
+  normalizeThreshold,
+  normalizeTimeout,
+  PLATFORM_NAME,
   PLUGIN_NAME,
-  XiaomiAirPurifierAccessoryPlugin,
+  XiaomiAirPurifierPlatform,
 } from "../src/platform";
 import {
   FakeClient,
+  FakePlatformAccessory,
   FakeService,
   makeApi,
   makeLogger,
@@ -652,6 +660,39 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(indicationUpdates.some((update) => update.value === 0)).toBe(true);
   });
 
+  it("getServices excludes optional services when features are disabled", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      {
+        enableAirQuality: false,
+        enableTemperature: false,
+        enableHumidity: false,
+        exposeFilterReplaceAlertSensor: false,
+        enableChildLockControl: false,
+      },
+    );
+
+    const serviceNames = accessory
+      .getServices()
+      .map((service) => (service as unknown as FakeService).name);
+
+    expect(serviceNames).not.toContain(expect.stringContaining("AirQuality"));
+    expect(serviceNames).not.toContain(expect.stringContaining("Temp"));
+    expect(serviceNames).not.toContain(expect.stringContaining("Humidity"));
+    expect(serviceNames).not.toContain("Switch:Child Lock");
+    expect(serviceNames).not.toContain(expect.stringContaining("Contact"));
+  });
+
   it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {
     const api = makeApi(false);
     const logger = makeLogger();
@@ -743,243 +784,531 @@ it("handles non-Error init rejection and internal cache key edge", async () => {
     }
   ).updateCharacteristicIfNeeded(new FakeService("custom"), {}, 1);
 });
-describe("platform and index", () => {
-  it("registers accessory entrypoint", async () => {
+
+describe("platform plugin", () => {
+  it("registers platform entrypoint", async () => {
     const module = await import("../src/index");
-    const register = (module as { default?: (api: unknown) => void }).default;
+    const register = module.default;
     const api = makeApi();
+    const registerPlatform = vi.fn();
+    (api as unknown as Record<string, unknown>).registerPlatform =
+      registerPlatform;
     if (!register) {
       throw new Error("Missing register function");
     }
-    register(api);
+    register(api as never);
 
-    expect(api.registerAccessory).toHaveBeenCalledWith(
+    expect(registerPlatform).toHaveBeenCalledWith(
       PLUGIN_NAME,
-      ACCESSORY_NAME,
-      XiaomiAirPurifierAccessoryPlugin,
+      PLATFORM_NAME,
+      XiaomiAirPurifierPlatform,
     );
   });
 
-  it("validates platform config", () => {
+  it("discovers devices and registers new platform accessories on didFinishLaunching", () => {
     const api = makeApi();
     const logger = makeLogger();
 
-    let plugin: XiaomiAirPurifierAccessoryPlugin | undefined;
-    expect(() => {
-      plugin = new XiaomiAirPurifierAccessoryPlugin(
-        logger as never,
-        {
-          name: "Test",
-          address: "1.1.1.1",
-          token: "00112233445566778899aabbccddeeff",
-          model: "zhimi.airpurifier.3h",
-          filterChangeThreshold: Number.POSITIVE_INFINITY,
-        } as never,
-        api as never,
-      );
-    }).not.toThrow();
-
-    expect(plugin?.getServices()).toBeInstanceOf(Array);
-    expect(
-      plugin
-        ?.getServices()
-        .some(
-          (service) =>
-            (service as unknown as { name?: string }).name ===
-            "Contact:Filter Replace Alert",
-        ),
-    ).toBe(false);
-    expect(
-      (
-        plugin as unknown as {
-          delegate: { filterChangeThreshold: number };
-        }
-      ).delegate.filterChangeThreshold,
-    ).toBe(10);
-
-    const pluginWithAlert = new XiaomiAirPurifierAccessoryPlugin(
+    const platform = new XiaomiAirPurifierPlatform(
       logger as never,
       {
-        name: "AlertEnabled",
-        address: "1.1.1.4",
-        token: "00112233445566778899aabbccddeeff",
-        model: "zhimi.airpurifier.3h",
-        exposeFilterReplaceAlertSensor: true,
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Test",
+            address: "1.1.1.1",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
       } as never,
       api as never,
     );
-    expect(
-      pluginWithAlert
-        .getServices()
-        .some(
-          (service) =>
-            (service as unknown as { name?: string }).name ===
-            "Contact:Filter Replace Alert",
-        ),
-    ).toBe(true);
 
-    expect(
-      (
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
+    // Verify configureAccessory works
+    const fakeAccessory = new FakePlatformAccessory("OldDevice", "old-uuid");
+    platform.configureAccessory(fakeAccessory as never);
+
+    // Trigger didFinishLaunching
+    api.emit("didFinishLaunching");
+
+    // New accessory should be registered
+    expect(api.registerPlatformAccessories).toHaveBeenCalledWith(
+      PLUGIN_NAME,
+      PLATFORM_NAME,
+      expect.any(Array),
+    );
+
+    // Old cached accessory should be unregistered
+    expect(api.unregisterPlatformAccessories).toHaveBeenCalledWith(
+      PLUGIN_NAME,
+      PLATFORM_NAME,
+      [fakeAccessory],
+    );
+  });
+
+  it("updates existing cached accessory instead of creating new one", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    const platform = new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
           {
-            name: "StringThreshold",
-            address: "1.1.1.3",
+            name: "Test",
+            address: "1.1.1.1",
             token: "00112233445566778899aabbccddeeff",
             model: "zhimi.airpurifier.3h",
-            filterChangeThreshold: "9.6",
-          } as never,
-          api as never,
-        ) as unknown as {
-          delegate: { filterChangeThreshold: number };
-        }
-      ).delegate.filterChangeThreshold,
-    ).toBe(10);
+          },
+        ],
+      } as never,
+      api as never,
+    );
 
-    expect(
-      (
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
+    const expectedUuid = `uuid-${PLUGIN_NAME}:1.1.1.1`;
+    const cached = new FakePlatformAccessory("Test", expectedUuid);
+    platform.configureAccessory(cached as never);
+
+    api.emit("didFinishLaunching");
+
+    expect(api.updatePlatformAccessories).toHaveBeenCalledWith([cached]);
+    expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+    expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  });
+
+  it("handles multiple devices in config", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
           {
-            name: "InvalidStringThreshold",
-            address: "1.1.1.4",
+            name: "Living Room",
+            address: "1.1.1.1",
             token: "00112233445566778899aabbccddeeff",
             model: "zhimi.airpurifier.3h",
-            filterChangeThreshold: "not-a-number",
-          } as never,
-          api as never,
-        ) as unknown as {
-          delegate: { filterChangeThreshold: number };
-        }
-      ).delegate.filterChangeThreshold,
-    ).toBe(10);
+          },
+          {
+            name: "Bedroom",
+            address: "1.1.1.2",
+            token: "aabbccddeeff00112233445566778899",
+            model: "zhimi.airpurifier.4",
+          },
+        ],
+      } as never,
+      api as never,
+    );
 
-    expect(
-      (
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles empty devices array gracefully", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      { platform: PLATFORM_NAME, devices: [] } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+    expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  });
+
+  it("handles missing devices key gracefully", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      { platform: PLATFORM_NAME } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+  });
+
+  it("logs and continues when a device config is invalid", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          { name: "", address: "1.1.1.1", token: "abc", model: "bad" },
           {
-            name: "DefaultThreshold",
-            address: "1.1.1.5",
-            token: "00112233445566778899aabbccddeeff",
-            model: "zhimi.airpurifier.3h",
-          } as never,
-          api as never,
-        ) as unknown as {
-          delegate: { filterChangeThreshold: number };
-        }
-      ).delegate.filterChangeThreshold,
-    ).toBe(10);
-    expect(
-      () =>
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
-          {
-            name: "Rounded",
+            name: "Valid",
             address: "1.1.1.2",
             token: "00112233445566778899aabbccddeeff",
             model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to configure device"),
+    );
+    // Second device should still be registered
+    expect(api.registerPlatformAccessories).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes stale cached accessories that are no longer in config", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    const platform = new XiaomiAirPurifierPlatform(
+      logger as never,
+      { platform: PLATFORM_NAME, devices: [] } as never,
+      api as never,
+    );
+
+    const stale1 = new FakePlatformAccessory("Stale1", "stale-uuid-1");
+    const stale2 = new FakePlatformAccessory("Stale2", "stale-uuid-2");
+    platform.configureAccessory(stale1 as never);
+    platform.configureAccessory(stale2 as never);
+
+    api.emit("didFinishLaunching");
+
+    expect(api.unregisterPlatformAccessories).toHaveBeenCalledWith(
+      PLUGIN_NAME,
+      PLATFORM_NAME,
+      [stale1, stale2],
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Removing %d stale cached accessory(ies).",
+      2,
+    );
+  });
+
+  it("validates platform config options", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Test",
+            address: "1.1.1.1",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+            filterChangeThreshold: Number.POSITIVE_INFINITY,
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).toHaveBeenCalled();
+  });
+
+  it("handles device config with all optional fields", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "FullConfig",
+            address: "1.1.1.1",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+            enableAirQuality: false,
+            enableTemperature: false,
+            enableHumidity: false,
+            enableChildLockControl: false,
             filterChangeThreshold: 42.4,
             connectTimeoutMs: 50.4,
             operationTimeoutMs: 80.2,
             reconnectDelayMs: 99.9,
             keepAliveIntervalMs: 500,
-          } as never,
-          api as never,
-        ),
-    ).not.toThrow();
-
-    const pluginWithoutAirServices = new XiaomiAirPurifierAccessoryPlugin(
-      logger as never,
-      {
-        name: "NoAirSensors",
-        address: "1.1.1.6",
-        token: "00112233445566778899aabbccddeeff",
-        model: "zhimi.airpurifier.3h",
-        enableAirQuality: false,
-        enableTemperature: false,
-        enableHumidity: false,
-        enableChildLockControl: false,
+            operationPollIntervalMs: 2000,
+            sensorPollIntervalMs: 5000,
+            exposeFilterReplaceAlertSensor: true,
+            maskDeviceAddressInLogs: true,
+          },
+        ],
       } as never,
       api as never,
     );
-    const noAirServices = pluginWithoutAirServices
-      .getServices()
-      .map((service) => (service as unknown as FakeService).name);
-    expect(noAirServices).not.toContain("AirQuality:NoAirSensors Air Quality");
-    expect(noAirServices).not.toContain("Temp:NoAirSensors Temperature");
-    expect(noAirServices).not.toContain("Humidity:NoAirSensors Humidity");
-    expect(noAirServices).not.toContain("Switch:Child Lock");
 
-    const maskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).toHaveBeenCalled();
+  });
+
+  it("handles non-Error exception during device setup", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    // Mock ModernMiioTransport constructor to throw a non-Error value
+    vi.spyOn(ModernMiioTransport.prototype, "getProperties").mockImplementation(
+      () => {
+        throw "raw-string-error";
+      },
+    );
+
+    new XiaomiAirPurifierPlatform(
       logger as never,
       {
-        name: "Masked",
-        address: "1.1.1.9",
-        token: "00112233445566778899aabbccddeeff",
-        model: "zhimi.airpurifier.3h",
-        maskDeviceAddressInLogs: true,
-      } as never,
-      api as never,
-    );
-    expect(maskedPlugin.getServices()).toBeInstanceOf(Array);
-
-    const malformedMaskedPlugin = new XiaomiAirPurifierAccessoryPlugin(
-      logger as never,
-      {
-        name: "MaskedFallback",
-        address: "local-device",
-        token: "00112233445566778899aabbccddeeff",
-        model: "zhimi.airpurifier.3h",
-        maskDeviceAddressInLogs: true,
-      } as never,
-      api as never,
-    );
-    expect(malformedMaskedPlugin.getServices()).toBeInstanceOf(Array);
-
-    expect(
-      () =>
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
+        platform: PLATFORM_NAME,
+        devices: [
           {
             name: "BadToken",
             address: "1.1.1.7",
             token: "xyz",
             model: "zhimi.airpurifier.3h",
-          } as never,
-          api as never,
-        ),
-    ).toThrow("token must be a 32-character hexadecimal string");
+          },
+        ],
+      } as never,
+      api as never,
+    );
 
-    expect(
-      () =>
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
-          {
-            name: "BadModel",
-            address: "1.1.1.8",
-            token: "00112233445566778899aabbccddeeff",
-            model: "zhimi.airpurifier.unknown",
-          } as never,
-          api as never,
-        ),
-    ).toThrow("Unsupported model");
+    api.emit("didFinishLaunching");
 
-    expect(
-      () =>
-        new XiaomiAirPurifierAccessoryPlugin(
-          logger as never,
-          {
-            name: "",
-            address: "1.1.1.1",
-            token: "00112233445566778899aabbccddeeff",
-            model: "zhimi.airpurifier.3h",
-          } as never,
-          api as never,
-        ),
-    ).toThrow("Invalid or missing config field: name");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to configure device"),
+    );
   });
 
+  it("covers non-Error branch in discoverDevices catch", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    const platform = new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [],
+      } as never,
+      api as never,
+    );
+
+    // Directly test the non-Error path by manually invoking discoverDevices
+    // via didFinishLaunching after adding a device that causes a non-Error throw
+    const setupDevice = vi
+      .spyOn(platform as never, "setupDevice" as never)
+      .mockImplementation(() => {
+        throw "non-error-string";
+      });
+
+    // Add a dummy device
+    (platform as unknown as { devices: object[] }).devices = [{ name: "x" }];
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Failed to configure device: non-error-string",
+    );
+    setupDevice.mockRestore();
+  });
+});
+
+describe("config validation helpers", () => {
+  it("assertString rejects empty and non-string values", () => {
+    expect(() => assertString("", "field")).toThrow(
+      "Invalid or missing config field: field",
+    );
+    expect(() => assertString(undefined, "field")).toThrow(
+      "Invalid or missing config field: field",
+    );
+    expect(() => assertString(123, "field")).toThrow(
+      "Invalid or missing config field: field",
+    );
+    expect(assertString("valid", "field")).toBe("valid");
+  });
+
+  it("assertHexToken rejects invalid tokens", () => {
+    expect(() => assertHexToken("xyz")).toThrow(
+      "token must be a 32-character hexadecimal string",
+    );
+    expect(() => assertHexToken("short")).toThrow(
+      "token must be a 32-character hexadecimal string",
+    );
+    expect(assertHexToken("00112233445566778899aabbccddeeff")).toBe(
+      "00112233445566778899aabbccddeeff",
+    );
+  });
+
+  it("normalizeModel rejects unsupported models", () => {
+    const logger = makeLogger();
+    expect(() => normalizeModel("unknown.model", logger as never)).toThrow(
+      "Unsupported model",
+    );
+    expect(logger.error).toHaveBeenCalled();
+    expect(normalizeModel("zhimi.airpurifier.3h", logger as never)).toBe(
+      "zhimi.airpurifier.3h",
+    );
+  });
+
+  it("normalizeThreshold handles edge cases", () => {
+    expect(normalizeThreshold(Number.POSITIVE_INFINITY)).toBe(10);
+    expect(normalizeThreshold("not-a-number")).toBe(10);
+    expect(normalizeThreshold("9.6")).toBe(10);
+    expect(normalizeThreshold(undefined)).toBe(10);
+    expect(normalizeThreshold(42.4)).toBe(42);
+    expect(normalizeThreshold(-5)).toBe(0);
+    expect(normalizeThreshold(150)).toBe(100);
+  });
+
+  it("normalizeTimeout handles edge cases", () => {
+    expect(normalizeTimeout(undefined, 5000)).toBe(5000);
+    expect(normalizeTimeout("bad", 5000)).toBe(5000);
+    expect(normalizeTimeout(Number.NaN, 5000)).toBe(5000);
+    expect(normalizeTimeout(50, 5000)).toBe(100); // min 100
+    expect(normalizeTimeout(200, 5000)).toBe(200);
+    expect(normalizeTimeout(500, 5000, 1000)).toBe(1000); // custom min
+  });
+
+  it("normalizeBoolean handles edge cases", () => {
+    expect(normalizeBoolean(undefined, true)).toBe(true);
+    expect(normalizeBoolean("yes", false)).toBe(false);
+    expect(normalizeBoolean(true, false)).toBe(true);
+    expect(normalizeBoolean(false, true)).toBe(false);
+  });
+
+  it("maskAddress handles various formats", () => {
+    expect(maskAddress("192.168.1.100")).toBe("192.168.*.*");
+    expect(maskAddress("local-device")).toBe("[masked]");
+  });
+});
+
+describe("platform accessory integration", () => {
+  it("uses getOrAddService with platform accessory to reuse existing services", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const platformAccessory = new FakePlatformAccessory("Test", "test-uuid");
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      {
+        enableAirQuality: true,
+        enableTemperature: true,
+        enableHumidity: true,
+        exposeFilterReplaceAlertSensor: true,
+        enableChildLockControl: true,
+      },
+      platformAccessory as never,
+    );
+
+    // Services should have been added to the platform accessory
+    expect(platformAccessory.services.length).toBeGreaterThan(0);
+
+    // Creating another accessory with the same platformAccessory should reuse services
+    const accessory2 = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      {
+        enableAirQuality: true,
+        enableTemperature: true,
+        enableHumidity: true,
+        exposeFilterReplaceAlertSensor: true,
+        enableChildLockControl: true,
+      },
+      platformAccessory as never,
+    );
+
+    const serviceCount = platformAccessory.services.length;
+    expect(accessory.getServices().length).toBe(
+      accessory2.getServices().length,
+    );
+    expect(platformAccessory.services.length).toBe(serviceCount);
+  });
+
+  it("removes stale services from platform accessory when features are disabled", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const platformAccessory = new FakePlatformAccessory("Test", "test-uuid");
+
+    // First create with all features enabled
+    new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      {
+        enableAirQuality: true,
+        enableTemperature: true,
+        enableHumidity: true,
+        exposeFilterReplaceAlertSensor: true,
+        enableChildLockControl: true,
+      },
+      platformAccessory as never,
+    );
+
+    const initialCount = platformAccessory.services.length;
+
+    // Now create with fewer features - stale services should be removed
+    new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+      {
+        enableAirQuality: false,
+        enableTemperature: false,
+        enableHumidity: false,
+        exposeFilterReplaceAlertSensor: false,
+        enableChildLockControl: false,
+      },
+      platformAccessory as never,
+    );
+
+    expect(platformAccessory.services.length).toBeLessThan(initialCount);
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringMatching(/Removing stale service/),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+});
+
+describe("services without onGet and cached onGet values", () => {
   it("handles services without onGet and returns cached onGet values", () => {
     const api = makeApi();
     const logger = makeLogger();
@@ -1067,5 +1396,42 @@ describe("platform and index", () => {
         accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
       ).bindOnGet(noOnGetService, characteristic, false);
     }).not.toThrow();
+
+    // Test bindOnGet with a primitive characteristic (no UUID) → early return
+    (
+      accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
+    ).bindOnGet(onGetService, 42, false);
+
+    // Test bindOnGet with null characteristic → early return
+    (
+      accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
+    ).bindOnGet(onGetService, null, false);
+
+    // Test bindOnGet with characteristic that has non-string UUID → early return
+    (
+      accessory as unknown as { bindOnGet: (...args: unknown[]) => void }
+    ).bindOnGet(onGetService, { UUID: 123 }, false);
+
+    // Test updateCharacteristicIfNeeded with a primitive characteristic (no UUID) → early return
+    (
+      accessory as unknown as {
+        updateCharacteristicIfNeeded: (
+          service: unknown,
+          characteristic: unknown,
+          value: unknown,
+        ) => void;
+      }
+    ).updateCharacteristicIfNeeded(new FakeService("custom"), 42, 1);
+
+    // Test updateCharacteristicIfNeeded with null characteristic → early return
+    (
+      accessory as unknown as {
+        updateCharacteristicIfNeeded: (
+          service: unknown,
+          characteristic: unknown,
+          value: unknown,
+        ) => void;
+      }
+    ).updateCharacteristicIfNeeded(new FakeService("custom"), null, 1);
   });
 });

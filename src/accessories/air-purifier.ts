@@ -1,8 +1,8 @@
 import type {
-  AccessoryPlugin,
   API,
   CharacteristicValue,
   Logging,
+  PlatformAccessory,
   Service,
 } from "homebridge";
 import type { ConnectionStateEvent, DeviceClient } from "../core/device-client";
@@ -34,7 +34,7 @@ export interface AccessoryFeatureFlags {
   enableChildLockControl: boolean;
 }
 
-export class AirPurifierAccessory implements AccessoryPlugin {
+export class AirPurifierAccessory {
   private readonly informationService: Service;
   private readonly purifierService: Service;
   private readonly airQualityService: Service | null;
@@ -60,6 +60,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     model: string,
     private readonly filterChangeThreshold: number,
     featuresOrExpose: AccessoryFeatureFlags | boolean = false,
+    private readonly platformAccessory?: PlatformAccessory,
   ) {
     this.displayAddress = displayAddress;
 
@@ -73,7 +74,10 @@ export class AirPurifierAccessory implements AccessoryPlugin {
             enableChildLockControl: true,
           }
         : featuresOrExpose;
-    this.informationService = new this.api.hap.Service.AccessoryInformation()
+
+    this.informationService = this.getOrAddService(
+      this.api.hap.Service.AccessoryInformation,
+    )
       .setCharacteristic(this.api.hap.Characteristic.Manufacturer, "Xiaomi")
       .setCharacteristic(this.api.hap.Characteristic.Model, model)
       .setCharacteristic(this.api.hap.Characteristic.Name, name)
@@ -88,45 +92,69 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     );
     this.usesNativePurifierService = Boolean(AirPurifierService);
     this.purifierService = this.usesNativePurifierService
-      ? new (
+      ? this.getOrAddService(
           AirPurifierService as new (
             name: string,
             subtype: string,
-          ) => Service
-        )(name, "main")
-      : new this.api.hap.Service.Switch("Power", "power");
+          ) => Service,
+          name,
+          "main",
+        )
+      : this.getOrAddService(this.api.hap.Service.Switch, "Power", "power");
     this.airQualityService = features.enableAirQuality
-      ? new this.api.hap.Service.AirQualitySensor(`${name} Air Quality`)
+      ? this.getOrAddService(
+          this.api.hap.Service.AirQualitySensor,
+          `${name} Air Quality`,
+        )
       : null;
     this.temperatureService = features.enableTemperature
-      ? new this.api.hap.Service.TemperatureSensor(`${name} Temperature`)
+      ? this.getOrAddService(
+          this.api.hap.Service.TemperatureSensor,
+          `${name} Temperature`,
+        )
       : null;
     this.humidityService = features.enableHumidity
-      ? new this.api.hap.Service.HumiditySensor(`${name} Humidity`)
+      ? this.getOrAddService(
+          this.api.hap.Service.HumiditySensor,
+          `${name} Humidity`,
+        )
       : null;
     this.childLockService = features.enableChildLockControl
-      ? new this.api.hap.Service.Switch("Child Lock", "child_lock")
+      ? this.getOrAddService(
+          this.api.hap.Service.Switch,
+          "Child Lock",
+          "child_lock",
+        )
       : null;
 
-    this.ledService = new this.api.hap.Service.Switch("LED Night Mode", "led");
-    this.modeAutoService = new this.api.hap.Service.Switch(
+    this.ledService = this.getOrAddService(
+      this.api.hap.Service.Switch,
+      "LED Night Mode",
+      "led",
+    );
+    this.modeAutoService = this.getOrAddService(
+      this.api.hap.Service.Switch,
       "Mode AUTO ON/OFF",
       "mode_auto",
     );
-    this.modeNightService = new this.api.hap.Service.Switch(
+    this.modeNightService = this.getOrAddService(
+      this.api.hap.Service.Switch,
       "Mode NIGHT ON/OFF",
       "mode_night",
     );
-    this.filterService = new this.api.hap.Service.FilterMaintenance(
+    this.filterService = this.getOrAddService(
+      this.api.hap.Service.FilterMaintenance,
       "Filter Life",
     );
     this.filterAlertService = features.exposeFilterReplaceAlertSensor
-      ? new this.api.hap.Service.ContactSensor(
+      ? this.getOrAddService(
+          this.api.hap.Service.ContactSensor,
           "Filter Replace Alert",
           "filter_replace_alert",
         )
       : null;
 
+    this.removeStaleServices(features);
     this.applyServiceNames();
     this.log.debug(
       `Accessory initialized for device endpoint ${this.displayAddress}.`,
@@ -149,6 +177,63 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.log.warn(`Shutdown error: ${message}`);
       });
     });
+  }
+
+  private getOrAddService(
+    serviceConstructor: unknown,
+    ...args: unknown[]
+  ): Service {
+    const Ctor = serviceConstructor as new (...a: string[]) => Service;
+    if (!this.platformAccessory) {
+      return new Ctor(...(args as string[]));
+    }
+
+    const subtype =
+      args.length >= 2 && typeof args[1] === "string" ? args[1] : undefined;
+
+    const existing = subtype
+      ? this.platformAccessory.getServiceById(Ctor as never, subtype)
+      : this.platformAccessory.getService(Ctor as never);
+
+    if (existing) {
+      return existing;
+    }
+
+    const service = new Ctor(...(args as string[]));
+    return this.platformAccessory.addService(service);
+  }
+
+  private removeStaleServices(_features: AccessoryFeatureFlags): void {
+    if (!this.platformAccessory) {
+      return;
+    }
+
+    const activeServices = new Set<Service>([
+      this.informationService,
+      this.purifierService,
+      this.ledService,
+      this.modeAutoService,
+      this.modeNightService,
+      this.filterService,
+    ]);
+
+    if (this.airQualityService) activeServices.add(this.airQualityService);
+    if (this.temperatureService) activeServices.add(this.temperatureService);
+    if (this.humidityService) activeServices.add(this.humidityService);
+    if (this.childLockService) activeServices.add(this.childLockService);
+    if (this.filterAlertService) activeServices.add(this.filterAlertService);
+
+    const allServices = this.platformAccessory.services;
+    for (const service of allServices) {
+      if (!activeServices.has(service)) {
+        this.log.debug(
+          "Removing stale service: %s (subtype: %s)",
+          service.displayName,
+          service.subtype ?? "none",
+        );
+        this.platformAccessory.removeService(service);
+      }
+    }
   }
 
   private applyServiceNames(): void {
