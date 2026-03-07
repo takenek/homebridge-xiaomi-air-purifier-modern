@@ -18,6 +18,14 @@ import {
   resolveModeFromNightSwitch,
 } from "../core/mode-policy";
 
+const getOptionalProperty = (obj: object, key: string): unknown =>
+  (obj as Record<string, unknown>)[key];
+
+const getNumericEnum = (obj: object, key: string, fallback: number): number => {
+  const value = (obj as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : fallback;
+};
+
 export interface AccessoryFeatureFlags {
   enableAirQuality: boolean;
   enableTemperature: boolean;
@@ -74,8 +82,8 @@ export class AirPurifierAccessory implements AccessoryPlugin {
         this.buildSerialNumber(displayAddress),
       );
 
-    const AirPurifierService = Reflect.get(
-      this.api.hap.Service as object,
+    const AirPurifierService = getOptionalProperty(
+      this.api.hap.Service,
       "AirPurifier",
     );
     this.usesNativePurifierService = Boolean(AirPurifierService);
@@ -181,8 +189,8 @@ export class AirPurifierAccessory implements AccessoryPlugin {
 
     for (const { service, name } of namedServices) {
       service.setCharacteristic(this.api.hap.Characteristic.Name, name);
-      const configuredName = Reflect.get(
-        this.api.hap.Characteristic as object,
+      const configuredName = getOptionalProperty(
+        this.api.hap.Characteristic,
         "ConfiguredName",
       );
       if (configuredName) {
@@ -468,47 +476,37 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       this.api.hap.Characteristic.FilterLifeLevel,
       state.filter1_life,
     );
-    const filterChangeIndication = Reflect.get(
-      this.api.hap.Characteristic.FilterChangeIndication as object,
-      "CHANGE_FILTER",
-    );
-    const filterOkIndication = Reflect.get(
-      this.api.hap.Characteristic.FilterChangeIndication as object,
-      "FILTER_OK",
-    );
-
     this.updateCharacteristicIfNeeded(
       this.filterService,
       this.api.hap.Characteristic.FilterChangeIndication,
       state.filter1_life <= this.filterChangeThreshold
-        ? typeof filterChangeIndication === "number"
-          ? filterChangeIndication
-          : 1
-        : typeof filterOkIndication === "number"
-          ? filterOkIndication
-          : 0,
+        ? getNumericEnum(
+            this.api.hap.Characteristic.FilterChangeIndication,
+            "CHANGE_FILTER",
+            1,
+          )
+        : getNumericEnum(
+            this.api.hap.Characteristic.FilterChangeIndication,
+            "FILTER_OK",
+            0,
+          ),
     );
 
     if (this.filterAlertService) {
-      const contactDetected = Reflect.get(
-        this.api.hap.Characteristic.ContactSensorState as object,
-        "CONTACT_DETECTED",
-      );
-      const contactNotDetected = Reflect.get(
-        this.api.hap.Characteristic.ContactSensorState as object,
-        "CONTACT_NOT_DETECTED",
-      );
-
       this.updateCharacteristicIfNeeded(
         this.filterAlertService,
         this.api.hap.Characteristic.ContactSensorState,
         state.filter1_life <= this.filterChangeThreshold
-          ? typeof contactNotDetected === "number"
-            ? contactNotDetected
-            : 1
-          : typeof contactDetected === "number"
-            ? contactDetected
-            : 0,
+          ? getNumericEnum(
+              this.api.hap.Characteristic.ContactSensorState,
+              "CONTACT_NOT_DETECTED",
+              1,
+            )
+          : getNumericEnum(
+              this.api.hap.Characteristic.ContactSensorState,
+              "CONTACT_DETECTED",
+              0,
+            ),
       );
     }
   }
@@ -535,7 +533,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     bound.onGet(
       () =>
         this.characteristicCache.get(
-          `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`,
+          `${service.UUID}:${String((service as unknown as { subtype?: string }).subtype ?? "")}:${characteristicUuid}`,
         ) ?? fallback,
     );
   }
@@ -548,7 +546,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
       return "";
     }
 
-    const uuid = Reflect.get(characteristic as object, "UUID");
+    const uuid = (characteristic as Record<string, unknown>).UUID;
     return typeof uuid === "string" ? uuid : "";
   }
 
@@ -581,7 +579,7 @@ export class AirPurifierAccessory implements AccessoryPlugin {
     if (!characteristicUuid) {
       return;
     }
-    const key = `${service.UUID}:${String(Reflect.get(service, "subtype") ?? "")}:${characteristicUuid}`;
+    const key = `${service.UUID}:${String((service as unknown as { subtype?: string }).subtype ?? "")}:${characteristicUuid}`;
     if (this.characteristicCache.get(key) === value) {
       return;
     }

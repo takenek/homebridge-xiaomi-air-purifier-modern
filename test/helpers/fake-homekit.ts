@@ -1,0 +1,208 @@
+import { vi } from "vitest";
+import type { DeviceState } from "../../src/core/types";
+
+export const makeState = (
+  overrides: Partial<DeviceState> = {},
+): DeviceState => ({
+  power: true,
+  fan_level: 8,
+  mode: "auto",
+  temperature: 23,
+  humidity: 40,
+  aqi: 30,
+  filter1_life: 85,
+  child_lock: false,
+  led: true,
+  motor1_speed: 1000,
+  use_time: 100,
+  purify_volume: 200,
+  ...overrides,
+});
+
+export const makeLogger = () => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+});
+
+export class FakeCharacteristic {
+  public onSetHandler: ((value: unknown) => Promise<void> | void) | null = null;
+  public onGetHandler: (() => unknown) | null = null;
+  public constructor(public readonly UUID: string) {}
+  public onSet(handler: (value: unknown) => Promise<void> | void): this {
+    this.onSetHandler = handler;
+    return this;
+  }
+  public onGet(handler: () => unknown): this {
+    this.onGetHandler = handler;
+    return this;
+  }
+}
+
+export class FakeService {
+  public readonly UUID: string;
+  public readonly subtype: string | undefined;
+  public updates: Array<{ characteristic: string; value: unknown }> = [];
+  public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
+    [];
+  private readonly characteristics = new Map<string, FakeCharacteristic>();
+
+  public constructor(
+    public readonly name: string,
+    subtype?: string,
+  ) {
+    this.UUID = name;
+    this.subtype = subtype;
+  }
+
+  public setCharacteristic(
+    characteristic: { UUID: string },
+    value: unknown,
+  ): this {
+    this.setCalls.push({ characteristic: characteristic.UUID, value });
+    return this;
+  }
+
+  public getCharacteristic(characteristic: {
+    UUID: string;
+  }): FakeCharacteristic {
+    const existing = this.characteristics.get(characteristic.UUID);
+    if (existing) {
+      return existing;
+    }
+    const created = new FakeCharacteristic(characteristic.UUID);
+    this.characteristics.set(characteristic.UUID, created);
+    return created;
+  }
+
+  public updateCharacteristic(
+    characteristic: { UUID: string },
+    value: unknown,
+  ): this {
+    this.updates.push({ characteristic: characteristic.UUID, value });
+    return this;
+  }
+}
+
+export class FakeClient {
+  public state: DeviceState | null = { ...makeState() };
+  public readonly listeners: Array<(state: DeviceState) => void> = [];
+  public readonly connectionListeners: Array<
+    (event: { state: "connected" | "disconnected" | "reconnected" }) => void
+  > = [];
+  public readonly calls: string[] = [];
+  public onStateUpdate(listener: (state: DeviceState) => void): void {
+    this.listeners.push(listener);
+  }
+  public onConnectionEvent(
+    listener: (event: {
+      state: "connected" | "disconnected" | "reconnected";
+    }) => void,
+  ): void {
+    this.connectionListeners.push(listener);
+  }
+  public async init(): Promise<void> {}
+  public async shutdown(): Promise<void> {
+    this.calls.push("shutdown");
+  }
+  public async setPower(value: boolean): Promise<void> {
+    this.calls.push(`power:${value}`);
+  }
+  public async setChildLock(value: boolean): Promise<void> {
+    this.calls.push(`child:${value}`);
+  }
+  public async setLed(value: boolean): Promise<void> {
+    this.calls.push(`led:${value}`);
+  }
+  public async setMode(value: string): Promise<void> {
+    this.calls.push(`mode:${value}`);
+  }
+}
+
+export const makeApi = (withConfiguredName = true) => {
+  const events = new Map<string, Array<() => void>>();
+  const api = {
+    hap: {
+      Service: {
+        AccessoryInformation: class extends FakeService {
+          public constructor() {
+            super("AccessoryInformation");
+          }
+        },
+        Switch: class extends FakeService {
+          public constructor(name: string, subtype?: string) {
+            super(`Switch:${name}`, subtype);
+          }
+        },
+        AirQualitySensor: class extends FakeService {
+          public constructor(name: string) {
+            super(`AirQuality:${name}`);
+          }
+        },
+        TemperatureSensor: class extends FakeService {
+          public constructor(name: string) {
+            super(`Temp:${name}`);
+          }
+        },
+        HumiditySensor: class extends FakeService {
+          public constructor(name: string) {
+            super(`Humidity:${name}`);
+          }
+        },
+        FilterMaintenance: class extends FakeService {
+          public constructor(name: string) {
+            super(`Filter:${name}`);
+          }
+        },
+        ContactSensor: class extends FakeService {
+          public constructor(name: string, subtype?: string) {
+            super(`Contact:${name}`, subtype);
+          }
+        },
+      },
+      Characteristic: {
+        Manufacturer: { UUID: "manufacturer" },
+        Model: { UUID: "model" },
+        Name: { UUID: "name" },
+        ...(withConfiguredName
+          ? { ConfiguredName: { UUID: "configuredName" } }
+          : {}),
+        SerialNumber: { UUID: "serial" },
+        On: { UUID: "on" },
+        AirQuality: { UUID: "airQuality" },
+        CurrentTemperature: { UUID: "temp" },
+        CurrentRelativeHumidity: { UUID: "humidity" },
+        FilterLifeLevel: { UUID: "filterLife" },
+        FilterChangeIndication: {
+          UUID: "filterIndication",
+          CHANGE_FILTER: 1,
+          FILTER_OK: 0,
+        },
+        ContactSensorState: {
+          UUID: "contactState",
+          CONTACT_NOT_DETECTED: 0,
+          CONTACT_DETECTED: 1,
+        },
+      },
+    },
+    on: (event: string, cb: () => void) => {
+      const arr = events.get(event) ?? [];
+      arr.push(cb);
+      events.set(event, arr);
+    },
+    emit: (event: string) => {
+      for (const cb of events.get(event) ?? []) {
+        cb();
+      }
+    },
+    registerAccessory: vi.fn(),
+  };
+
+  return api as unknown as {
+    hap: unknown;
+    on: (event: string, cb: () => void) => void;
+    emit: (event: string) => void;
+    registerAccessory: ReturnType<typeof vi.fn>;
+  };
+};

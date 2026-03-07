@@ -3,22 +3,13 @@ import { AirPurifierAccessory } from "../src/accessories/air-purifier";
 import { DeviceClient } from "../src/core/device-client";
 import { ModernMiioTransport } from "../src/core/miio-transport";
 import type { DeviceState, MiioTransport } from "../src/core/types";
-
-const makeState = (overrides: Partial<DeviceState> = {}): DeviceState => ({
-  power: true,
-  fan_level: 8,
-  mode: "auto",
-  temperature: 23,
-  humidity: 40,
-  aqi: 30,
-  filter1_life: 85,
-  child_lock: false,
-  led: true,
-  motor1_speed: 1000,
-  use_time: 100,
-  purify_volume: 200,
-  ...overrides,
-});
+import {
+  FakeClient,
+  type FakeService,
+  makeApi,
+  makeLogger,
+  makeState,
+} from "./helpers/fake-homekit";
 
 class ScriptedTransport implements MiioTransport {
   public reads: Array<DeviceState | string> = [];
@@ -43,13 +34,6 @@ class ScriptedTransport implements MiioTransport {
 
   public async close(): Promise<void> {}
 }
-
-const makeLogger = () => ({
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-});
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -235,182 +219,6 @@ describe("network/status scenarios", () => {
   });
 });
 
-class FakeCharacteristic {
-  public onSetHandler: ((value: unknown) => Promise<void> | void) | null = null;
-  public onGetHandler: (() => unknown) | null = null;
-  public constructor(public readonly UUID: string) {}
-  public onSet(handler: (value: unknown) => Promise<void> | void): this {
-    this.onSetHandler = handler;
-    return this;
-  }
-  public onGet(handler: () => unknown): this {
-    this.onGetHandler = handler;
-    return this;
-  }
-}
-
-class FakeService {
-  public readonly UUID: string;
-  public readonly subtype: string | undefined;
-  public updates: Array<{ characteristic: string; value: unknown }> = [];
-  public readonly setCalls: Array<{ characteristic: string; value: unknown }> =
-    [];
-  private readonly characteristics = new Map<string, FakeCharacteristic>();
-
-  public constructor(
-    public readonly name: string,
-    subtype?: string,
-  ) {
-    this.UUID = name;
-    this.subtype = subtype;
-  }
-
-  public setCharacteristic(
-    characteristic: { UUID: string },
-    value: unknown,
-  ): this {
-    this.setCalls.push({ characteristic: characteristic.UUID, value });
-    return this;
-  }
-
-  public getCharacteristic(characteristic: {
-    UUID: string;
-  }): FakeCharacteristic {
-    const existing = this.characteristics.get(characteristic.UUID);
-    if (existing) {
-      return existing;
-    }
-    const created = new FakeCharacteristic(characteristic.UUID);
-    this.characteristics.set(characteristic.UUID, created);
-    return created;
-  }
-
-  public updateCharacteristic(
-    characteristic: { UUID: string },
-    value: unknown,
-  ): this {
-    this.updates.push({ characteristic: characteristic.UUID, value });
-    return this;
-  }
-}
-
-const makeFilterApi = () => {
-  const events = new Map<string, Array<() => void>>();
-  return {
-    hap: {
-      Service: {
-        AccessoryInformation: class extends FakeService {
-          public constructor() {
-            super("AccessoryInformation");
-          }
-        },
-        Switch: class extends FakeService {
-          public constructor(name: string, subtype?: string) {
-            super(`Switch:${name}`, subtype);
-          }
-        },
-        AirQualitySensor: class extends FakeService {
-          public constructor(name: string) {
-            super(`AirQuality:${name}`);
-          }
-        },
-        TemperatureSensor: class extends FakeService {
-          public constructor(name: string) {
-            super(`Temp:${name}`);
-          }
-        },
-        HumiditySensor: class extends FakeService {
-          public constructor(name: string) {
-            super(`Humidity:${name}`);
-          }
-        },
-        FilterMaintenance: class extends FakeService {
-          public constructor(name: string) {
-            super(`Filter:${name}`);
-          }
-        },
-        ContactSensor: class extends FakeService {
-          public constructor(name: string, subtype?: string) {
-            super(`Contact:${name}`, subtype);
-          }
-        },
-      },
-      Characteristic: {
-        Manufacturer: { UUID: "manufacturer" },
-        Model: { UUID: "model" },
-        Name: { UUID: "name" },
-        ConfiguredName: { UUID: "configuredName" },
-        SerialNumber: { UUID: "serial" },
-        On: { UUID: "on" },
-        AirQuality: { UUID: "airQuality" },
-        CurrentTemperature: { UUID: "temp" },
-        CurrentRelativeHumidity: { UUID: "humidity" },
-        FilterLifeLevel: { UUID: "filterLife" },
-        FilterChangeIndication: {
-          UUID: "filterIndication",
-          CHANGE_FILTER: 1,
-          FILTER_OK: 0,
-        },
-        ContactSensorState: {
-          UUID: "contactState",
-          CONTACT_NOT_DETECTED: 0,
-          CONTACT_DETECTED: 1,
-        },
-      },
-    },
-    on: (event: string, cb: () => void) => {
-      const arr = events.get(event) ?? [];
-      arr.push(cb);
-      events.set(event, arr);
-    },
-    emit: (event: string) => {
-      for (const cb of events.get(event) ?? []) {
-        cb();
-      }
-    },
-    registerAccessory: vi.fn(),
-  } as unknown as {
-    hap: unknown;
-    on: (event: string, cb: () => void) => void;
-    emit: (event: string) => void;
-  };
-};
-
-class FakeClient {
-  public state: DeviceState | null = { ...makeState() };
-  public readonly listeners: Array<(state: DeviceState) => void> = [];
-  public readonly connectionListeners: Array<
-    (event: { state: "connected" | "disconnected" | "reconnected" }) => void
-  > = [];
-  public readonly calls: string[] = [];
-  public onStateUpdate(listener: (state: DeviceState) => void): void {
-    this.listeners.push(listener);
-  }
-  public onConnectionEvent(
-    listener: (event: {
-      state: "connected" | "disconnected" | "reconnected";
-    }) => void,
-  ): void {
-    this.connectionListeners.push(listener);
-  }
-  public async init(): Promise<void> {}
-  public async shutdown(): Promise<void> {
-    this.calls.push("shutdown");
-  }
-  public async setPower(value: boolean): Promise<void> {
-    this.calls.push(`power:${value}`);
-  }
-  public async setChildLock(value: boolean): Promise<void> {
-    this.calls.push(`child:${value}`);
-  }
-  public async setLed(value: boolean): Promise<void> {
-    this.calls.push(`led:${value}`);
-  }
-  public async setMode(value: string): Promise<void> {
-    this.calls.push(`mode:${value}`);
-  }
-}
-
 describe("filter status scenarios", () => {
   beforeEach(() => {
     vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
@@ -426,7 +234,7 @@ describe("filter status scenarios", () => {
   });
 
   it("[S8] Given filter life drops to 4%, When state refresh runs, Then FilterChangeIndication is set to 1 (CHANGE_FILTER)", () => {
-    const api = makeFilterApi();
+    const api = makeApi();
     const client = new FakeClient();
 
     const accessory = new AirPurifierAccessory(
@@ -459,7 +267,7 @@ describe("filter status scenarios", () => {
   });
 
   it("[S9] Given filter replacement (4% -> 100%), When state refresh runs, Then FilterChangeIndication resets to 0 (FILTER_OK)", () => {
-    const api = makeFilterApi();
+    const api = makeApi();
     const client = new FakeClient();
 
     const accessory = new AirPurifierAccessory(

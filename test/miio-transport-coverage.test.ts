@@ -1028,3 +1028,46 @@ it("covers final protocol mode branches in getProperties and setProperty", async
 
   await transport.close();
 });
+
+it("reports suppressed error on response checksum mismatch", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    session: {
+      deviceId: number;
+      deviceStamp: number;
+      handshakeAtEpochSec: number;
+    } | null;
+    encrypt: (payload: Buffer) => Buffer;
+    sendAndReceive: (
+      packet: Buffer,
+      expectEncrypted: boolean,
+      expectedResponseId?: number,
+      options?: { timeoutMs: number },
+    ) => Promise<Buffer>;
+    sendCommand: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<unknown>;
+    reportSuppressedError: (context: string, error: unknown) => void;
+  };
+
+  internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
+  const okPayload = internals.encrypt(
+    Buffer.from(JSON.stringify({ result: ["ok"] }), "utf8"),
+  );
+  // Build a response with correct header but corrupted checksum (bytes 16-32)
+  const header = Buffer.alloc(32, 0);
+  header.fill(0xff, 16, 32); // wrong checksum
+  const corruptResponse = Buffer.concat([header, okPayload]);
+
+  vi.spyOn(internals, "sendAndReceive").mockResolvedValue(corruptResponse);
+  const spy = vi.spyOn(internals, "reportSuppressedError");
+
+  await internals.sendCommand("get_prop", []);
+  expect(spy).toHaveBeenCalledWith(
+    "checksum",
+    expect.objectContaining({ message: expect.stringContaining("checksum") }),
+  );
+
+  await transport.close();
+});
