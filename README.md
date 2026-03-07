@@ -53,25 +53,24 @@ npm install -g homebridge-xiaomi-air-purifier-modern
 
 ## Configuration
 
-Each purifier is configured as a separate accessory entry:
+This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a `devices` list:
 
 ```json
-"accessories": [
+"platforms": [
   {
-    "accessory": "XiaomiMiAirPurifier",
-    "name": "Office Purifier",
-    "address": "10.10.1.17",
-    "token": "00112233445566778899aabbccddeeff",
-    "model": "zhimi.airpurifier.3h",
-    "connectTimeoutMs": 15000,
-    "operationTimeoutMs": 15000,
-    "reconnectDelayMs": 15000,
-    "keepAliveIntervalMs": 60000,
-    "_bridge": {
-      "name": "Xiaomi Mi Air Purifier HUB",
-      "username": "11:22:33:44:55:66",
-      "port": 35012
-    }
+    "platform": "XiaomiMiAirPurifier",
+    "devices": [
+      {
+        "name": "Office Purifier",
+        "address": "10.10.1.17",
+        "token": "00112233445566778899aabbccddeeff",
+        "model": "zhimi.airpurifier.3h",
+        "connectTimeoutMs": 15000,
+        "operationTimeoutMs": 15000,
+        "reconnectDelayMs": 15000,
+        "keepAliveIntervalMs": 60000
+      }
+    ]
   }
 ]
 ```
@@ -80,8 +79,8 @@ Each purifier is configured as a separate accessory entry:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `accessory` | string | Yes | Must be `"XiaomiMiAirPurifier"` |
-| `name` | string | Yes | HomeKit display name |
+| `platform` | string | Yes | Must be `"XiaomiMiAirPurifier"` |
+| `name` | string | Yes | HomeKit display name (per device) |
 | `address` | string | Yes | LAN IP address |
 | `token` | string | Yes | 32-character hex token |
 | `model` | string | Yes | Xiaomi model identifier |
@@ -99,7 +98,7 @@ Each purifier is configured as a separate accessory entry:
 | `operationPollIntervalMs` | integer | No | Polling interval for control-related state refresh in milliseconds (default `10000`, min `1000`) |
 | `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |
 | `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
-| `_bridge` | object | No | Optional child bridge configuration |
+| `_bridge` | object | No | Optional child bridge configuration (Homebridge 1.x) |
 
 ### Known model strings
 
@@ -210,7 +209,7 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 - Supported runtime: active LTS Node versions listed in `package.json` engines.
 - Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
-- **v2.0 roadmap:** Migration from `accessory` plugin to `platform` plugin for multi-device support and auto-discovery. The current accessory-based architecture supports multiple devices via child bridges (`_bridge` config).
+- **Dynamic Platform Plugin** — supports multiple devices in a single plugin instance with automatic cached accessory management. See `config.schema.json` for the full schema.
 
 ---
 

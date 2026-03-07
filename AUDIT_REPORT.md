@@ -14,11 +14,11 @@
 
 1. **Zero runtime dependencies** — wtyczka opiera się wyłącznie na `node:crypto` i `node:dgram`. Supply-chain risk praktycznie zerowy. To rzadkość wśród wtyczek Homebridge.
 
-2. **~88 testów, 100% pokrycie kodu** — 9 plików testowych z progami wymuszanymi w `vitest.config.ts` (statements/branches/functions/lines = 100%). Obejmuje 9 realistycznych scenariuszy sieciowych (S1-S9).
+2. **126 testów, 100% pokrycie kodu** — 9 plików testowych z progami wymuszanymi w `vitest.config.ts` (statements/branches/functions/lines = 100%). Obejmuje 9 realistycznych scenariuszy sieciowych (S1-S9).
 
 3. **Profesjonalny CI/CD** — semantic-release z npm provenance, SBOM CycloneDX, OSV Scanner, OpenSSF Scorecard, Dependabot (npm + GitHub Actions), macierz CI na Node 20/22/24 × Homebridge 1.11.2/beta, SHA-pinned actions.
 
-4. **Solidna architektura warstwowa** — `MiioTransport → DeviceClient → AirPurifierAccessory → XiaomiAirPurifierAccessoryPlugin`. Operation queue serializująca UDP, retry z exponential backoff + jitter, dual protocol (MIOT/Legacy) z auto-detekcją i fallback.
+4. **Solidna architektura warstwowa** — `MiioTransport → DeviceClient → AirPurifierAccessory → XiaomiAirPurifierPlatform`. Operation queue serializująca UDP, retry z exponential backoff + jitter, dual protocol (MIOT/Legacy) z auto-detekcją i fallback.
 
 5. **Pełna spójność README ↔ config.schema.json ↔ kod** — trójstronna weryfikacja domyślnych wartości, limitów i mapowań HomeKit potwierdzona.
 
@@ -41,8 +41,8 @@
 ```
 xiaomi-mi-air-purifier-ng/
 ├── src/                            ~2100 LOC (7 plików)
-│   ├── index.ts                    Entry point — registerAccessory (14 LOC)
-│   ├── platform.ts                 Config validation, DI wiring (229 LOC)
+│   ├── index.ts                    Entry point — registerPlatform (14 LOC)
+│   ├── platform.ts                 Platform plugin, config validation, DI wiring (301 LOC)
 │   ├── accessories/
 │   │   └── air-purifier.ts         HomeKit service/characteristic binding (592 LOC)
 │   └── core/
@@ -77,9 +77,9 @@ xiaomi-mi-air-purifier-ng/
 
 | Aspekt | Status | Dowód w kodzie |
 |--------|--------|----------------|
-| `registerAccessory` | ✅ | `index.ts:8-13` — `export =` z `(api: API) => void` |
-| `pluginAlias` match | ✅ | `XiaomiMiAirPurifier` = `ACCESSORY_NAME` = `config.schema.json:pluginAlias` |
-| `pluginType` | ✅ | `"accessory"` w `config.schema.json` |
+| `registerPlatform` | ✅ | `index.ts:8-10` — `api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, ...)` |
+| `pluginAlias` match | ✅ | `XiaomiMiAirPurifier` = `PLATFORM_NAME` = `config.schema.json:pluginAlias` |
+| `pluginType` | ✅ | `"platform"` w `config.schema.json` |
 | `displayName` | ✅ | `package.json:73` |
 | Init (non-blocking) | ✅ | `air-purifier.ts:130-136` — `void client.init().then(...).catch(...)` |
 | Shutdown | ✅ | `air-purifier.ts:138-143` — `api.on("shutdown", ...)` z `void client.shutdown().catch(...)` |
@@ -303,8 +303,8 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 |---------|---------|
 | Framework | vitest v4 |
 | Coverage provider | v8 |
-| Testy | ~88 (100% pass) |
-| Pliki testowe | 9 |
+| Testy | 126 (100% pass) |
+| Pliki testowe | 10 |
 | Pokrycie statements | 100% (enforced) |
 | Pokrycie branches | 100% (enforced) |
 | Pokrycie functions | 100% (enforced) |
@@ -456,7 +456,7 @@ Brak — wszystkie critical i high issues rozwiązane.
 | L2 | Test crypto round-trip | Weryfikacja encrypt/decrypt z known token/payload jako unit test. Obecnie crypto jest testowane pośrednio. |
 | L3 | Weryfikacja checksum w response MIIO | Nagłówek MIIO zawiera checksum MD5, ale response checksum nie jest weryfikowany. Dodanie weryfikacji poprawiłoby odporność na corrupt packets. |
 | L4 | Redukcja `Reflect.get` w kodzie produkcyjnym | Rozważyć runtime type guards z explicit fallback zamiast generycznego `Reflect.get` (np. dla `AirPurifier` service). |
-| L5 | Platform plugin migration (v2.0) | Multi-device support, auto-discovery. Obecny model `accessory` z child bridge jest w pełni funkcjonalny — to long-term goal. |
+| L5 | ~~Platform plugin migration~~ | ✅ Already completed — migrated to Dynamic Platform Plugin in commit `6c2eaf5`. |
 
 ### INFO (obserwacje, nie wymagają akcji)
 
@@ -474,7 +474,7 @@ Brak — wszystkie critical i high issues rozwiązane.
 
 | Kryterium | Ocena | Komentarz |
 |-----------|-------|-----------|
-| Rejestracja i aliasy | 10/10 | `registerAccessory` + matching pluginAlias |
+| Rejestracja i aliasy | 10/10 | `registerPlatform` + matching pluginAlias |
 | Lifecycle (init/shutdown) | 10/10 | Non-blocking init, proper shutdown handler |
 | Error handling i resilience | 10/10 | Queue isolation, retry with backoff, connection events |
 | Config validation | 10/10 | Trójstronna spójność README/schema/code |
@@ -558,7 +558,7 @@ Brak — wszystkie critical i high issues rozwiązane.
 |---------|--------|
 | lint (0 errors) | ✅ |
 | typecheck (0 errors) | ✅ |
-| test (~88 tests, 100% coverage) | ✅ |
+| test (126 tests, 100% coverage) | ✅ |
 | build (tsc) | ✅ |
 | Zero runtime dependencies | ✅ |
 | Source maps w dist | ✅ |

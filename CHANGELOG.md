@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
 
+### Fixed
+
+- **README configuration example** — updated from stale `"accessories"` / `"accessory"` pattern to correct Dynamic Platform Plugin format (`"platforms"` / `"platform"` with `devices` array). Matches the actual `registerPlatform` registration and `config.schema.json` layout.
+- **Audit report stale references** — corrected `registerAccessory` → `registerPlatform`, updated test counts (126 tests), and marked platform migration as completed.
+
 ### Added
 
 - **Filter status test scenarios** — S8 (filter life drops to 4% triggers `FilterChangeIndication = CHANGE_FILTER`) and S9 (filter replacement 4%→100% resets `FilterChangeIndication = FILTER_OK`) added to automated network/status scenario suite.
@@ -39,7 +44,7 @@ Initial public release.
 - **Config validation** — strict 32-char hex token regex, supported model enum, timeout normalization with floor clamping.
 - **Config schema** for Homebridge UI with 3 expandable sections (Sensors, Alerts & Controls, Privacy & Timing).
 - **Zero runtime dependencies** — only `node:crypto` and `node:dgram`.
-- **97 tests** across 9 test suites, 100% coverage enforced (statements, branches, functions, lines) via vitest v4 + v8 provider.
+- **126 tests** across 10 test suites, 100% coverage enforced (statements, branches, functions, lines) via vitest v4 + v8 provider.
 - **CI matrix** — Node 20/22/24 × Homebridge 1.11.2 / beta (2.x), with full and smoke lanes.
 - **Supply chain security** — SBOM (CycloneDX), OSV Scanner, OpenSSF Scorecard, npm audit in CI, SHA-pinned GitHub Actions.
 - **Semantic release** with `@semantic-release/changelog`, npm publish with provenance (`NPM_CONFIG_PROVENANCE`).
