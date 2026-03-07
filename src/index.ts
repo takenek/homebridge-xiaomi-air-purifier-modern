@@ -1,14 +1,10 @@
 import type { API } from "homebridge";
 import {
-  ACCESSORY_NAME,
+  PLATFORM_NAME,
   PLUGIN_NAME,
-  XiaomiAirPurifierAccessoryPlugin,
+  XiaomiAirPurifierPlatform,
 } from "./platform";
 
-export = (api: API): void => {
-  api.registerAccessory(
-    PLUGIN_NAME,
-    ACCESSORY_NAME,
-    XiaomiAirPurifierAccessoryPlugin,
-  );
+export default (api: API): void => {
+  api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, XiaomiAirPurifierPlatform);
 };
