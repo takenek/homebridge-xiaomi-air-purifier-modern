@@ -1,25 +1,24 @@
-# Homebridge Plugin Audit Report — v10
+# Homebridge Plugin Audit Report — v11
 
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
 **Data audytu:** 2026-03-08
 **Audytor:** Claude Opus 4.6 — niezależny pełny code review, security audit, quality assessment
-**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (2292 LOC), 10 plików testowych + helpers (4674 LOC), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione i wyniki udokumentowane.
+**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (2292 LOC), 13 plików testowych + helpers (4732 LOC), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione i wyniki udokumentowane.
 
 ### Komendy weryfikacyjne (uruchomione z `env -u npm_config_http_proxy -u npm_config_https_proxy`):
 
 | Komenda | Wynik |
 |---------|-------|
 | `npm ci` | ✅ 114 packages, 0 vulnerabilities |
-| `npm run lint` | ✅ "Checked 27 files in 64ms. No fixes applied." |
+| `npm run lint` | ✅ "Checked 30 files in 56ms. No fixes applied." |
 | `npm run typecheck` | ✅ Clean (0 errors) |
-| `npm test` (vitest --coverage) | ✅ 126 tests passed, 100% coverage (all metrics) |
+| `npm test` (vitest --coverage) | ✅ 126 tests passed, 13 test files, 100% coverage (all metrics) |
 | `npm run build` | ✅ Clean TypeScript compilation |
-| `npm audit --audit-level=high` | ✅ "found 0 vulnerabilities" |
+| `npm audit` | ✅ "found 0 vulnerabilities" |
 | `npm outdated` | ✅ Only `@types/node` 22.x vs 25.x (correct for engines) |
-| `npm ls --all` (deprecated check) | ✅ No deprecation warnings |
-| `npm pack --dry-run` | ✅ 34 files, 37.1 kB packed |
-| `npm ls q` | ✅ q@1.1.2 via homebridge→hap-nodejs→node-persist (expected) |
+| `npm ls --all` (deprecated check) | ✅ Only q@1.1.2 (transitive: homebridge 1.x) — expected |
+| `npm pack --dry-run` | ✅ 34 files, 37.2 kB packed, 163.7 kB unpacked |
 
 ---
 
@@ -29,7 +28,7 @@
 
 1. **Zero runtime dependencies** — wtyczka używa wyłącznie `node:crypto` i `node:dgram`. Supply-chain risk jest praktycznie zerowy — to wybitne osiągnięcie wśród wtyczek Homebridge.
 
-2. **126 testów z wymuszonym 100% pokryciem kodu** — vitest.config.ts wymusza 100% na statements/branches/functions/lines. 10 plików testowych obejmuje 9 realistycznych scenariuszy sieciowych (S1-S9), crypto round-trip, pełne coverage transportu MIIO/MIOT i kompletne branch coverage DeviceClient.
+2. **126 testów w 13 plikach z wymuszonym 100% pokryciem kodu** — vitest.config.ts wymusza 100% na statements/branches/functions/lines. Suite obejmuje 9 realistycznych scenariuszy sieciowych (S1-S9), crypto round-trip, pełne coverage transportu MIIO/MIOT, kompletne branch coverage DeviceClient i dobrze zorganizowane testy modułowe.
 
 3. **Profesjonalny CI/CD z supply-chain hardening** — semantic-release z npm provenance, SBOM CycloneDX, OSV Scanner, OpenSSF Scorecard, Dependabot (npm + GitHub Actions), macierz CI Node 20/22/24 × Homebridge 1.11.2/beta, SHA-pinned GitHub Actions z komentarzami wersji.
 
@@ -41,11 +40,9 @@
 
 ### Główne ryzyka / obszary do poprawy
 
-1. **Duże pliki testowe** — `accessory-platform-index.test.ts` (1437 LOC) i `miio-transport-coverage.test.ts` (1073 LOC) mogłyby zyskać na podziale dla czytelności. Nie blokuje publikacji.
+1. **Liczne type casts (`as never`, `as unknown as`)** — wymuszone przez kompatybilność HB 1.x/2.x API, ale utrudniają statyczną analizę. Uzasadnione, lecz warte obserwacji przy ewolucji API.
 
-2. **Liczne type casts (`as never`, `as unknown as`)** — wymuszone przez kompatybilność HB 1.x/2.x API, ale utrudniają statyczną analizę. Uzasadnione, lecz warte obserwacji przy ewolucji API.
-
-3. **Semantic-release plugins version-pinned, ale nie integrity-pinned** — standardowa praktyka, ale warto mieć świadomość ryzyka supply-chain w runtime release pipeline.
+2. **Semantic-release plugins version-pinned, ale nie integrity-pinned** — standardowa praktyka, ale warto mieć świadomość ryzyka supply-chain w runtime release pipeline.
 
 ---
 
@@ -65,19 +62,22 @@ xiaomi-mi-air-purifier-ng/
 │       ├── mode-policy.ts          Auto/Night switch state machine (29 LOC)
 │       ├── retry.ts                Exponential backoff + retryable error codes (76 LOC)
 │       └── types.ts                Shared types + property list (48 LOC)
-├── test/                           4674 LOC (10 plików testowych + helpers)
+├── test/                           4732 LOC (13 plików testowych + helpers)
 │   ├── helpers/
 │   │   └── fake-homekit.ts         Shared test infrastructure (274 LOC)
-│   ├── accessory-platform-index.test.ts  (1437 LOC, 35 tests)
-│   ├── miio-transport-coverage.test.ts   (1073 LOC, 21 tests)
-│   ├── device-client-branches.test.ts    (607 LOC, 25 tests)
+│   ├── accessory.test.ts                  (901 LOC, 14 tests)
+│   ├── platform.test.ts                   (492 LOC, 14 tests)
+│   ├── config-validation.test.ts          (80 LOC, 7 tests)
+│   ├── device-client-branches.test.ts     (607 LOC, 25 tests)
+│   ├── miio-transport-commands.test.ts    (598 LOC, 11 tests)
+│   ├── miio-transport-protocol.test.ts    (497 LOC, 10 tests)
 │   ├── miio-transport-reliability.test.ts (384 LOC, 8 tests)
-│   ├── network-scenarios.test.ts         (309 LOC, 9 tests)
-│   ├── device-api.test.ts               (199 LOC, 7 tests)
-│   ├── reliability.test.ts              (189 LOC, 5 tests)
-│   ├── crypto-roundtrip.test.ts         (97 LOC, 3 tests)
-│   ├── mappers.test.ts                  (72 LOC, 9 tests)
-│   └── mode-policy.test.ts             (33 LOC, 4 tests)
+│   ├── network-scenarios.test.ts          (309 LOC, 9 tests)
+│   ├── device-api.test.ts                (199 LOC, 7 tests)
+│   ├── reliability.test.ts               (189 LOC, 5 tests)
+│   ├── crypto-roundtrip.test.ts          (97 LOC, 3 tests)
+│   ├── mappers.test.ts                   (72 LOC, 9 tests)
+│   └── mode-policy.test.ts              (33 LOC, 4 tests)
 ├── .github/
 │   ├── workflows/                  6 workflows (ci, release, supply-chain, scorecard, stale, labeler)
 │   ├── dependabot.yml, CODEOWNERS, labeler.yml
@@ -92,7 +92,7 @@ xiaomi-mi-air-purifier-ng/
     LICENSE / SECURITY.md / RELEASE_CHECKLIST.md / AUDIT_REPORT.md
 ```
 
-**Ocena struktury: 10/10.** Czysty podział na warstwy z przestrzeganiem SRP. Brak "god objects". Shared test infrastructure wyodrębniona. Każdy moduł core ma jedną wyraźną odpowiedzialność.
+**Ocena struktury: 10/10.** Czysty podział na warstwy z przestrzeganiem SRP. Brak "god objects". Shared test infrastructure wyodrębniona. Każdy moduł core ma jedną wyraźną odpowiedzialność. Testy podzielone na 13 fokusowych plików z jasnym single-responsibility.
 
 ---
 
@@ -348,30 +348,34 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 | Framework | vitest v4.0.18 |
 | Coverage provider | v8 |
 | Testy | 126 (100% pass) |
-| Pliki testowe | 10 |
+| Pliki testowe | 13 |
 | Shared helpers | 1 (`test/helpers/fake-homekit.ts`, 274 LOC) |
 | Pokrycie statements | 100% (enforced w vitest.config.ts) |
 | Pokrycie branches | 100% (enforced) |
 | Pokrycie functions | 100% (enforced) |
 | Pokrycie lines | 100% (enforced) |
-| Test duration | 4.44s |
+| Test duration | 3.45s |
 
 **Testy według pliku:**
 
-| Plik | Testów | Zakres pokrycia |
-|------|--------|-----------------|
-| `accessory-platform-index.test.ts` | 35 | Services, config validation, platform lifecycle, HomeKit bindings, stale cleanup |
-| `device-client-branches.test.ts` | 25 | Queue, retry, listeners, timers, error isolation, EDEVICEUNAVAILABLE cap |
-| `miio-transport-coverage.test.ts` | 21 | Protocol detection, handshake, batch reads, MIOT/legacy fallback |
-| `mappers.test.ts` | 9 | Fan level mapping, AQI thresholds, boundary values |
-| `network-scenarios.test.ts` | 9 | S1-S9: realistic network failure/recovery + filter lifecycle |
-| `miio-transport-reliability.test.ts` | 8 | Retryable errors, close idempotency, diagnostics |
-| `device-api.test.ts` | 7 | Read/write API contract, parameter encoding, set-and-sync |
-| `reliability.test.ts` | 5 | Backoff computation, error classification, socket error |
-| `mode-policy.test.ts` | 4 | Auto/Night switch state machine |
-| `crypto-roundtrip.test.ts` | 3 | AES-128-CBC encrypt/decrypt round-trip, token differentiation |
+| Plik | Testów | LOC | Zakres pokrycia |
+|------|--------|-----|-----------------|
+| `accessory.test.ts` | 14 | 901 | HomeKit service bindings, characteristic updates, feature flags, connection events |
+| `platform.test.ts` | 14 | 492 | Platform lifecycle, device discovery, cached accessory restore, stale cleanup |
+| `device-client-branches.test.ts` | 25 | 607 | Queue, retry, listeners, timers, error isolation, EDEVICEUNAVAILABLE cap |
+| `miio-transport-commands.test.ts` | 11 | 598 | MIOT/legacy set commands, fan level, child lock, LED, mode switching |
+| `miio-transport-protocol.test.ts` | 10 | 497 | Protocol detection, handshake, batch reads, MIOT/legacy fallback |
+| `network-scenarios.test.ts` | 9 | 309 | S1-S9: realistic network failure/recovery + filter lifecycle |
+| `mappers.test.ts` | 9 | 72 | Fan level mapping, AQI thresholds, boundary values |
+| `miio-transport-reliability.test.ts` | 8 | 384 | Retryable errors, close idempotency, diagnostics |
+| `device-api.test.ts` | 7 | 199 | Read/write API contract, parameter encoding, set-and-sync |
+| `config-validation.test.ts` | 7 | 80 | Config normalization: threshold, timeout, boolean, hex token, model |
+| `reliability.test.ts` | 5 | 189 | Backoff computation, error classification, socket error |
+| `mode-policy.test.ts` | 4 | 33 | Auto/Night switch state machine |
+| `crypto-roundtrip.test.ts` | 3 | 97 | AES-128-CBC encrypt/decrypt round-trip, token differentiation |
 
 **Mocne strony testów:**
+- Dobrze zorganizowana struktura — 13 fokusowych plików z jasnym single-responsibility (refaktoryzacja z wcześniejszych dużych plików zakończona)
 - Shared test infrastructure (`fake-homekit.ts`) — `FakeService`, `FakeCharacteristic`, `FakeClient`, `FakePlatformAccessory`, `makeApi()`, `makeState()`, `makeLogger()`
 - DI-based mocking (interfejsy `MiioTransport`, `Logger`) — clean architecture
 - `ScriptedTransport` z queue-based reads — deterministic sequencing
@@ -379,13 +383,6 @@ Semantic-release plugins w `release.yml` są version-pinned (np. `@semantic-rele
 - `vi.useFakeTimers()` z kontrolowanym time-advancement
 - 9 realistycznych scenariuszy sieciowych (restart urządzenia, router, packet loss, Wi-Fi outage, filter lifecycle)
 - Isolation testów: proper cleanup w `afterEach`
-
-**Uwagi do testów (nie blokujące):**
-
-| # | Uwaga | Priorytet |
-|---|-------|-----------|
-| T1 | `accessory-platform-index.test.ts` (1437 LOC) łączy accessory behavior, config validation i platform lifecycle. Podział poprawiłby czytelność. | Low |
-| T2 | `miio-transport-coverage.test.ts` (1073 LOC) pokrywa wiele odrębnych concerns (protocol detection, batch reads, fallback). | Low |
 
 ### 6.2 CI Pipeline
 
@@ -550,9 +547,7 @@ Brak.
 
 | # | Usprawnienie | Uzasadnienie |
 |---|-------------|--------------|
-| L1 | Podział `accessory-platform-index.test.ts` (1437 LOC) | Łączy accessory behavior, config validation i platform lifecycle. Podział na 2-3 pliki poprawiłby czytelność i maintainability. |
-| L2 | Podział `miio-transport-coverage.test.ts` (1073 LOC) | Pokrywa wiele odrębnych concerns (protocol detection, batch reads, fallback). |
-| L3 | Redukcja type casts w kodzie produkcyjnym | Rozważyć runtime type guards zamiast `as never` w `getOrAddService`, `bindOnGet`, `updateCharacteristicIfNeeded`. Kompatybilność HB 1.x/2.x wymusza kompromisy. |
+| L1 | Redukcja type casts w kodzie produkcyjnym | Rozważyć runtime type guards zamiast `as never` w `getOrAddService`, `bindOnGet`, `updateCharacteristicIfNeeded`. Kompatybilność HB 1.x/2.x wymusza kompromisy. |
 
 ### INFO (obserwacje, nie wymagają akcji)
 
@@ -655,18 +650,17 @@ Brak.
 
 | Element | Status | Weryfikacja |
 |---------|--------|-------------|
-| lint (0 errors) | ✅ | "Checked 27 files in 64ms. No fixes applied." |
+| lint (0 errors) | ✅ | "Checked 30 files in 56ms. No fixes applied." |
 | typecheck (0 errors) | ✅ | `tsc --noEmit` — clean |
-| test (126 tests, 100% coverage) | ✅ | 10 test files, 4.44s, all metrics 100% |
+| test (126 tests, 100% coverage) | ✅ | 13 test files, 3.45s, all metrics 100% |
 | build (tsc) | ✅ | Clean TypeScript compilation |
 | npm audit | ✅ | "found 0 vulnerabilities" |
-| npm pack | ✅ | 34 files, 37.1 kB packed, 163.4 kB unpacked |
+| npm pack | ✅ | 34 files, 37.2 kB packed, 163.7 kB unpacked |
 | Zero runtime dependencies | ✅ | All deps are `devDependencies` or `peerDependencies` |
 | Source maps in dist | ✅ | `*.js.map` included in pack |
 | Declaration files in dist | ✅ | `*.d.ts` included in pack |
 | npm outdated | ✅ | Only `@types/node` 22.x vs 25.x — correct for engines |
 | Deprecated packages | ✅ | Only `q@1.1.2` (transitive: homebridge 1.x) |
-| Entry point | ✅ | `require('./dist/index.js').default` is a function |
 
 ---
 
@@ -677,8 +671,8 @@ Brak.
 | Metryka | Wartość |
 |---------|---------|
 | Linie kodu (src) | 2292 |
-| Linie testów + helpers | 4674 |
-| Test:Source ratio | ~2.0× |
+| Linie testów + helpers | 4732 |
+| Test:Source ratio | ~2.1× |
 | Pokrycie kodu | 100% (enforced, zweryfikowane uruchomieniem) |
 | Runtime dependencies | **0** |
 | Known vulnerabilities | **0** (npm audit clean) |
@@ -690,7 +684,7 @@ Brak.
 | Supported purifier models | 5 |
 | Protocols supported | MIOT + Legacy MIIO (auto-detect + fallback) |
 | HomeKit services | 11 (6 conditional) |
-| npm pack size | 37.1 kB |
+| npm pack size | 37.2 kB |
 
 ### Oceny finalne
 
@@ -705,8 +699,14 @@ Brak.
 | README vs kod spójność | 10/10 |
 | **Ocena ogólna** | **9.9/10** |
 
-Projekt reprezentuje bardzo wysoki standard jakości dla wtyczek Homebridge: zero runtime dependencies, 126 testów z wymuszonym 100% pokryciem kodu (zweryfikowane uruchomieniem w 4.44s), profesjonalny CI/CD z npm provenance i SBOM, pełna dokumentacja OSS z community standards, kompletna trójstronna spójność README ↔ config.schema.json ↔ kod. Jedyne sugestie to drobne usprawnienia organizacji testów (L1-L2) i minor redukcja type casts (L3).
+Projekt reprezentuje bardzo wysoki standard jakości dla wtyczek Homebridge: zero runtime dependencies, 126 testów w 13 fokusowych plikach z wymuszonym 100% pokryciem kodu (zweryfikowane uruchomieniem w 3.45s), profesjonalny CI/CD z npm provenance i SBOM, pełna dokumentacja OSS z community standards, kompletna trójstronna spójność README ↔ config.schema.json ↔ kod. Jedyna sugestia to minor redukcja type casts (L1) — uzasadnionych kompatybilnością HB 1.x/2.x.
+
+### Zmiany od v10 → v11
+
+- **Zaktualizowano strukturę testów** — v10 referował stare pliki `accessory-platform-index.test.ts` (1437 LOC) i `miio-transport-coverage.test.ts` (1073 LOC), które zostały podzielone na 5 fokusowych modułów. Aktualnie: 13 plików testowych (zamiast 10).
+- **Usunięto L1/L2** z listy usprawnień — podział dużych plików testowych został zrealizowany (commit `ce8506c`).
+- **Zaktualizowano dane weryfikacyjne** — lint: 30 plików (nie 27), czas testów: 3.45s (nie 4.44s), LOC testów: 4732 (nie 4674).
 
 ---
 
-*Raport v10 wygenerowany niezależnie. Wszystkie wyniki zweryfikowane uruchomieniem komend w środowisku Node.js v22 na Linux. Data: 2026-03-08.*
+*Raport v11 wygenerowany niezależnie. Wszystkie wyniki zweryfikowane uruchomieniem komend w środowisku Node.js v22 na Linux. Data: 2026-03-08.*
