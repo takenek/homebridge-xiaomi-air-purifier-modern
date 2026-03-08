@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Filter status test scenarios** — S8 (filter life drops to 4% triggers `FilterChangeIndication = CHANGE_FILTER`) and S9 (filter replacement 4%→100% resets `FilterChangeIndication = FILTER_OK`) added to automated network/status scenario suite.
 
+### Changed
+
+- **Test suite reorganized** — split 2 oversized test files (1437 + 1073 LOC) into 5 focused, single-responsibility modules: `accessory.test.ts`, `platform.test.ts`, `config-validation.test.ts`, `miio-transport-protocol.test.ts`, `miio-transport-commands.test.ts`. 126 tests across 13 files, 100% coverage enforced.
+
 ## [1.0.0] — 2026-03-02
 
 Initial public release.
