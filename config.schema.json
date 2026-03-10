@@ -29,7 +29,10 @@
               "title": "Token",
               "type": "string",
               "pattern": "^[0-9a-fA-F]{32}$",
-              "description": "32-character token in hexadecimal format (0-9, a-f)."
+              "description": "32-character token in hexadecimal format (0-9, a-f).",
+              "x-schema-form": {
+                "type": "password"
+              }
             },
             "model": {
               "title": "Model",
