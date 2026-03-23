@@ -500,7 +500,7 @@ it("covers remaining branch variants in MIOT helpers", async () => {
       props: readonly string[],
     ) => Promise<Map<string, unknown>>;
     readMiotOne: (
-      candidates: readonly Array<{ did: string; siid: number; piid: number }>,
+      candidates: readonly { did: string; siid: number; piid: number }[],
     ) => Promise<unknown>;
     trySetViaMiot: (
       method: string,
