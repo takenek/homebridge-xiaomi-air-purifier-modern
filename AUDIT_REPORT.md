@@ -1,8 +1,8 @@
-# Homebridge Plugin Audit Report — v12
+# Homebridge Plugin Audit Report — v13
 
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
-**Data audytu:** 2026-03-10
+**Data audytu:** 2026-03-24
 **Audytor:** Claude Opus 4.6 — pełny code review, security audit, quality assessment
 **Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
 
@@ -10,15 +10,15 @@
 
 | Komenda | Wynik |
 |---------|-------|
-| `npm ci` | ✅ 114 packages, 0 vulnerabilities |
-| `npm run lint` | ✅ "Checked 30 files in 58ms. No fixes applied." |
+| `npm ci` | ✅ Clean install, 0 vulnerabilities |
+| `npm run lint` | ✅ "Checked 30 files in 55ms. No fixes applied." |
 | `npm run typecheck` | ✅ Clean (0 errors) |
 | `npm test` (vitest --coverage) | ✅ 126 tests passed, 13 test files, 100% coverage (all metrics) |
 | `npm run build` | ✅ Clean TypeScript compilation |
 | `npm audit` | ✅ "found 0 vulnerabilities" |
 | `npm audit --audit-level=high` | ✅ "found 0 vulnerabilities" |
-| `npm outdated` | ✅ Only `@types/node` 22.x vs 25.x (correct — `engines` declares `^22.0.0`) |
-| `npm ls --all \| grep deprecated` | ✅ No deprecated packages (q@1.1.2 present as transitive dep of homebridge 1.x — expected & acceptable) |
+| `npm outdated` | ✅ Minor semver updates available (vitest 4.1.0→4.1.1, @vitest/coverage-v8 4.1.0→4.1.1, homebridge 1.11.2→1.11.3, typescript 5.9.3→6.0.2) — all within `^` range, no action needed. `@types/node` 22.x vs 25.x correct per `engines`. |
+| `npm ls --all \| grep deprecated` | ✅ No deprecated packages (q@1.1.2 present as transitive dep of homebridge 1.x via hap-nodejs → node-persist — expected & acceptable) |
 | `npm pack --dry-run` | ✅ 34 files, 37.3 kB packed, 163.8 kB unpacked |
 | `npm run check` (lint+typecheck+test+build) | ✅ All green |
 
@@ -53,18 +53,18 @@
 
 | Commit | Opis | Ocena |
 |--------|------|-------|
-| `c37b8eb` | Merge PR #143 (review HomeKit/Homebridge) | ✅ Merge commit |
-| `930e9be` | feat(ux): mask token field in Homebridge UI config form | ✅ Użycie `x-schema-form: { type: password }` — best practice |
-| `a90e3be` | Merge PR #140 | ✅ Merge commit |
-| `7dd8ab0` | docs: update audit report v11 | ✅ Docs only |
-| `7005d03` | Merge PR #139 | ✅ Merge commit |
-| `def7eda` | docs: update changelog with test reorganization entry | ✅ Docs only |
-| `ce8506c` | refactor(test): split large test files into focused modules | ✅ Dobra praktyka — podział testów na moduły SRP |
-| `dd6fe3b` | docs: update audit report v10 | ✅ Docs only |
-| `17155e4` | Merge PR #138 | ✅ Merge commit |
-| `3586373` | docs: update audit report v9 | ✅ Docs only |
+| `3ce4a6f` | Merge PR #154 (fix npm ci install issues) | ✅ Lockfile fix — utrzymanie reprodukowalności CI |
+| `8a330f8` | Fix npm lockfile for npm ci | ✅ Lockfile sync po aktualizacji zależności |
+| `f063133` | Merge PR #153 (fix errors after package update) | ✅ Merge commit |
+| `6e56a3f` | Fix test parsing after dependency updates | ✅ Utrzymanie testów po bump dependencies |
+| `10bfa1d` | Merge PR #149 (dependabot: @vitest/coverage-v8 4.1.0) | ✅ Dependabot update |
+| `7cabbaf` | Merge main into dependabot branch | ✅ Merge commit |
+| `8168ddc` | chore(deps-dev): bump @vitest/coverage-v8 4.0.18→4.1.0 | ✅ Dependabot — devDep update |
+| `93cc125` | Merge PR #150 (dependabot: @types/node 25.5.0) | ✅ Dependabot update |
+| `b3d757a` | Merge main into dependabot branch | ✅ Merge commit |
+| `2f28799` | Merge PR #147 (dependabot: actions/setup-node 6.3.0) | ✅ Dependabot — Actions SHA pin update |
 
-**Ocena:** Historia commitów jest czysta, stosuje conventional commits, merge-based workflow. Brak force-pushów ani rebase-ów na main.
+**Ocena:** Historia commitów jest czysta, stosuje conventional commits, merge-based workflow. Dependabot aktywnie utrzymuje zależności (npm + GitHub Actions). Brak force-pushów ani rebase-ów na main. Post-update fixy (lockfile, test parsing) świadczą o aktywnym maintainerstwie.
 
 ---
 
@@ -203,7 +203,7 @@
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
 | Runtime dependencies | ✅ Zero | Tylko Node.js builtins |
-| DevDependencies | ✅ Minimal | 5 pakietów: biome, @types/node, vitest, @vitest/coverage-v8, typescript, homebridge |
+| DevDependencies | ✅ Minimal | 6 pakietów: @biomejs/biome, @types/node, @vitest/coverage-v8, homebridge, typescript, vitest |
 | npm audit | ✅ | 0 vulnerabilities |
 | Deprecated packages | ✅ | Tylko q@1.1.2 (transitive via homebridge 1.x) — oczekiwane |
 | package-lock.json | ✅ | Obecny, commitowany |
@@ -236,7 +236,7 @@
 
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
-| Linter | ✅ | Biome v2.4.6, `recommended: true`, `noExplicitAny: error` |
+| Linter | ✅ | Biome v2.4.8, `recommended: true`, `noExplicitAny: error` |
 | Formatter | ✅ | Biome formatter, `indentStyle: space` |
 | EditorConfig | ✅ | 2-space indent, LF, UTF-8, trailing whitespace trim |
 | TypeScript strict | ✅ | `strict: true` + dodatkowe flagi |
