@@ -1,4 +1,4 @@
-import type { API } from "homebridge";
+import type { API } from "homebridge" with { "resolution-mode": "import" };
 import {
   PLATFORM_NAME,
   PLUGIN_NAME,

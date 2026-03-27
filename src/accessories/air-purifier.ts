@@ -4,7 +4,7 @@ import type {
   Logging,
   PlatformAccessory,
   Service,
-} from "homebridge";
+} from "homebridge" with { "resolution-mode": "import" };
 import type { ConnectionStateEvent, DeviceClient } from "../core/device-client";
 import {
   aqiToHomeKitAirQuality,
