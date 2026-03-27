@@ -4,7 +4,7 @@ import type {
   Logging,
   PlatformAccessory,
   PlatformConfig,
-} from "homebridge";
+} from "homebridge" with { "resolution-mode": "import" };
 import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
