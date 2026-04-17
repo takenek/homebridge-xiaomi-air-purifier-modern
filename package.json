@@ -64,7 +64,7 @@
     "@vitest/coverage-v8": "^4.1.2",
     "homebridge": "^1.11.4",
     "typescript": "^6.0.2",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.4"
   },
   "author": {
     "name": "TaKeN",
