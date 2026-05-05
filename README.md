@@ -1,6 +1,6 @@
 # homebridge-xiaomi-air-purifier-modern
 
-[![CI](https://github.com/takenek/xiaomi-mi-air-purifier-ng/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/xiaomi-mi-air-purifier-ng/actions/workflows/ci.yml)
+[![CI](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-xiaomi-air-purifier-modern)](https://www.npmjs.com/package/homebridge-xiaomi-air-purifier-modern)
 [![Homebridge](https://img.shields.io/badge/Homebridge-1.11.1%2B%20%7C%202.0%2B-blueviolet)](https://homebridge.io)
 

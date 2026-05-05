@@ -26,13 +26,13 @@
     "homebridge": "^1.11.1 || ^2.0.0",
     "npm": ">=10.0.0"
   },
-  "homepage": "https://github.com/takenek/xiaomi-mi-air-purifier-ng",
+  "homepage": "https://github.com/takenek/homebridge-xiaomi-air-purifier-modern",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/takenek/xiaomi-mi-air-purifier-ng.git"
+    "url": "git+https://github.com/takenek/homebridge-xiaomi-air-purifier-modern.git"
   },
   "bugs": {
-    "url": "https://github.com/takenek/xiaomi-mi-air-purifier-ng/issues"
+    "url": "https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues"
   },
   "license": "MIT",
   "files": [
