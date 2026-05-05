@@ -134,12 +134,12 @@ export class AirPurifierAccessory {
     );
     this.modeAutoService = this.getOrAddService(
       this.api.hap.Service.Switch,
-      "Mode AUTO ON/OFF",
+      "Mode AUTO On Off",
       "mode_auto",
     );
     this.modeNightService = this.getOrAddService(
       this.api.hap.Service.Switch,
-      "Mode NIGHT ON/OFF",
+      "Mode NIGHT On Off",
       "mode_night",
     );
     this.filterService = this.getOrAddService(

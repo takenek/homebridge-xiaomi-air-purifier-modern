@@ -72,8 +72,8 @@ describe("AirPurifierAccessory switch contract", () => {
       "Switch:Power",
       "Switch:Child Lock",
       "Switch:LED Night Mode",
-      "Switch:Mode AUTO ON/OFF",
-      "Switch:Mode NIGHT ON/OFF",
+      "Switch:Mode AUTO On Off",
+      "Switch:Mode NIGHT On Off",
     ]);
 
     for (const service of accessory.getServices()) {
@@ -94,14 +94,14 @@ describe("AirPurifierAccessory switch contract", () => {
       .find(
         (service) =>
           (service as unknown as FakeService).name ===
-          "Switch:Mode AUTO ON/OFF",
+          "Switch:Mode AUTO On Off",
       ) as unknown as FakeService;
     const modeNightService = accessory
       .getServices()
       .find(
         (service) =>
           (service as unknown as FakeService).name ===
-          "Switch:Mode NIGHT ON/OFF",
+          "Switch:Mode NIGHT On Off",
       ) as unknown as FakeService;
     const modeAutoSetter = modeAutoService.getCharacteristic(
       api.hap.Characteristic.On,
@@ -422,14 +422,14 @@ describe("AirPurifierAccessory switch contract", () => {
       .find(
         (service) =>
           (service as unknown as FakeService).name ===
-          "Switch:Mode AUTO ON/OFF",
+          "Switch:Mode AUTO On Off",
       ) as unknown as FakeService;
     const modeNightService = accessory
       .getServices()
       .find(
         (service) =>
           (service as unknown as FakeService).name ===
-          "Switch:Mode NIGHT ON/OFF",
+          "Switch:Mode NIGHT On Off",
       ) as unknown as FakeService;
 
     expect(logger.info).toHaveBeenCalledWith(
