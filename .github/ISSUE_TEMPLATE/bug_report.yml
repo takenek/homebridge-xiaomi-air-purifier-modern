@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible bug
+body:
+  - type: input
+    id: plugin_version
+    attributes: {label: Plugin version}
+    validations: {required: true}
+  - type: dropdown
+    id: model
+    attributes:
+      label: Purifier model
+      options:
+        - zhimi.airpurifier.2h
+        - zhimi.airpurifier.3
+        - zhimi.airpurifier.3h
+        - zhimi.airpurifier.4
+        - zhimi.airpurifier.pro
+        - Other / Unknown
+    validations: {required: true}
+  - type: input
+    id: homebridge
+    attributes: {label: Homebridge version}
+    validations: {required: true}
+  - type: input
+    id: node
+    attributes: {label: Node.js version}
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Steps to reproduce}
+    validations: {required: true}

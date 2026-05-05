@@ -1,0 +1,243 @@
+{
+  "pluginAlias": "XiaomiMiAirPurifier",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "address", "token", "model"],
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "default": "Air Purifier",
+              "placeholder": "Air Purifier",
+              "description": "Display name for this accessory in HomeKit."
+            },
+            "address": {
+              "title": "IP Address",
+              "type": "string",
+              "format": "ipv4",
+              "description": "LAN IP address of the air purifier."
+            },
+            "token": {
+              "title": "Token",
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{32}$",
+              "description": "32-character token in hexadecimal format (0-9, a-f).",
+              "x-schema-form": {
+                "type": "password"
+              }
+            },
+            "model": {
+              "title": "Model",
+              "type": "string",
+              "description": "Xiaomi model identifier. Check the README for supported models.",
+              "oneOf": [
+                {
+                  "title": "Mi Air Purifier 2H",
+                  "enum": ["zhimi.airpurifier.2h"]
+                },
+                {
+                  "title": "Mi Air Purifier 3",
+                  "enum": ["zhimi.airpurifier.3"]
+                },
+                {
+                  "title": "Mi Air Purifier 3H",
+                  "enum": ["zhimi.airpurifier.3h"]
+                },
+                {
+                  "title": "Mi Air Purifier 4",
+                  "enum": ["zhimi.airpurifier.4"]
+                },
+                {
+                  "title": "Mi Air Purifier Pro",
+                  "enum": ["zhimi.airpurifier.pro"]
+                }
+              ]
+            },
+            "enableAirQuality": {
+              "title": "Air Quality Sensor",
+              "type": "boolean",
+              "default": true,
+              "description": "Expose AirQualitySensor service in HomeKit."
+            },
+            "enableTemperature": {
+              "title": "Temperature Sensor",
+              "type": "boolean",
+              "default": true,
+              "description": "Expose TemperatureSensor service in HomeKit."
+            },
+            "enableHumidity": {
+              "title": "Humidity Sensor",
+              "type": "boolean",
+              "default": true,
+              "description": "Expose HumiditySensor service in HomeKit."
+            },
+            "filterChangeThreshold": {
+              "title": "Filter Change Warning Threshold",
+              "type": "integer",
+              "default": 10,
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Show <b>Change Filter</b> warning when Filter Life reaches or drops below this value."
+            },
+            "enableChildLockControl": {
+              "title": "Child Lock",
+              "type": "boolean",
+              "default": false,
+              "description": "Expose Child Lock switch service in HomeKit."
+            },
+            "connectTimeoutMs": {
+              "title": "Connect Timeout (ms)",
+              "type": "integer",
+              "default": 15000,
+              "minimum": 100,
+              "description": "Timeout for MIIO handshake/connect operations."
+            },
+            "operationTimeoutMs": {
+              "title": "Operation Timeout (ms)",
+              "type": "integer",
+              "default": 15000,
+              "minimum": 100,
+              "description": "Timeout for read/write operations after connection."
+            },
+            "reconnectDelayMs": {
+              "title": "Reconnect Delay (ms)",
+              "type": "integer",
+              "default": 15000,
+              "minimum": 100,
+              "description": "Maximum delay cap used by reconnect backoff policy (first retry starts fast, then increases up to this value)."
+            },
+            "keepAliveIntervalMs": {
+              "title": "Keep Alive Interval (ms)",
+              "type": "integer",
+              "default": 60000,
+              "minimum": 1000,
+              "description": "Background keep-alive poll interval."
+            },
+            "exposeFilterReplaceAlertSensor": {
+              "title": "Expose Filter Replace Alert Sensor",
+              "type": "boolean",
+              "default": false,
+              "description": "Adds an extra Contact Sensor service for filter replacement warning. Keep disabled to avoid duplicate warning tiles in Homebridge UI."
+            },
+            "operationPollIntervalMs": {
+              "title": "Operation Poll Interval (ms)",
+              "type": "integer",
+              "default": 10000,
+              "minimum": 1000,
+              "description": "Polling interval for control-related state refresh."
+            },
+            "sensorPollIntervalMs": {
+              "title": "Sensor Poll Interval (ms)",
+              "type": "integer",
+              "default": 30000,
+              "minimum": 1000,
+              "description": "Polling interval for slower sensor updates."
+            },
+            "maskDeviceAddressInLogs": {
+              "title": "Mask Device IP in Logs",
+              "type": "boolean",
+              "default": false,
+              "description": "Mask device IP address in runtime logs (for privacy-sensitive deployments)."
+            }
+          }
+        }
+      }
+    }
+  },
+  "layout": [
+    {
+      "key": "devices",
+      "type": "array",
+      "buttonText": "Add Device",
+      "items": [
+        {
+          "key": "devices[].name"
+        },
+        {
+          "key": "devices[].model"
+        },
+        {
+          "key": "devices[].address"
+        },
+        {
+          "key": "devices[].token"
+        },
+        {
+          "type": "help",
+          "helpvalue": "Please check the README for instruction about how to get a <em>token</em>."
+        },
+        {
+          "type": "fieldset",
+          "title": "Sensors",
+          "expandable": true,
+          "expanded": true,
+          "items": [
+            {
+              "key": "devices[].enableAirQuality"
+            },
+            {
+              "key": "devices[].enableTemperature"
+            },
+            {
+              "key": "devices[].enableHumidity"
+            }
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Alerts & Controls",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            {
+              "key": "devices[].filterChangeThreshold"
+            },
+            {
+              "key": "devices[].exposeFilterReplaceAlertSensor"
+            },
+            {
+              "key": "devices[].enableChildLockControl"
+            }
+          ]
+        },
+        {
+          "type": "fieldset",
+          "title": "Privacy & Timing",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            {
+              "key": "devices[].maskDeviceAddressInLogs"
+            },
+            {
+              "key": "devices[].connectTimeoutMs"
+            },
+            {
+              "key": "devices[].operationTimeoutMs"
+            },
+            {
+              "key": "devices[].reconnectDelayMs"
+            },
+            {
+              "key": "devices[].keepAliveIntervalMs"
+            },
+            {
+              "key": "devices[].operationPollIntervalMs"
+            },
+            {
+              "key": "devices[].sensorPollIntervalMs"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
