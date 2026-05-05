@@ -1,3 +1,10 @@
+# 1.0.0 (2026-05-05)
+
+
+### Bug Fixes
+
+* trigger initial npm release ([b5cc8f8](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/b5cc8f8137ae49dad32538d1b6a24b7bad0d7b1c))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
