@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.0...v1.0.1) (2026-05-05)
+
+
+### Bug Fixes
+
+* replace slash in ConfiguredName to satisfy HAP-NodeJS validation ([73c36e1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/73c36e1ba641eec0fdfbf22f24b1710f55217d5e))
+
 # 1.0.0 (2026-05-05)
 
 

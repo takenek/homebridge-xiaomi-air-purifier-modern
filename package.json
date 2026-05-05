@@ -1,6 +1,6 @@
 {
   "name": "homebridge-xiaomi-air-purifier-modern",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modern Homebridge plugin for Xiaomi Mi Air Purifier (2H/3/3H/4/Pro)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
