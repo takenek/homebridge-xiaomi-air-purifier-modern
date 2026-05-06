@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.1...v1.0.2) (2026-05-06)
+
+
+### Bug Fixes
+
+* **platform:** report device index, name and missing fields when validating config ([05e187c](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/05e187c8b0772da73b383d95b8e9480db43dbb2a))
+
 ## [1.0.1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.0...v1.0.1) (2026-05-05)
 
 
