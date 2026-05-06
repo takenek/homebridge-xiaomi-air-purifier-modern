@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import type {
   API,
   DynamicPlatformPlugin,
@@ -22,6 +23,7 @@ const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
   "zhimi.airpurifier.pro",
 ];
 const VALID_MODELS = new Set<AirPurifierModel>(SUPPORTED_MODELS);
+const TOKEN_PATTERN = /^[0-9a-fA-F]{32}$/;
 
 export interface DeviceConfig {
   name?: string;
@@ -43,6 +45,13 @@ export interface DeviceConfig {
   maskDeviceAddressInLogs?: boolean;
 }
 
+export interface ValidatedDeviceConfig {
+  name: string;
+  address: string;
+  token: string;
+  model: AirPurifierModel;
+}
+
 export const maskAddress = (address: string): string => {
   const segments = address.split(".");
   if (segments.length !== 4) {
@@ -52,36 +61,73 @@ export const maskAddress = (address: string): string => {
   return `${segments[0]}.${segments[1]}.*.*`;
 };
 
-export const assertString = (value: unknown, field: string): string => {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Invalid or missing config field: ${field}`);
-  }
+const trimOrEmpty = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
 
-  return value;
+export const formatDeviceLabel = (
+  config: DeviceConfig,
+  index: number,
+): string => {
+  const number = `#${index + 1}`;
+  const name = trimOrEmpty(config.name);
+  return name ? `${number} ("${name}")` : number;
 };
 
-export const assertHexToken = (value: string): string => {
-  if (!/^[0-9a-fA-F]{32}$/.test(value)) {
-    throw new Error(
-      "Invalid config field: token must be a 32-character hexadecimal string.",
-    );
+export const validateDeviceConfig = (
+  config: DeviceConfig,
+): ValidatedDeviceConfig => {
+  const missing: string[] = [];
+  const invalid: string[] = [];
+
+  const name = trimOrEmpty(config.name);
+  if (!name) {
+    missing.push("name");
   }
 
-  return value;
-};
-
-export const normalizeModel = (
-  value: string,
-  log: Logging,
-): AirPurifierModel => {
-  if (VALID_MODELS.has(value as AirPurifierModel)) {
-    return value as AirPurifierModel;
+  const address = trimOrEmpty(config.address);
+  if (!address) {
+    missing.push("address");
+  } else if (isIP(address) !== 4) {
+    invalid.push("address");
   }
 
-  log.error(`Unsupported model configured: "${value}".`);
-  throw new Error(
-    `Unsupported model: ${value}. Supported models: ${SUPPORTED_MODELS.join(", ")}.`,
-  );
+  const token = trimOrEmpty(config.token);
+  if (!token) {
+    missing.push("token");
+  } else if (!TOKEN_PATTERN.test(token)) {
+    invalid.push("token");
+  }
+
+  const model = trimOrEmpty(config.model);
+  if (!model) {
+    missing.push("model");
+  } else if (!VALID_MODELS.has(model as AirPurifierModel)) {
+    invalid.push("model");
+  }
+
+  if (missing.length > 0 || invalid.length > 0) {
+    const parts: string[] = [];
+    if (missing.length > 0) {
+      const label =
+        missing.length === 1
+          ? "missing required config field"
+          : "missing required config fields";
+      parts.push(`${label}: ${missing.join(", ")}`);
+    }
+    if (invalid.length > 0) {
+      const label =
+        invalid.length === 1 ? "invalid config field" : "invalid config fields";
+      parts.push(`${label}: ${invalid.join(", ")}`);
+    }
+    throw new Error(parts.join("; "));
+  }
+
+  return {
+    name,
+    address,
+    token,
+    model: model as AirPurifierModel,
+  };
 };
 
 export const normalizeThreshold = (value: unknown): number => {
@@ -150,14 +196,15 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
   }
 
   private discoverDevices(): void {
-    for (const deviceConfig of this.devices) {
+    this.devices.forEach((deviceConfig, index) => {
       try {
         this.setupDevice(deviceConfig);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        this.log.error(`Failed to configure device: ${message}`);
+        const label = formatDeviceLabel(deviceConfig, index);
+        this.log.error(`Failed to configure device ${label}: ${message}`);
       }
-    }
+    });
 
     const staleAccessories = this.cachedAccessories.filter(
       (accessory) => !this.activeAccessoryUuids.has(accessory.UUID),
@@ -176,13 +223,7 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
   }
 
   private setupDevice(deviceConfig: DeviceConfig): void {
-    const name = assertString(deviceConfig.name, "name");
-    const address = assertString(deviceConfig.address, "address");
-    const token = assertHexToken(assertString(deviceConfig.token, "token"));
-    const model = normalizeModel(
-      assertString(deviceConfig.model, "model"),
-      this.log,
-    );
+    const { name, address, token, model } = validateDeviceConfig(deviceConfig);
     const filterChangeThreshold = normalizeThreshold(
       deviceConfig.filterChangeThreshold,
     );

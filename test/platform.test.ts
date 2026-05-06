@@ -374,9 +374,193 @@ describe("platform plugin", () => {
     api.emit("didFinishLaunching");
 
     expect(logger.error).toHaveBeenCalledWith(
-      "Failed to configure device: non-error-string",
+      'Failed to configure device #1 ("x"): non-error-string',
     );
     setupDevice.mockRestore();
+  });
+
+  it("registers three valid devices alongside one empty default entry", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Oczyszczacz komputerowy",
+            address: "10.10.1.17",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+          {
+            name: "Oczyszczacz Hania",
+            address: "10.10.1.16",
+            token: "aabbccddeeff00112233445566778899",
+            model: "zhimi.airpurifier.3h",
+          },
+          {
+            name: "Oczyszczacz jadalnia",
+            address: "10.10.1.24",
+            token: "112233445566778899aabbccddeeff00",
+            model: "zhimi.airpurifier.3h",
+          },
+          { name: "Air Purifier" },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).toHaveBeenCalledTimes(3);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to configure device #4 ("Air Purifier"): missing required config fields: address, token, model',
+    );
+  });
+
+  it("logs index when name is missing on the broken entry", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [{}],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      "Failed to configure device #1: missing required config fields: name, address, token, model",
+    );
+  });
+
+  it("flags empty string address with the missing-field message", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Air Purifier",
+            address: "",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to configure device #1 ("Air Purifier"): missing required config field: address',
+    );
+  });
+
+  it("flags whitespace-only address with the missing-field message", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Air Purifier",
+            address: "   ",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to configure device #1 ("Air Purifier"): missing required config field: address',
+    );
+  });
+
+  it("flags an invalid IPv4 address", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Air Purifier",
+            address: "999.999.999.999",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to configure device #1 ("Air Purifier"): invalid config field: address',
+    );
+  });
+
+  it("never logs the token, even when the token is the broken field", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const secretToken = "deadbeefcafebabe1234567890abcdef";
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Air Purifier",
+            address: "10.10.1.17",
+            token: secretToken,
+            model: "not-a-real-model",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalled();
+    for (const call of logger.error.mock.calls) {
+      for (const arg of call) {
+        if (typeof arg === "string") {
+          expect(arg).not.toContain(secretToken);
+        }
+      }
+    }
+    for (const call of logger.warn.mock.calls) {
+      for (const arg of call) {
+        if (typeof arg === "string") {
+          expect(arg).not.toContain(secretToken);
+        }
+      }
+    }
   });
 });
 

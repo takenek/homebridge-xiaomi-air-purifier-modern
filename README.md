@@ -227,6 +227,37 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 - Token must be exactly 32 hex characters
 - Regenerate token after device reset if needed
 
+### `Failed to configure device: Invalid or missing config field: address`
+
+This error means at least one entry in the `devices` array is empty or
+incomplete — typically a leftover entry created by clicking **Add Device** in
+Homebridge UI without filling in `address`, `token`, or `model`. Three real
+purifiers may still appear correctly in HomeKit while a fourth ghost entry
+keeps producing this error on every restart.
+
+Starting with this release the message names the offending entry, e.g.
+
+```text
+Failed to configure device #4 ("Air Purifier"): missing required config fields: address, token, model
+```
+
+To inspect your saved configuration safely (the `jq` filter strips `token`
+values so you can paste output without leaking secrets):
+
+```bash
+jq '.platforms[]
+    | select(.platform == "XiaomiMiAirPurifier")
+    | .devices
+    | map(del(.token))' \
+  ~/.homebridge/config.json
+```
+
+Remove the empty entry (or fill in the missing fields), save the file, then
+restart the **child bridge** for `XiaomiMiAirPurifier` from Homebridge UI — or
+restart Homebridge entirely if you do not run this plugin in a child bridge.
+Cached HomeKit accessories for the three working purifiers are unaffected by
+this fix; their UUIDs are derived from the device IP and remain stable.
+
 ### Model differences
 
 Some properties are model/firmware-specific. The transport supports both legacy MIIO and MIOT property APIs and falls back where possible.

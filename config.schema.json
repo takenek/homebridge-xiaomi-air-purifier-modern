@@ -2,20 +2,33 @@
   "pluginAlias": "XiaomiMiAirPurifier",
   "pluginType": "platform",
   "singular": true,
+  "strictValidation": true,
   "schema": {
     "type": "object",
     "properties": {
+      "platform": {
+        "type": "string",
+        "const": "XiaomiMiAirPurifier"
+      },
+      "name": {
+        "type": "string"
+      },
+      "_bridge": {
+        "type": "object",
+        "additionalProperties": true
+      },
       "devices": {
         "title": "Devices",
         "type": "array",
         "items": {
           "type": "object",
+          "additionalProperties": false,
           "required": ["name", "address", "token", "model"],
           "properties": {
             "name": {
               "title": "Name",
               "type": "string",
-              "default": "Air Purifier",
+              "minLength": 1,
               "placeholder": "Air Purifier",
               "description": "Display name for this accessory in HomeKit."
             },
