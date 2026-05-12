@@ -186,6 +186,11 @@ export const makeApi = (withConfiguredName = true) => {
             super("AccessoryInformation");
           }
         },
+        AirPurifier: class extends FakeService {
+          public constructor(name: string, subtype?: string) {
+            super(`AirPurifier:${name}`, subtype);
+          }
+        },
         Switch: class extends FakeService {
           public constructor(name: string, subtype?: string) {
             super(`Switch:${name}`, subtype);
@@ -226,6 +231,19 @@ export const makeApi = (withConfiguredName = true) => {
           : {}),
         SerialNumber: { UUID: "serial" },
         On: { UUID: "on" },
+        Active: { UUID: "active", ACTIVE: 1, INACTIVE: 0 },
+        CurrentAirPurifierState: {
+          UUID: "currentAirPurifierState",
+          INACTIVE: 0,
+          IDLE: 1,
+          PURIFYING_AIR: 2,
+        },
+        TargetAirPurifierState: {
+          UUID: "targetAirPurifierState",
+          AUTO: 0,
+          MANUAL: 1,
+        },
+        RotationSpeed: { UUID: "rotationSpeed" },
         AirQuality: { UUID: "airQuality", UNKNOWN: 0 },
         PM2_5Density: { UUID: "pm25" },
         CurrentTemperature: { UUID: "temp" },

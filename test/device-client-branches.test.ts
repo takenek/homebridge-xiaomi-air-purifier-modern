@@ -80,6 +80,14 @@ class BranchTransport implements MiioTransport {
   }
 
   public async close(): Promise<void> {}
+  public resetCalls = 0;
+  public failResetWith: unknown = null;
+  public async reset(): Promise<void> {
+    this.resetCalls += 1;
+    if (this.failResetWith !== null) {
+      throw this.failResetWith;
+    }
+  }
 }
 
 const makeLogger = () => ({
@@ -104,7 +112,9 @@ describe("device client uncovered branches", () => {
     const logger = makeLogger();
     const client = new DeviceClient(transport, logger);
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     expect(client.state).toEqual(state);
     await client.shutdown();
   });
@@ -122,7 +132,9 @@ describe("device client uncovered branches", () => {
     client.onStateUpdate(listener);
     client.onConnectionEvent(connectionListener);
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     expect(listener).toHaveBeenCalledWith(state);
     expect(connectionListener).toHaveBeenCalledWith({ state: "connected" });
 
@@ -142,7 +154,9 @@ describe("device client uncovered branches", () => {
     const offState = client.onStateUpdate(stateListener);
     const offConnection = client.onConnectionEvent(connectionListener);
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     offState();
     offConnection();
 
@@ -170,7 +184,9 @@ describe("device client uncovered branches", () => {
       throw "raw-listener-error";
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
 
     await vi.advanceTimersByTimeAsync(10);
     await vi.runOnlyPendingTimersAsync();
@@ -194,7 +210,9 @@ describe("device client uncovered branches", () => {
       sensorPollIntervalMs: 600_000,
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     await client.setPower(true);
     await client.setPower(false);
     await client.setFanLevel(7);
@@ -226,7 +244,9 @@ describe("device client uncovered branches", () => {
       sensorPollIntervalMs: 600_000,
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     transport.throwsUnknown = true;
 
     await vi.advanceTimersByTimeAsync(10);
@@ -253,7 +273,9 @@ describe("device client uncovered branches", () => {
       },
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     transport.throwsErrorOnPoll = true;
 
     await vi.advanceTimersByTimeAsync(10);
@@ -291,7 +313,9 @@ describe("device client uncovered branches", () => {
       throw "connection-listener-raw";
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     transport.retryableFailuresRemaining = 1;
 
     const setPromise = client.setPower(true);
@@ -490,7 +514,9 @@ describe("device client uncovered branches", () => {
       sensorPollIntervalMs: 600_000,
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
 
     await expect(client.setPower(true)).rejects.toBeInstanceOf(Error);
     await expect(client.setLed(true)).resolves.toBeUndefined();
@@ -508,7 +534,9 @@ describe("device client uncovered branches", () => {
       sensorPollIntervalMs: 600_000,
     });
 
-    await client.init();
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
     (client as unknown as { operationQueue: Promise<void> }).operationQueue =
       Promise.reject(new Error("pre-rejected"));
 
@@ -603,5 +631,180 @@ describe("retry helper uncovered branches", () => {
     const error = new Error("unavailable");
     Reflect.set(error, "code", "EDEVICEUNAVAILABLE");
     expect(effectiveMaxRetries(error, 1)).toBe(1);
+  });
+
+  it("classifies MIIO command codes (-5001, -10000) as retryable", () => {
+    const e1 = new Error("command error");
+    Reflect.set(e1, "code", "-5001");
+    const e2 = new Error("Method execution error");
+    Reflect.set(e2, "code", "-10000");
+    expect(isRetryableError(e1)).toBe(true);
+    expect(isRetryableError(e2)).toBe(true);
+  });
+
+  it("caps retries for MIIO command codes", () => {
+    const error = new Error("command error");
+    Reflect.set(error, "code", "-5001");
+    expect(effectiveMaxRetries(error, 8)).toBe(2);
+  });
+});
+
+describe("auto transport reset on persistent failures", () => {
+  const drainPolls = async (intervalMs: number, count: number) => {
+    // Run each interval slice individually so that the queued async callbacks
+    // (safePoll → enqueueOperation → pollWithRetry) actually settle before
+    // the next interval fires. A single bulk advance can collapse multiple
+    // intervals into a single microtask flush and skip iterations.
+    for (let i = 0; i < count; i++) {
+      await vi.advanceTimersByTimeAsync(intervalMs);
+    }
+  };
+
+  it("calls transport.reset() after threshold consecutive failures", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 3,
+      transportResetCooldownMs: 60_000,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+    transport.throwsNonRetryable = true;
+
+    await drainPolls(10, 4);
+
+    expect(transport.resetCalls).toBeGreaterThanOrEqual(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Persistent device errors"),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("recreating MIIO transport"),
+    );
+    await client.shutdown();
+  });
+
+  it("respects cooldown between consecutive resets", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 1,
+      transportResetCooldownMs: 60_000,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+    transport.throwsNonRetryable = true;
+
+    await drainPolls(10, 10);
+
+    expect(transport.resetCalls).toBe(1);
+    await client.shutdown();
+  });
+
+  it("disables auto reset when threshold is 0", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 0,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+    transport.throwsNonRetryable = true;
+
+    await drainPolls(10, 5);
+
+    expect(transport.resetCalls).toBe(0);
+    await client.shutdown();
+  });
+
+  it("logs a warning if transport.reset() itself fails", async () => {
+    const transport = new BranchTransport();
+    transport.failResetWith = new Error("socket already closed");
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 1,
+      transportResetCooldownMs: 60_000,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+    transport.throwsNonRetryable = true;
+    await drainPolls(10, 2);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Transport reset failed: socket already closed"),
+    );
+    await client.shutdown();
+  });
+
+  it("logs a generic message if transport.reset() rejects with a non-Error", async () => {
+    const transport = new BranchTransport();
+    transport.failResetWith = "raw-string-reject";
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 1,
+      transportResetCooldownMs: 60_000,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+    transport.throwsNonRetryable = true;
+    await drainPolls(10, 2);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Transport reset failed: Unknown reset error"),
+    );
+    await client.shutdown();
+  });
+
+  it("clears consecutiveFailures counter after a successful poll", async () => {
+    const transport = new BranchTransport();
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+      transportResetThreshold: 5,
+      transportResetCooldownMs: 60_000,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+
+    // Two failures (counter = 2)
+    transport.throwsNonRetryable = true;
+    await drainPolls(10, 2);
+    // Recover (counter resets to 0)
+    transport.throwsNonRetryable = false;
+    await drainPolls(10, 1);
+    // Four more failures (counter = 4) — still below threshold (5)
+    transport.throwsNonRetryable = true;
+    await drainPolls(10, 4);
+
+    expect(transport.resetCalls).toBe(0);
+    await client.shutdown();
   });
 });

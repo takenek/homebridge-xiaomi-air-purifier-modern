@@ -40,6 +40,8 @@ export interface DeviceConfig {
   keepAliveIntervalMs?: number;
   operationPollIntervalMs?: number;
   sensorPollIntervalMs?: number;
+  transportResetThreshold?: number;
+  transportResetCooldownMs?: number;
   exposeFilterReplaceAlertSensor?: boolean;
   enableChildLockControl?: boolean;
   maskDeviceAddressInLogs?: boolean;
@@ -157,6 +159,17 @@ export const normalizeTimeout = (
   return Math.max(minMs, Math.round(value));
 };
 
+export const normalizeNonNegativeInt = (
+  value: unknown,
+  fallback: number,
+): number => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.round(value));
+};
+
 export const normalizeBoolean = (
   value: unknown,
   fallback: boolean,
@@ -263,6 +276,15 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
       30_000,
       1_000,
     );
+    const transportResetThreshold = normalizeNonNegativeInt(
+      deviceConfig.transportResetThreshold,
+      12,
+    );
+    const transportResetCooldownMs = normalizeTimeout(
+      deviceConfig.transportResetCooldownMs,
+      5 * 60 * 1000,
+      1_000,
+    );
     const exposeFilterReplaceAlertSensor = normalizeBoolean(
       deviceConfig.exposeFilterReplaceAlertSensor,
       false,
@@ -305,6 +327,8 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
       operationPollIntervalMs,
       sensorPollIntervalMs,
       keepAliveIntervalMs,
+      transportResetThreshold,
+      transportResetCooldownMs,
       retryPolicy: {
         ...DEFAULT_RETRY_POLICY,
         maxDelayMs: reconnectDelayMs,

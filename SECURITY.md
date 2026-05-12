@@ -2,10 +2,11 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| --- | --- |
-| 1.x | ✅ |
-| < 1.0.0 | ❌ |
+| Version | Supported | Runtime requirements |
+| --- | --- | --- |
+| 1.x (latest) | ✅ | Homebridge **2.0.2+**, Node **22.x / 24.x** |
+| 1.x (older) | ❌ | superseded by latest 1.x |
+| < 1.0.0 | ❌ | unsupported |
 
 ## Reporting a Vulnerability
 

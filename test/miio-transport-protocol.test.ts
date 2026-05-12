@@ -495,3 +495,93 @@ it("covers final protocol mode branches in getProperties and setProperty", async
 
   await transport.close();
 });
+
+describe("ModernMiioTransport.reset", () => {
+  it("recreates the UDP socket and clears session/protocolMode/messageId", async () => {
+    const transport = createTransport();
+    const internals = transport as unknown as {
+      socket: { close: (cb?: () => void) => void };
+      session: unknown;
+      protocolMode: "unknown" | "miot" | "legacy";
+      nextMessageId: number;
+    };
+
+    internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
+    internals.protocolMode = "miot";
+    internals.nextMessageId = 999;
+    const previousSocket = internals.socket;
+
+    await transport.reset();
+
+    expect(internals.session).toBeNull();
+    expect(internals.protocolMode).toBe("unknown");
+    expect(internals.nextMessageId).toBe(1);
+    expect(internals.socket).not.toBe(previousSocket);
+
+    await transport.close();
+  });
+
+  it("survives socket.close throwing ERR_SOCKET_DGRAM_NOT_RUNNING", async () => {
+    const transport = createTransport();
+    const internals = transport as unknown as {
+      socket: { close: (cb?: () => void) => void };
+    };
+
+    internals.socket = {
+      close: () => {
+        const err = Object.assign(new Error("not running"), {
+          code: "ERR_SOCKET_DGRAM_NOT_RUNNING",
+        });
+        throw err;
+      },
+    };
+
+    await expect(transport.reset()).resolves.toBeUndefined();
+    await transport.close();
+  });
+
+  it("logs other socket.close errors via reportSuppressedError", async () => {
+    const debug = vi.fn();
+    const transport = new ModernMiioTransport({
+      address: "127.0.0.1",
+      token: "00112233445566778899aabbccddeeff",
+      model: "zhimi.airpurifier.4",
+      connectTimeoutMs: 20,
+      operationTimeoutMs: 20,
+      logger: { debug },
+    });
+    const internals = transport as unknown as {
+      socket: { close: (cb?: () => void) => void };
+    };
+
+    internals.socket = {
+      close: () => {
+        throw new Error("boom");
+      },
+    };
+
+    await transport.reset();
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining("[miio-transport:reset-close]"),
+    );
+    await transport.close();
+  });
+
+  it("survives socket.close throwing a non-Error value", async () => {
+    const transport = createTransport();
+    const internals = transport as unknown as {
+      socket: { close: (cb?: () => void) => void };
+    };
+
+    const nonError = "raw-string-throw" as unknown as Error;
+    internals.socket = {
+      close: () => {
+        // Simulate a synchronous non-Error throw (e.g. a thrown string).
+        throw nonError;
+      },
+    };
+
+    await expect(transport.reset()).resolves.toBeUndefined();
+    await transport.close();
+  });
+});

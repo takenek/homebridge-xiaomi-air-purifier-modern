@@ -41,6 +41,7 @@ class FlakyTransport implements MiioTransport {
 
   public async setProperty(): Promise<void> {}
   public async close(): Promise<void> {}
+  public async reset(): Promise<void> {}
 }
 
 const makeLogger = () => ({

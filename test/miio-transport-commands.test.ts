@@ -78,7 +78,7 @@ describe("ModernMiioTransport commands and low-level transport", () => {
         deviceStamp: number;
         handshakeAtEpochSec: number;
       } | null;
-      isTransportError: (error: unknown) => boolean;
+      shouldRehandshake: (error: unknown) => boolean;
       handshake: () => Promise<void>;
       sendCommand: (
         method: string,
@@ -96,12 +96,13 @@ describe("ModernMiioTransport commands and low-level transport", () => {
       close: () => Promise<void>;
     };
 
-    expect(internals.isTransportError(new Error("x"))).toBe(false);
+    expect(internals.shouldRehandshake(new Error("x"))).toBe(false);
     expect(
-      internals.isTransportError(
+      internals.shouldRehandshake(
         Object.assign(new Error("x"), { code: "EIO" }),
       ),
     ).toBe(true);
+    expect(internals.shouldRehandshake("not-an-error")).toBe(false);
 
     vi.spyOn(internals, "sendAndReceive").mockResolvedValue(Buffer.alloc(32));
     await internals.handshake();
@@ -318,7 +319,7 @@ it("covers skipped MIOT batch payload entries and handshake short response", asy
   await transport.close();
 });
 
-it("treats MIIO command errors as non-transport for retry logic", async () => {
+it("does not re-handshake for unrecoverable MIIO command errors", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
     session: {
@@ -337,7 +338,7 @@ it("treats MIIO command errors as non-transport for retry logic", async () => {
       method: string,
       params: readonly unknown[],
     ) => Promise<unknown>;
-    isTransportError: (error: unknown) => boolean;
+    shouldRehandshake: (error: unknown) => boolean;
   };
 
   internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
@@ -354,7 +355,50 @@ it("treats MIIO command errors as non-transport for retry logic", async () => {
   try {
     await internals.sendCommand("set_power", ["on"]);
   } catch (error: unknown) {
-    expect(internals.isTransportError(error)).toBe(false);
+    // -123 is not in MIIO_COMMAND_RETRY_CODES, so no re-handshake.
+    expect(internals.shouldRehandshake(error)).toBe(false);
+  }
+
+  await transport.close();
+});
+
+it("does re-handshake for recoverable MIIO command errors (-5001)", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    session: {
+      deviceId: number;
+      deviceStamp: number;
+      handshakeAtEpochSec: number;
+    } | null;
+    sendAndReceive: (
+      packet: Buffer,
+      expectEncrypted: boolean,
+      expectedResponseId?: number,
+      options?: { timeoutMs: number },
+    ) => Promise<Buffer>;
+    encrypt: (payload: Buffer) => Buffer;
+    sendCommand: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<unknown>;
+    shouldRehandshake: (error: unknown) => boolean;
+  };
+
+  internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
+  const errPayload = internals.encrypt(
+    Buffer.from(
+      JSON.stringify({ error: { code: -5001, message: "command error" } }),
+      "utf8",
+    ),
+  );
+  vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
+    Buffer.concat([Buffer.alloc(32), errPayload]),
+  );
+
+  try {
+    await internals.sendCommand("set_power", ["on"]);
+  } catch (error: unknown) {
+    expect(internals.shouldRehandshake(error)).toBe(true);
   }
 
   await transport.close();

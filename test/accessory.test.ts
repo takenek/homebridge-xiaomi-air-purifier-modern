@@ -48,7 +48,7 @@ const baseState = {
 };
 
 describe("AirPurifierAccessory switch contract", () => {
-  it("publishes Power, Child Lock, LED and separate AUTO/NIGHT mode switches", async () => {
+  it("publishes AirPurifier + Child Lock, LED and separate AUTO/NIGHT mode switches", async () => {
     const api = makeApi();
     const logger = makeLogger();
     const client = new FakeClient();
@@ -69,12 +69,19 @@ describe("AirPurifierAccessory switch contract", () => {
       .filter((name) => name.startsWith("Switch:"));
 
     expect(switchNames).toEqual([
-      "Switch:Power",
       "Switch:Child Lock",
       "Switch:LED Night Mode",
       "Switch:Mode AUTO On Off",
       "Switch:Mode NIGHT On Off",
     ]);
+
+    const purifierService = accessory
+      .getServices()
+      .find(
+        (service) =>
+          (service as unknown as FakeService).name === "AirPurifier:Office",
+      ) as unknown as FakeService;
+    expect(purifierService).toBeDefined();
 
     for (const service of accessory.getServices()) {
       const typed = service as unknown as FakeService;
@@ -110,12 +117,6 @@ describe("AirPurifierAccessory switch contract", () => {
       api.hap.Characteristic.On,
     ).onSetHandler;
 
-    const powerService = accessory
-      .getServices()
-      .find(
-        (service) =>
-          (service as unknown as FakeService).name === "Switch:Power",
-      ) as unknown as FakeService;
     const childService = accessory
       .getServices()
       .find(
@@ -129,9 +130,9 @@ describe("AirPurifierAccessory switch contract", () => {
           (service as unknown as FakeService).name === "Switch:LED Night Mode",
       ) as unknown as FakeService;
 
-    await powerService
-      .getCharacteristic(api.hap.Characteristic.On)
-      .onSetHandler?.(false);
+    await purifierService
+      .getCharacteristic(api.hap.Characteristic.Active)
+      .onSetHandler?.(api.hap.Characteristic.Active.INACTIVE);
     await childService
       .getCharacteristic(api.hap.Characteristic.On)
       .onSetHandler?.(true);
@@ -209,31 +210,10 @@ describe("AirPurifierAccessory switch contract", () => {
     );
   });
 
-  it("supports native AirPurifier service characteristics when available", async () => {
+  it("drives native AirPurifier service characteristics (Active/Current/Target/RotationSpeed)", async () => {
     const api = makeApi() as unknown as Record<string, unknown>;
-    const serviceConstructors = (api.hap as Record<string, unknown>)
-      .Service as Record<string, unknown>;
-    serviceConstructors.AirPurifier = class extends FakeService {
-      public constructor(name: string, subtype?: string) {
-        super(`AirPurifier:${name}`, subtype);
-      }
-    };
-
     const characteristics = (api.hap as Record<string, unknown>)
       .Characteristic as Record<string, unknown>;
-    characteristics.Active = { UUID: "active", ACTIVE: 1, INACTIVE: 0 };
-    characteristics.CurrentAirPurifierState = {
-      UUID: "currentAirPurifierState",
-      INACTIVE: 0,
-      IDLE: 1,
-      PURIFYING_AIR: 2,
-    };
-    characteristics.TargetAirPurifierState = {
-      UUID: "targetAirPurifierState",
-      AUTO: 0,
-      MANUAL: 1,
-    };
-    characteristics.RotationSpeed = { UUID: "rotationSpeed" };
 
     const logger = makeLogger();
     const client = new FakeClient();

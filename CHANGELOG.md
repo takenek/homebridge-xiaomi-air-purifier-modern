@@ -28,8 +28,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> Notes below are human-authored summaries of pending work on `main`. The
+> machine-generated version header (`## [x.y.z]`) and per-commit bullet list
+> are added by [semantic-release](https://semantic-release.gitbook.io/) on
+> the next merge to `main`, based on conventional commit messages.
+
+### Changed (BREAKING)
+
+- **Homebridge 2.0.2 is now the minimum supported version.** `engines.homebridge` and `peerDependencies.homebridge` were tightened from `^1.11.1 || ^2.0.0` to `^2.0.2`. The Homebridge 1.x `Switch` fallback path in `accessories/air-purifier.ts` was removed — the native HomeKit `AirPurifier` service (`Active`, `CurrentAirPurifierState`, `TargetAirPurifierState`, `RotationSpeed`) is now mandatory. Users on Homebridge 1.x must stay on plugin v1.0.2 or upgrade Homebridge.
+- **Node.js 20 dropped (end-of-life).** Supported runtimes are now **Node 22.x** and **Node 24.x** only. CI matrix updated accordingly.
+- **CI matrix simplified to Homebridge 2.0.2** stable on Node 22 / 24. The `beta` (HB 2.x pre-release) lane was removed because Homebridge 2.0 is generally available.
+
+### Added
+
+- **Automatic transport recovery for stuck device-side state.** After `transportResetThreshold` (default `12`) consecutive failed polls, the plugin now recreates the underlying UDP socket, MIIO session, protocol-mode cache and message-id counter — the same effect as restarting Homebridge — so the plugin recovers without operator intervention. A `transportResetCooldownMs` (default `5 min`) prevents thrashing when the device is genuinely offline. Diagnostic warning is logged on each reset (`Persistent device errors (...) — recreating MIIO transport`).
+- **`MIIO error -5001` and `-10000` are now classified as retryable** (with a hard cap of 2 retries per call). These device-side command errors used to fail immediately on the first attempt and could keep the connection stuck for hours on older firmware (notably `zhimi.airpurifier.pro`); they now go through the standard retry path and trigger the auto-reset above when persistent.
+- **Defensive re-handshake on recoverable MIIO command errors.** `ModernMiioTransport.call()` now also rebuilds its session after `-5001`/`-10000`, not only after transport-level errors — a fresh handshake / `deviceStamp` clears most stuck states reported by older firmware.
+- **New per-device config options** (also exposed in Homebridge UI via `config.schema.json`): `transportResetThreshold` (default `12`, set `0` to disable), `transportResetCooldownMs` (default `300000`).
+
 ### Removed
 
+- **Homebridge 1.x `Switch` fallback** in `accessories/air-purifier.ts` — `getOptionalProperty(Service, "AirPurifier")` branch and `usesNativePurifierService` flag are gone.
 - **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
 
 ### Fixed
@@ -41,14 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`config.schema.json` strict validation** — added top-level `strictValidation: true`, declared `additionalProperties: false` on each `devices[]` item, and explicitly allowed `platform`, `name`, and `_bridge` at the schema root so Homebridge UI accepts both top-level and child-bridge configurations. The schema no longer ships a default value for `devices[].name` so an "Add Device" button click cannot persist a half-filled entry that is missing `address`, `token`, and `model`.
+- **Test suite reorganized** — split 2 oversized test files (1437 + 1073 LOC) into focused, single-responsibility modules; **160 tests across 13 files, 100% coverage enforced** (statements/branches/functions/lines).
+- **`homebridge` (devDependency) bumped from `1.11.4` to `2.0.2`.**
 
-### Added
+### Tests added in this cycle
 
-- **Filter status test scenarios** — S8 (filter life drops to 4% triggers `FilterChangeIndication = CHANGE_FILTER`) and S9 (filter replacement 4%→100% resets `FilterChangeIndication = FILTER_OK`) added to automated network/status scenario suite.
-
-### Changed
-
-- **Test suite reorganized** — split 2 oversized test files (1437 + 1073 LOC) into 5 focused, single-responsibility modules: `accessory.test.ts`, `platform.test.ts`, `config-validation.test.ts`, `miio-transport-protocol.test.ts`, `miio-transport-commands.test.ts`. 126 tests across 13 files, 100% coverage enforced.
+- Filter status scenarios S8 / S9 (filter life drop / replacement) in the automated network/status scenario suite.
+- Transport auto-reset path: threshold trigger, cooldown enforcement, threshold-disable, reset-failure handling (Error + non-Error), counter reset on successful poll.
+- `ModernMiioTransport.reset()` — happy path, `ERR_SOCKET_DGRAM_NOT_RUNNING` swallow, non-Error throw.
+- `-5001` / `-10000` classified as retryable + capped retries; `shouldRehandshake` true for `-5001`, false for unknown command codes.
 
 ## [1.0.0] — 2026-03-02
 
