@@ -7,7 +7,7 @@
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 3 / 3H / 4 / Pro).
 
-This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https://github.com/torifat/xiaomi-mi-air-purifier) plugin (last commit about 5 years ago) with a modern TypeScript implementation that uses only Node.js built-ins for protocol transport.
+Built from scratch in TypeScript on top of Node.js built-ins (no native dependencies, no external HTTP traffic), targeting Homebridge 2.x and current LTS Node.js (22.x / 24.x).
 
 ---
 
@@ -20,12 +20,29 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
 | Switch: Child Lock | Optional control (`enableChildLockControl`) |
-
 | Switch: LED Night Mode | LED indicator on/off |
 | Switch: Mode AUTO ON/OFF | Dedicated switch: ON=`auto`, OFF=`sleep`; unavailable while Power OFF |
 | Switch: Mode NIGHT ON/OFF | Dedicated switch: ON=`sleep`, OFF=`auto`; unavailable while Power OFF |
 | Filter Maintenance | `filter1_life` as filter life level + change indication |
 | Contact Sensor: Filter Replace Alert | Optional extra sensor for filter replacement warning (`exposeFilterReplaceAlertSensor`, default `false`) |
+
+### How this plugin compares to other Xiaomi air-purifier plugins
+
+| Capability | `homebridge-xiaomi-mi-air-purifier` (verified, last release 2020) | `homebridge-xiaomi-air-purifier-modern` (this plugin) |
+|------------|-------------------------------------------------------------------|--------------------------------------------------------|
+| Homebridge target | Homebridge 1.x | **Homebridge 2.x** (native `AirPurifier` service with `Active` / `CurrentAirPurifierState` / `TargetAirPurifierState` / `RotationSpeed`) |
+| Node.js | Legacy (Node 10/12) | **Node 22 LTS and Node 24 LTS** |
+| Implementation | JavaScript + abandoned `miio` dependency | **TypeScript**, Node `dgram` only, zero runtime deps |
+| Supported models | 2 / 2S (`zhimi.airpurifier.m1`, `m2`) | **2H, 3, 3H, 4, Pro** (`zhimi.airpurifier.2h/3/3h/4/pro`) — MIOT + legacy MIIO transports |
+| Multi-device | Single accessory | **Dynamic platform** with multiple devices in one instance |
+| Reconnect / resilience | Manual restart on failure | **Exponential backoff with jitter** + automatic UDP transport reset to recover from `MIIO error -5001` stuck state |
+| Mode handling | One switch, `auto` only | **Separate AUTO / NIGHT switches** with state sync after writes |
+| Filter status | None | `FilterMaintenance` (life + change indication) + optional `Filter Replace Alert` contact sensor |
+| Settings GUI | Minimal | **Full `config.schema.json`** with grouped fieldsets, validation, password-masked token field |
+| Tests | None | **100 % coverage** (statements / branches / functions / lines) on Vitest v4 + v8 |
+| Maintenance | Last release 2020 | Active — semantic-release pipeline with GitHub releases per version |
+
+This plugin is intended for users on Homebridge 2.x with the newer hardware (model **3 / 3H / 4 / Pro**), where the legacy verified plugin does not provide working transport.
 
 ---
 
@@ -129,14 +146,17 @@ This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a
 
 The token is required for local LAN control and is different from your Xiaomi account password.
 
-> Never share your token publicly.
+> Never share your token publicly — it grants full LAN control of the device.
 
-Common methods:
+Recommended tools (community-maintained, well-known):
 
-1. Xiaomi cloud token extractors
-2. Android Mi Home backup parsing
-3. iOS backup parsing (iMazing / SQLite)
-4. Packet capture during pairing (advanced)
+1. **[Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor)** — Python script that signs into your Mi Home account and prints tokens for all paired devices. The easiest method when you still have access to the Mi Home account that paired the device.
+2. **[python-miio](https://github.com/rytilahti/python-miio)** — `miiocli` CLI can read tokens stored locally and discover devices on the LAN (`miiocli discover --handshake true`).
+3. **Android — Mi Home backup parsing**: install Mi Home **5.4.54** (older version that keeps tokens unencrypted), pair the device, then extract the SQLite database from `/data/data/com.xiaomi.smarthome/databases/miio2.db`.
+4. **iOS — iMazing backup parsing**: read tokens from the encrypted Mi Home backup using [this guide](https://www.openhab.org/addons/bindings/miio/#discovery).
+5. **Packet capture during pairing** (advanced) — Wireshark on the IoT VLAN during the initial Mi Home pairing flow.
+
+The token must be exactly **32 hexadecimal characters** (`0-9`, `a-f`). The plugin will reject any other format with a clear error in the Homebridge log.
 
 ---
 
@@ -210,12 +230,21 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 
 ---
 
+## Privacy and data flow
+
+- The plugin communicates **only** with the configured purifier over LAN UDP 54321 (MIIO/MIOT). No data is sent to the Xiaomi cloud, no telemetry, no analytics, no error reporting to any external service.
+- Runtime dependencies: **zero** — the published package depends only on Node.js built-ins (`node:dgram`, `node:crypto`, `node:net`, etc.).
+- The plugin does not write any files to disk. All Homebridge accessory state is managed by Homebridge itself in the user's storage directory (`api.user.storagePath()`); the plugin only reads it back via the standard `configureAccessory` callback.
+- Tokens are read from `config.json` only and are never logged, never forwarded, and never persisted anywhere else.
+
+---
+
 ## Support & deprecation policy
 
 - Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.x** and **Node 24.x**).
 - Homebridge support target: stable **2.0.2+** validated in CI on Node 22 and Node 24.
-- Homebridge **1.x** support has been dropped — install plugin **v1.x** if you still run Homebridge 1.x.
-- Node.js **20.x** support has been dropped (end-of-life) — install plugin **v1.x** if you still run Node 20.
+- Homebridge **1.x** support has been dropped — users on Homebridge 1.x must **stay on plugin v1.0.2** or upgrade Homebridge to 2.x.
+- Node.js **20.x** support has been dropped (end-of-life) — users on Node 20 must **stay on plugin v1.0.2** or upgrade Node.js to 22 / 24.
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
 - **Dynamic Platform Plugin** — supports multiple devices in a single plugin instance with automatic cached accessory management. See `config.schema.json` for the full schema.
 
