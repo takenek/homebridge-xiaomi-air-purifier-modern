@@ -3,6 +3,7 @@ import {
   formatDeviceLabel,
   maskAddress,
   normalizeBoolean,
+  normalizeNonNegativeInt,
   normalizeThreshold,
   normalizeTimeout,
   validateDeviceConfig,
@@ -207,6 +208,16 @@ describe("normalize helpers", () => {
     expect(normalizeBoolean("yes", false)).toBe(false);
     expect(normalizeBoolean(true, false)).toBe(true);
     expect(normalizeBoolean(false, true)).toBe(false);
+  });
+
+  it("normalizeNonNegativeInt handles edge cases", () => {
+    expect(normalizeNonNegativeInt(undefined, 12)).toBe(12);
+    expect(normalizeNonNegativeInt("bad", 12)).toBe(12);
+    expect(normalizeNonNegativeInt(Number.NaN, 12)).toBe(12);
+    expect(normalizeNonNegativeInt(-1, 12)).toBe(12);
+    expect(normalizeNonNegativeInt(0, 12)).toBe(0);
+    expect(normalizeNonNegativeInt(7.4, 12)).toBe(7);
+    expect(normalizeNonNegativeInt(7.6, 12)).toBe(8);
   });
 
   it("maskAddress handles various formats", () => {

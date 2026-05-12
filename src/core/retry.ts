@@ -44,32 +44,50 @@ export const RETRYABLE_ERROR_CODES = new Set<string>([
   "ERR_NETWORK_CHANGED",
 ]);
 
-export const DEVICE_UNAVAILABLE_MAX_RETRIES = 2;
+/**
+ * MIIO-level error codes returned by the device daemon (encrypted JSON
+ * `{"error":{"code":N,"message":"..."}}`) that historically respond to
+ * a fresh handshake / new source port. Treated as retryable but with a
+ * tight per-call retry cap so we do not hammer a genuinely broken device.
+ *
+ * - `-5001` "command error" — most common, observed on `zhimi.airpurifier.pro`
+ *   after long uptime; daemon rejects all commands until source port rotates.
+ * - `-10000` "Method execution error" — generic firmware-side failure.
+ */
+export const MIIO_COMMAND_RETRY_CODES = new Set<string>(["-5001", "-10000"]);
 
-export const isRetryableError = (error: unknown): boolean => {
+export const DEVICE_UNAVAILABLE_MAX_RETRIES = 2;
+export const MIIO_COMMAND_MAX_RETRIES = 2;
+
+const errorCode = (error: unknown): string | undefined => {
   if (!(error instanceof Error)) {
-    return false;
+    return undefined;
   }
 
   const code = (error as unknown as { code?: unknown }).code;
-  if (typeof code === "string") {
-    return RETRYABLE_ERROR_CODES.has(code);
+  return typeof code === "string" ? code : undefined;
+};
+
+export const isRetryableError = (error: unknown): boolean => {
+  const code = errorCode(error);
+  if (code === undefined) {
+    return false;
   }
 
-  return false;
+  return RETRYABLE_ERROR_CODES.has(code) || MIIO_COMMAND_RETRY_CODES.has(code);
 };
 
 export const effectiveMaxRetries = (
   error: unknown,
   policyMaxRetries: number,
 ): number => {
-  if (!(error instanceof Error)) {
-    return policyMaxRetries;
-  }
-
-  const code = (error as unknown as { code?: unknown }).code;
+  const code = errorCode(error);
   if (code === "EDEVICEUNAVAILABLE") {
     return Math.min(DEVICE_UNAVAILABLE_MAX_RETRIES, policyMaxRetries);
+  }
+
+  if (code !== undefined && MIIO_COMMAND_RETRY_CODES.has(code)) {
+    return Math.min(MIIO_COMMAND_MAX_RETRIES, policyMaxRetries);
   }
 
   return policyMaxRetries;

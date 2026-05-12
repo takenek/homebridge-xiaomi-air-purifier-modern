@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
-import { isRetryableError } from "./retry";
+import { isRetryableError, MIIO_COMMAND_RETRY_CODES } from "./retry";
 import {
   type DeviceState,
   type MiioTransport,
@@ -47,7 +47,7 @@ interface MiotValueResult {
   value?: unknown;
 }
 
-class MiioCommandError extends Error {
+export class MiioCommandError extends Error {
   public readonly code: string | undefined;
   public constructor(
     public readonly miioCode: number | null,
@@ -170,7 +170,7 @@ export class ModernMiioTransport implements MiioTransport {
   private readonly token: Buffer;
   private readonly key: Buffer;
   private readonly iv: Buffer;
-  private readonly socket: Socket;
+  private socket: Socket;
   private session: MiioSession | null = null;
   private nextMessageId = 1;
   private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
@@ -200,10 +200,54 @@ export class ModernMiioTransport implements MiioTransport {
     }
     this.key = toMd5(this.token);
     this.iv = toMd5(this.key, this.token);
-    this.socket = dgram.createSocket("udp4");
-    this.socket.on("error", (error: Error) => {
+    this.socket = this.createSocket();
+  }
+
+  private createSocket(): Socket {
+    const socket = dgram.createSocket("udp4");
+    socket.on("error", (error: Error) => {
       this.reportSuppressedError("socket", error);
     });
+    return socket;
+  }
+
+  /**
+   * Tear down the current UDP socket and recreate it from scratch, clearing
+   * the cached MIIO session, protocol mode and message-id counter. Used to
+   * recover from device-side stuck states (see `MiioTransport.reset`).
+   * Safe to call multiple times; concurrent in-flight `sendAndReceive` calls
+   * on the old socket will reject with their pending timeout/error path.
+   */
+  public async reset(): Promise<void> {
+    const previous = this.socket;
+    this.session = null;
+    this.nextMessageId = 1;
+    this.protocolMode = "unknown";
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        /* c8 ignore next -- defensive guard against the close() callback firing after we already resolved via the catch path; not reachable in practice (dgram either calls back or throws). */
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      try {
+        previous.close(finish);
+      } catch (error: unknown) {
+        const code =
+          error instanceof Error
+            ? String((error as unknown as { code?: string }).code ?? "")
+            : "";
+        if (code !== "ERR_SOCKET_DGRAM_NOT_RUNNING") {
+          this.reportSuppressedError("reset-close", error);
+        }
+        finish();
+      }
+    });
+
+    this.socket = this.createSocket();
+    this.socketClosed = false;
   }
 
   public async getProperties(
@@ -219,8 +263,15 @@ export class ModernMiioTransport implements MiioTransport {
       this.protocolMode === "miot"
         ? await this.readViaMiot(requestedProps).catch(
             async (error: unknown) => {
+              // Network/transport errors must propagate so DeviceClient can
+              // back off. MIIO command errors (incl. -5001) signal a
+              // protocol/firmware mismatch — fall back to legacy here so
+              // older models like zhimi.airpurifier.pro keep working.
               /* c8 ignore next -- retryable errors are re-thrown by the caller (pollWithRetry); tested at the DeviceClient level, not transport level. */
-              if (isRetryableError(error)) {
+              if (
+                isRetryableError(error) &&
+                !(error instanceof MiioCommandError)
+              ) {
                 throw error;
               }
               this.protocolMode = "legacy";
@@ -238,7 +289,10 @@ export class ModernMiioTransport implements MiioTransport {
       if (this.protocolMode === "legacy") {
         const miotState = await this.readViaMiot(requestedProps).catch(
           (error: unknown) => {
-            if (isRetryableError(error)) {
+            if (
+              isRetryableError(error) &&
+              !(error instanceof MiioCommandError)
+            ) {
               throw error;
             }
 
@@ -421,7 +475,7 @@ export class ModernMiioTransport implements MiioTransport {
 
       return valueByKey;
     } catch (error: unknown) {
-      if (isRetryableError(error)) {
+      if (isRetryableError(error) && !(error instanceof MiioCommandError)) {
         throw error;
       }
 
@@ -515,10 +569,10 @@ export class ModernMiioTransport implements MiioTransport {
           return payload.value;
         }
       } catch (error: unknown) {
-        if (isRetryableError(error)) {
+        if (isRetryableError(error) && !(error instanceof MiioCommandError)) {
           throw error;
         }
-        // try next candidate
+        // try next candidate (also includes MiioCommandError for per-prop firmware variance)
       }
     }
 
@@ -595,7 +649,7 @@ export class ModernMiioTransport implements MiioTransport {
       return await this.sendCommand(method, params);
     } catch (error: unknown) {
       this.session = null;
-      if (this.isTransportError(error)) {
+      if (this.shouldRehandshake(error)) {
         await this.handshake();
         return this.sendCommand(method, params);
       }
@@ -604,9 +658,17 @@ export class ModernMiioTransport implements MiioTransport {
     }
   }
 
-  private isTransportError(error: unknown): boolean {
-    if (!(error instanceof Error) || error instanceof MiioCommandError) {
+  private shouldRehandshake(error: unknown): boolean {
+    if (!(error instanceof Error)) {
       return false;
+    }
+
+    // Re-handshake on any transport-level error (socket / timeout / network)
+    // *and* on MIIO command errors flagged as recoverable — the latter often
+    // clears once we negotiate a fresh session/stamp with the device.
+    if (error instanceof MiioCommandError) {
+      const code = error.code;
+      return code !== undefined && MIIO_COMMAND_RETRY_CODES.has(code);
     }
 
     const code = (error as unknown as { code?: unknown }).code;

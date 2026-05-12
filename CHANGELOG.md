@@ -1,3 +1,31 @@
+## [1.0.3](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.2...v1.0.3) (2026-05-12)
+
+
+### Changed (BREAKING)
+
+* **Homebridge 2.0.2 is now the minimum supported version.** `engines.homebridge` and `peerDependencies.homebridge` were tightened from `^1.11.1 || ^2.0.0` to `^2.0.2`. The Homebridge 1.x `Switch` fallback path in `accessories/air-purifier.ts` was removed — the native HomeKit `AirPurifier` service (with `Active`, `CurrentAirPurifierState`, `TargetAirPurifierState`, `RotationSpeed`) is now mandatory. Users on Homebridge 1.x must stay on plugin v1.0.2 or upgrade Homebridge.
+* **Node.js 20 dropped (end-of-life).** Supported runtimes are now **Node 22.x** and **Node 24.x** only. CI matrix updated accordingly.
+* **CI matrix bumped to Homebridge 2.0.2** in the full lanes (Node 22 / 24), with the `beta` lane retained for 2.x pre-release validation.
+
+
+### Added
+
+* **Automatic transport recovery for stuck device-side state.** After `transportResetThreshold` (default `12`) consecutive failed polls, the plugin now recreates the underlying UDP socket, MIIO session, protocol-mode cache and message-id counter — the same effect as restarting Homebridge — so the plugin recovers without operator intervention. A `transportResetCooldownMs` (default `5 min`) prevents thrashing when the device is genuinely offline. Diagnostic warning is logged on each reset (`Persistent device errors (...) — recreating MIIO transport`).
+* **`MIIO error -5001` and `-10000` are now classified as retryable** (with a hard cap of 2 retries per call). These device-side command errors used to fail immediately on the first attempt and could keep the connection stuck for hours on older firmware (notably `zhimi.airpurifier.pro`); they now go through the standard retry path and trigger the auto-reset above when persistent.
+* **Defensive re-handshake on recoverable MIIO command errors.** `ModernMiioTransport.call()` now also rebuilds its session after `-5001`/`-10000`, not only after transport-level errors — a fresh handshake / `deviceStamp` clears most stuck states reported by older firmware.
+* **New per-device config options** (also exposed in Homebridge UI via `config.schema.json`): `transportResetThreshold` (default `12`, set `0` to disable), `transportResetCooldownMs` (default `300000`).
+
+
+### Removed
+
+* **Homebridge 1.x `Switch` fallback** in `accessories/air-purifier.ts` — `getOptionalProperty(Service, "AirPurifier")` branch and `usesNativePurifierService` flag are gone. The plugin now requires the native `AirPurifier` service unconditionally (HB 2.x guarantees it).
+* **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
+
+
+### Dependencies
+
+* `homebridge` (devDependency) bumped from `1.11.4` to `2.0.2`.
+
 ## [1.0.2](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.1...v1.0.2) (2026-05-06)
 
 
@@ -27,20 +55,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
-### Changed (BREAKING)
-
-- **Homebridge 2.0.2 is now the minimum supported version.** `engines.homebridge` and `peerDependencies.homebridge` were tightened from `^1.11.1 || ^2.0.0` to `^2.0.2`. Homebridge 1.x is no longer supported — users on Homebridge 1.x must stay on plugin v1.x or upgrade Homebridge.
-- **Node.js 20 dropped (end-of-life).** Supported runtimes are now **Node 22.x** and **Node 24.x** only. CI matrix updated accordingly.
-- **CI matrix bumped to Homebridge 2.0.2** in the full lanes (Node 22 / 24), with the `beta` lane retained for 2.x pre-release validation.
-
-### Removed
-
-- **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
-
-### Dependencies
-
-- `homebridge` (devDependency) bumped from `1.11.4` to `2.0.2`.
 
 ### Fixed
 

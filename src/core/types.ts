@@ -45,4 +45,12 @@ export interface MiioTransport {
   getProperties(props: readonly ReadProperty[]): Promise<DeviceState>;
   setProperty(method: string, params: readonly unknown[]): Promise<void>;
   close(): Promise<void>;
+  /**
+   * Force-recreate the underlying transport state (UDP socket, MIIO session,
+   * cached protocol mode, message-id counter). Used by DeviceClient to break
+   * out of stuck device-side states (e.g. firmware that keeps returning
+   * `MIIO error -5001` from the same source port until the client reconnects)
+   * without requiring a Homebridge restart.
+   */
+  reset(): Promise<void>;
 }

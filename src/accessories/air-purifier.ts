@@ -49,7 +49,6 @@ export class AirPurifierAccessory {
   private readonly filterService: Service;
   private readonly filterAlertService: Service | null;
   private readonly characteristicCache = new Map<string, CharacteristicValue>();
-  private readonly usesNativePurifierService: boolean;
 
   public constructor(
     private readonly api: API,
@@ -86,21 +85,11 @@ export class AirPurifierAccessory {
         this.buildSerialNumber(displayAddress),
       );
 
-    const AirPurifierService = getOptionalProperty(
-      this.api.hap.Service,
-      "AirPurifier",
+    this.purifierService = this.getOrAddService(
+      this.api.hap.Service.AirPurifier,
+      name,
+      "main",
     );
-    this.usesNativePurifierService = Boolean(AirPurifierService);
-    this.purifierService = this.usesNativePurifierService
-      ? this.getOrAddService(
-          AirPurifierService as new (
-            name: string,
-            subtype: string,
-          ) => Service,
-          name,
-          "main",
-        )
-      : this.getOrAddService(this.api.hap.Service.Switch, "Power", "power");
     this.airQualityService = features.enableAirQuality
       ? this.getOrAddService(
           this.api.hap.Service.AirQualitySensor,
@@ -302,59 +291,46 @@ export class AirPurifierAccessory {
   }
 
   private bindHandlers(): void {
-    if (!this.usesNativePurifierService) {
-      this.purifierService
-        .getCharacteristic(this.api.hap.Characteristic.On)
-        .onSet(async (value: CharacteristicValue) =>
-          this.client.setPower(Boolean(value)),
-        );
-      this.bindOnGet(
-        this.purifierService,
-        this.api.hap.Characteristic.On,
-        false,
+    this.purifierService
+      .getCharacteristic(this.api.hap.Characteristic.Active)
+      .onSet(async (value: CharacteristicValue) =>
+        this.client.setPower(
+          Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
+        ),
       );
-    } else {
-      this.purifierService
-        .getCharacteristic(this.api.hap.Characteristic.Active)
-        .onSet(async (value: CharacteristicValue) =>
-          this.client.setPower(
-            Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
-          ),
-        );
-      this.bindOnGet(
-        this.purifierService,
-        this.api.hap.Characteristic.Active,
-        Number(this.api.hap.Characteristic.Active.INACTIVE),
-      );
-      this.bindOnGet(
-        this.purifierService,
-        this.api.hap.Characteristic.CurrentAirPurifierState,
-        Number(this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE),
-      );
-      this.bindOnGet(
-        this.purifierService,
-        this.api.hap.Characteristic.TargetAirPurifierState,
-        Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO),
-      );
-      this.purifierService
-        .getCharacteristic(this.api.hap.Characteristic.TargetAirPurifierState)
-        .onSet(async (value: CharacteristicValue) => {
-          const isAuto =
-            Number(value) ===
-            Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO);
-          await this.client.setMode(isAuto ? "auto" : "favorite");
-        });
-      this.purifierService
-        .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
-        .onSet(async (value: CharacteristicValue) => {
-          await this.client.setFanLevel(rotationSpeedToFanLevel(Number(value)));
-        });
-      this.bindOnGet(
-        this.purifierService,
-        this.api.hap.Characteristic.RotationSpeed,
-        0,
-      );
-    }
+    this.bindOnGet(
+      this.purifierService,
+      this.api.hap.Characteristic.Active,
+      Number(this.api.hap.Characteristic.Active.INACTIVE),
+    );
+    this.bindOnGet(
+      this.purifierService,
+      this.api.hap.Characteristic.CurrentAirPurifierState,
+      Number(this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE),
+    );
+    this.bindOnGet(
+      this.purifierService,
+      this.api.hap.Characteristic.TargetAirPurifierState,
+      Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO),
+    );
+    this.purifierService
+      .getCharacteristic(this.api.hap.Characteristic.TargetAirPurifierState)
+      .onSet(async (value: CharacteristicValue) => {
+        const isAuto =
+          Number(value) ===
+          Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO);
+        await this.client.setMode(isAuto ? "auto" : "favorite");
+      });
+    this.purifierService
+      .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
+      .onSet(async (value: CharacteristicValue) => {
+        await this.client.setFanLevel(rotationSpeedToFanLevel(Number(value)));
+      });
+    this.bindOnGet(
+      this.purifierService,
+      this.api.hap.Characteristic.RotationSpeed,
+      0,
+    );
 
     this.childLockService
       ?.getCharacteristic(this.api.hap.Characteristic.On)
@@ -468,42 +444,34 @@ export class AirPurifierAccessory {
       return;
     }
 
-    if (!this.usesNativePurifierService) {
-      this.updateCharacteristicIfNeeded(
-        this.purifierService,
-        this.api.hap.Characteristic.On,
-        state.power,
-      );
-    } else {
-      this.updateCharacteristicIfNeeded(
-        this.purifierService,
-        this.api.hap.Characteristic.Active,
-        state.power
-          ? this.api.hap.Characteristic.Active.ACTIVE
-          : this.api.hap.Characteristic.Active.INACTIVE,
-      );
-      this.updateCharacteristicIfNeeded(
-        this.purifierService,
-        this.api.hap.Characteristic.CurrentAirPurifierState,
-        state.power
-          ? state.mode === "idle"
-            ? this.api.hap.Characteristic.CurrentAirPurifierState.IDLE
-            : this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
-          : this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE,
-      );
-      this.updateCharacteristicIfNeeded(
-        this.purifierService,
-        this.api.hap.Characteristic.TargetAirPurifierState,
-        state.mode === "auto"
-          ? this.api.hap.Characteristic.TargetAirPurifierState.AUTO
-          : this.api.hap.Characteristic.TargetAirPurifierState.MANUAL,
-      );
-      this.updateCharacteristicIfNeeded(
-        this.purifierService,
-        this.api.hap.Characteristic.RotationSpeed,
-        fanLevelToRotationSpeed(state.fan_level),
-      );
-    }
+    this.updateCharacteristicIfNeeded(
+      this.purifierService,
+      this.api.hap.Characteristic.Active,
+      state.power
+        ? this.api.hap.Characteristic.Active.ACTIVE
+        : this.api.hap.Characteristic.Active.INACTIVE,
+    );
+    this.updateCharacteristicIfNeeded(
+      this.purifierService,
+      this.api.hap.Characteristic.CurrentAirPurifierState,
+      state.power
+        ? state.mode === "idle"
+          ? this.api.hap.Characteristic.CurrentAirPurifierState.IDLE
+          : this.api.hap.Characteristic.CurrentAirPurifierState.PURIFYING_AIR
+        : this.api.hap.Characteristic.CurrentAirPurifierState.INACTIVE,
+    );
+    this.updateCharacteristicIfNeeded(
+      this.purifierService,
+      this.api.hap.Characteristic.TargetAirPurifierState,
+      state.mode === "auto"
+        ? this.api.hap.Characteristic.TargetAirPurifierState.AUTO
+        : this.api.hap.Characteristic.TargetAirPurifierState.MANUAL,
+    );
+    this.updateCharacteristicIfNeeded(
+      this.purifierService,
+      this.api.hap.Characteristic.RotationSpeed,
+      fanLevelToRotationSpeed(state.fan_level),
+    );
 
     if (this.airQualityService) {
       this.updateCharacteristicIfNeeded(

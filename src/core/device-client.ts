@@ -25,7 +25,27 @@ export interface DeviceClientOptions {
   keepAliveIntervalMs?: number;
   retryPolicy?: RetryPolicy;
   randomFn?: () => number;
+  /**
+   * After this many consecutive failed polls, force a full transport reset
+   * (recreate UDP socket, clear MIIO session/protocol-mode/message-id).
+   * Mirrors the effect of restarting Homebridge — used to recover from
+   * device-side stuck states (e.g. firmware that keeps replying with
+   * `MIIO error -5001` until the source port rotates).
+   *
+   * Set to `0` to disable. Default `12` (≈2 minutes at the default 10 s
+   * operation poll cadence, allowing for sensor/keepalive polls in between).
+   */
+  transportResetThreshold?: number;
+  /**
+   * Minimum delay between two consecutive automatic transport resets, in
+   * milliseconds. Prevents reset thrashing when the device is genuinely
+   * unreachable. Default 5 minutes.
+   */
+  transportResetCooldownMs?: number;
 }
+
+const DEFAULT_TRANSPORT_RESET_THRESHOLD = 12;
+const DEFAULT_TRANSPORT_RESET_COOLDOWN_MS = 5 * 60 * 1000;
 
 export type ConnectionStateEvent = {
   state: "connected" | "disconnected" | "reconnected";
@@ -39,6 +59,8 @@ export class DeviceClient {
   private readonly keepAliveIntervalMs: number;
   private readonly retryPolicy: RetryPolicy;
   private readonly randomFn: () => number;
+  private readonly transportResetThreshold: number;
+  private readonly transportResetCooldownMs: number;
   private operationTimer: NodeJS.Timeout | undefined;
   private sensorTimer: NodeJS.Timeout | undefined;
   private keepAliveTimer: NodeJS.Timeout | undefined;
@@ -52,6 +74,8 @@ export class DeviceClient {
   private operationQueue: Promise<void> = Promise.resolve();
   private hasConnected = false;
   private disconnected = false;
+  private consecutiveFailures = 0;
+  private lastTransportResetAtMs = 0;
 
   private logSuppressedQueueError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
@@ -70,6 +94,10 @@ export class DeviceClient {
     this.keepAliveIntervalMs = options.keepAliveIntervalMs ?? 60_000;
     this.retryPolicy = options.retryPolicy ?? DEFAULT_RETRY_POLICY;
     this.randomFn = options.randomFn ?? Math.random;
+    this.transportResetThreshold =
+      options.transportResetThreshold ?? DEFAULT_TRANSPORT_RESET_THRESHOLD;
+    this.transportResetCooldownMs =
+      options.transportResetCooldownMs ?? DEFAULT_TRANSPORT_RESET_COOLDOWN_MS;
   }
 
   public get state(): DeviceState | null {
@@ -214,6 +242,7 @@ export class DeviceClient {
           );
         }
 
+        this.consecutiveFailures = 0;
         if (!this.hasConnected) {
           this.hasConnected = true;
           this.disconnected = false;
@@ -246,6 +275,8 @@ export class DeviceClient {
           this.retryPolicy.maxRetries,
         );
         if (!isRetryableError(error) || attempt > maxRetries) {
+          this.consecutiveFailures += 1;
+          await this.maybeResetTransport(code);
           throw error;
         }
 
@@ -256,6 +287,37 @@ export class DeviceClient {
         );
         await this.delay(delay);
       }
+    }
+  }
+
+  private async maybeResetTransport(lastErrorCode: string): Promise<void> {
+    if (this.transportResetThreshold <= 0) {
+      return;
+    }
+
+    if (this.consecutiveFailures < this.transportResetThreshold) {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      this.lastTransportResetAtMs > 0 &&
+      now - this.lastTransportResetAtMs < this.transportResetCooldownMs
+    ) {
+      return;
+    }
+
+    this.lastTransportResetAtMs = now;
+    this.logger.warn(
+      `Persistent device errors (${this.consecutiveFailures} consecutive failures, last code ${lastErrorCode}) — recreating MIIO transport (new UDP socket, fresh handshake) to break stuck device-side state.`,
+    );
+    try {
+      await this.transport.reset();
+      this.consecutiveFailures = 0;
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown reset error";
+      this.logger.warn(`Transport reset failed: ${message}`);
     }
   }
 

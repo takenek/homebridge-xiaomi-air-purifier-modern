@@ -99,6 +99,8 @@ This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a
 | `keepAliveIntervalMs` | integer | No | Keep-alive poll interval in milliseconds (default `60000`, min `1000`) |
 | `operationPollIntervalMs` | integer | No | Polling interval for control-related state refresh in milliseconds (default `10000`, min `1000`) |
 | `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |
+| `transportResetThreshold` | integer | No | After this many consecutive failed polls the plugin recreates the underlying UDP socket and MIIO session — equivalent to restarting Homebridge, but automatic. Set to `0` to disable. Default `12` (≈2 min at the default 10 s operation cadence). |
+| `transportResetCooldownMs` | integer | No | Minimum delay between two consecutive automatic transport resets, in milliseconds. Prevents reset thrashing when the device is genuinely unreachable. Default `300000` (5 min). |
 | `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
 | `_bridge` | object | No | Optional child bridge configuration |
 
@@ -182,6 +184,8 @@ Detailed resiliency and status scenarios (restart/reconnect, Wi-Fi outage behavi
 - Operational polling: every **10s**
 - Sensor polling: every **30s**
 - Exponential backoff with jitter on reconnect attempts
+- **Auto transport recovery**: after `transportResetThreshold` consecutive failed polls (default `12`, ≈2 min), the plugin tears down the UDP socket and MIIO session and rebuilds them from scratch — automatically performing what would otherwise require a Homebridge restart. This recovers from device-side stuck states (e.g. firmware that keeps replying `MIIO error -5001` until the source UDP port rotates), most common on older `zhimi.airpurifier.pro` units. A `transportResetCooldownMs` (default 5 min) prevents thrashing when the device is genuinely offline.
+- `MIIO error -5001` and `-10000` are now retried with a tight cap of 2 attempts per call before propagating, instead of failing immediately on the first attempt.
 - Timers are cleaned on Homebridge shutdown
 
 The accessory logs connection lifecycle events per device:

@@ -33,6 +33,10 @@ class ScriptedTransport implements MiioTransport {
   }
 
   public async close(): Promise<void> {}
+  public resetCalls = 0;
+  public async reset(): Promise<void> {
+    this.resetCalls += 1;
+  }
 }
 
 beforeEach(() => vi.useFakeTimers());

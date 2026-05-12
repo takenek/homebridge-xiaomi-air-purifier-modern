@@ -29,6 +29,7 @@ class FakeTransport implements MiioTransport {
     this.methods.push({ method, params });
   }
   public async close(): Promise<void> {}
+  public async reset(): Promise<void> {}
 }
 
 const logger = {

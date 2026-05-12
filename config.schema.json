@@ -159,6 +159,20 @@
               "type": "boolean",
               "default": false,
               "description": "Mask device IP address in runtime logs (for privacy-sensitive deployments)."
+            },
+            "transportResetThreshold": {
+              "title": "Auto Transport Reset Threshold",
+              "type": "integer",
+              "default": 12,
+              "minimum": 0,
+              "description": "After this many consecutive failed polls, the plugin recreates the underlying UDP socket and MIIO session — equivalent to restarting Homebridge, but automatic. Recovers from device-side stuck states (e.g. <code>MIIO error -5001</code>). Set to <code>0</code> to disable."
+            },
+            "transportResetCooldownMs": {
+              "title": "Auto Transport Reset Cooldown (ms)",
+              "type": "integer",
+              "default": 300000,
+              "minimum": 1000,
+              "description": "Minimum delay between two consecutive automatic transport resets. Prevents reset thrashing when the device is genuinely unreachable."
             }
           }
         }
@@ -247,6 +261,12 @@
             },
             {
               "key": "devices[].sensorPollIntervalMs"
+            },
+            {
+              "key": "devices[].transportResetThreshold"
+            },
+            {
+              "key": "devices[].transportResetCooldownMs"
             }
           ]
         }
