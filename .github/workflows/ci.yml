@@ -19,9 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - node: 20
-            homebridge: "1.11.2"
-            lane: full
           - node: 22
             homebridge: "1.11.2"
             lane: full
