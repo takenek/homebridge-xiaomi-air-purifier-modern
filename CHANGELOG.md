@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.2...v1.0.3) (2026-05-12)
+
+
+### Bug Fixes
+
+* auto-recover MIIO transport from -5001 stuck state, drop HB 1.x fallback ([0e9824c](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/0e9824ccc2d0593b3c4f392ee854520e684e266a))
+
 ## [1.0.2](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.1...v1.0.2) (2026-05-06)
 
 
