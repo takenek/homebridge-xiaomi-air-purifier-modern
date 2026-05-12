@@ -30,7 +30,7 @@
 
 1. **Zero runtime dependencies** — wtyczka używa wyłącznie `node:crypto` i `node:dgram`. Supply-chain risk jest praktycznie zerowy — to wybitne osiągnięcie wśród wtyczek Homebridge.
 2. **100% test coverage** — 126 testów w 13 plikach, wymuszone progi 100% (statements/branches/functions/lines) via vitest v4 + v8.
-3. **Profesjonalny pipeline CI/CD** — macierz Node 22/24 × Homebridge 2.0.2/beta, SBOM, OSV Scanner, OpenSSF Scorecard, npm audit, semantic-release z provenance.
+3. **Profesjonalny pipeline CI/CD** — macierz Node 22/24 × Homebridge 2.0.2 (stable, beta lane usunięty po wydaniu HB 2.0 GA), SBOM, OSV Scanner, OpenSSF Scorecard, npm audit, semantic-release z provenance.
 4. **Wzorowa architektura** — wyraźny podział na warstwy (transport → client → accessory → platform), SRP, operationQueue serializujący UDP, exponential backoff z jitter.
 5. **Kompletna dokumentacja OSS** — LICENSE, README z konfiguracją/troubleshootingiem/mapowaniem, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY.md z SLA, szablony issue/PR, CODEOWNERS.
 6. **Bezpieczeństwo** — token nigdy nie logowany, masking IP, SHA-pinned Actions, `files` whitelist, `engine-strict=true`, workflow permissions least-privilege.
@@ -93,7 +93,7 @@
 | `peerDependencies: homebridge ^1.11.1 \|\| ^2.0.0` | ✅ | Poprawne |
 | `engines.homebridge: ^2.0.2` | ✅ | Spójne z peerDeps; HB 1.x dropped (2026-05-12) |
 | `engines.node: ^22.0.0 \|\| ^24.0.0` | ✅ | Aktywne LTS; Node 20 dropped (EOL, 2026-05-12) |
-| CI macierz: Node 22/24 × HB 2.0.2/beta | ✅ | Full + smoke lanes |
+| CI macierz: Node 22/24 × HB 2.0.2 (stable) | ✅ | Full lanes; beta lane usunięty po wydaniu HB 2.0 GA |
 | Shutdown handler: `api.on("shutdown", ...)` | ✅ | Poprawne czyszczenie timerów i zamykanie socketu |
 
 ### 4.3 Mapowanie funkcji oczyszczacza na HomeKit
@@ -246,8 +246,8 @@
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
 | Trigger | ✅ | push to main + all PRs |
-| Matrix | ✅ | Node 22/24 × HB 2.0.2, Node 22/24 × HB beta |
-| Lanes | ✅ | `full` (lint+typecheck+test) i `smoke` (HB beta + Node 24) |
+| Matrix | ✅ | Node 22/24 × HB 2.0.2 (stable) |
+| Lanes | ✅ | `full` (lint+typecheck+test) na obu kombinacjach Node 22/24 |
 | Concurrency | ✅ | `cancel-in-progress: true` per ref |
 | Permissions | ✅ | `contents: read` — least privilege |
 | npm audit job | ✅ | Oddzielny job z `--audit-level=high` |
@@ -445,7 +445,7 @@
 | 1 | Rozważyć dodanie `LockPhysicalControls` characteristic na AirPurifier service (HB 2.x) zamiast oddzielnego Switch dla child lock | Low | Bardziej natywne mapowanie HomeKit, ale Switch działa poprawnie |
 | 2 | Dodać `npm run format` script do package.json (alias na `biome format --write .`) | Low | Wygoda developera |
 | 3 | Rozważyć dodanie badge OpenSSF Scorecard do README | Low | Buduje zaufanie użytkowników |
-| 4 | Rozważyć testowanie z homebridge 2.0.0 stable (gdy dostępne) obok beta | Low | CI już testuje beta — wystarczające |
+| 4 | (zrealizowane) Po wydaniu HB 2.0 GA macierz testuje wyłącznie wersję stabilną `2.0.2`; lane `beta` został usunięty. | Done | — |
 
 ---
 
@@ -456,10 +456,10 @@
 - ✅ **Trigger:** `push: [main]` + `pull_request` — poprawne
 - ✅ **Concurrency:** `ci-${{ github.ref }}` z `cancel-in-progress: true` — zapobiega zbędnym buildom
 - ✅ **Matrix strategy:** `fail-fast: false` — wszystkie kombinacje uruchamiane
-- ✅ **Matrix coverage:** Node 22/24 × HB 2.0.2 (full), Node 22 × HB beta (full), Node 24 × HB beta (smoke)
+- ✅ **Matrix coverage:** Node 22/24 × HB 2.0.2 stable (full lanes only); HB 2.0 GA, więc `beta` lane jest niepotrzebny i został usunięty.
 - ✅ **Smoke lane:** pomija upload coverage, ale uruchamia lint+typecheck+test
 - ✅ **npm ci** zamiast `npm install` — reprodukowalność
-- ✅ **homebridge@beta install** z `--no-save` — nie modyfikuje package-lock.json
+- ✅ **`homebridge@2.0.2` install** z `--no-save` — nie modyfikuje package-lock.json (CI matrix instaluje wersję per-cell przez `npm install --no-save`)
 - ✅ **Artifact naming:** unique per matrix combination
 - ✅ **Audit job:** oddzielny, parallel z test matrix
 

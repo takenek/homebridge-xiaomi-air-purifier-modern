@@ -213,7 +213,7 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 ## Support & deprecation policy
 
 - Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.x** and **Node 24.x**).
-- Homebridge support target: stable **2.0.2+** and the current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
+- Homebridge support target: stable **2.0.2+** validated in CI on Node 22 and Node 24.
 - Homebridge **1.x** support has been dropped — install plugin **v1.x** if you still run Homebridge 1.x.
 - Node.js **20.x** support has been dropped (end-of-life) — install plugin **v1.x** if you still run Node 20.
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
