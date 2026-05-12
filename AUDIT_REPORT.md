@@ -30,7 +30,7 @@
 
 1. **Zero runtime dependencies** — wtyczka używa wyłącznie `node:crypto` i `node:dgram`. Supply-chain risk jest praktycznie zerowy — to wybitne osiągnięcie wśród wtyczek Homebridge.
 2. **100% test coverage** — 126 testów w 13 plikach, wymuszone progi 100% (statements/branches/functions/lines) via vitest v4 + v8.
-3. **Profesjonalny pipeline CI/CD** — macierz Node 20/22/24 × Homebridge 1.11.2/beta(2.x), SBOM, OSV Scanner, OpenSSF Scorecard, npm audit, semantic-release z provenance.
+3. **Profesjonalny pipeline CI/CD** — macierz Node 22/24 × Homebridge 2.0.2/beta, SBOM, OSV Scanner, OpenSSF Scorecard, npm audit, semantic-release z provenance.
 4. **Wzorowa architektura** — wyraźny podział na warstwy (transport → client → accessory → platform), SRP, operationQueue serializujący UDP, exponential backoff z jitter.
 5. **Kompletna dokumentacja OSS** — LICENSE, README z konfiguracją/troubleshootingiem/mapowaniem, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY.md z SLA, szablony issue/PR, CODEOWNERS.
 6. **Bezpieczeństwo** — token nigdy nie logowany, masking IP, SHA-pinned Actions, `files` whitelist, `engine-strict=true`, workflow permissions least-privilege.
@@ -91,9 +91,9 @@
 | `Active` / `CurrentAirPurifierState` / `TargetAirPurifierState` | ✅ | Prawidłowe mapowanie z IDLE/PURIFYING_AIR/INACTIVE |
 | `RotationSpeed` → `setFanLevel` | ✅ | Mapowanie 0-100% ↔ fan level 1-16 |
 | `peerDependencies: homebridge ^1.11.1 \|\| ^2.0.0` | ✅ | Poprawne |
-| `engines.homebridge: ^1.11.1 \|\| ^2.0.0` | ✅ | Spójne z peerDeps |
-| `engines.node: ^20.0.0 \|\| ^22.0.0 \|\| ^24.0.0` | ✅ | Aktywne LTS |
-| CI macierz: Node 20/22/24 × HB 1.11.2/beta | ✅ | Full + smoke lanes |
+| `engines.homebridge: ^2.0.2` | ✅ | Spójne z peerDeps; HB 1.x dropped (2026-05-12) |
+| `engines.node: ^22.0.0 \|\| ^24.0.0` | ✅ | Aktywne LTS; Node 20 dropped (EOL, 2026-05-12) |
+| CI macierz: Node 22/24 × HB 2.0.2/beta | ✅ | Full + smoke lanes |
 | Shutdown handler: `api.on("shutdown", ...)` | ✅ | Poprawne czyszczenie timerów i zamykanie socketu |
 
 ### 4.3 Mapowanie funkcji oczyszczacza na HomeKit
@@ -246,7 +246,7 @@
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
 | Trigger | ✅ | push to main + all PRs |
-| Matrix | ✅ | Node 20/22/24 × HB 1.11.2, Node 22/24 × HB beta |
+| Matrix | ✅ | Node 22/24 × HB 2.0.2, Node 22/24 × HB beta |
 | Lanes | ✅ | `full` (lint+typecheck+test) i `smoke` (HB beta + Node 24) |
 | Concurrency | ✅ | `cancel-in-progress: true` per ref |
 | Permissions | ✅ | `contents: read` — least privilege |
@@ -388,8 +388,8 @@
 | `main` | ✅ | `dist/index.js` |
 | `types` | ✅ | `dist/index.d.ts` |
 | `keywords` | ✅ | 15 keywords (homebridge-plugin, homekit, xiaomi, miio, miot, etc.) |
-| `engines.node` | ✅ | `^20.0.0 \|\| ^22.0.0 \|\| ^24.0.0` |
-| `engines.homebridge` | ✅ | `^1.11.1 \|\| ^2.0.0` |
+| `engines.node` | ✅ | `^22.0.0 \|\| ^24.0.0` |
+| `engines.homebridge` | ✅ | `^2.0.2` |
 | `engines.npm` | ✅ | `>=10.0.0` |
 | `homepage` | ✅ | GitHub URL |
 | `repository` | ✅ | git+https URL |
@@ -398,7 +398,7 @@
 | `author` | ✅ | name + URL |
 | `displayName` | ✅ | `Xiaomi Mi Air Purifier Modern` |
 | `files` | ✅ | Whitelist: dist, config.schema.json, docs |
-| `peerDependencies` | ✅ | `homebridge: ^1.11.1 \|\| ^2.0.0` |
+| `peerDependencies` | ✅ | `homebridge: ^2.0.2` |
 | `type` | ✅ | `commonjs` (wymagane przez Homebridge) |
 | `scripts.prepublishOnly` | ✅ | lint + typecheck + test + build |
 | `scripts.prepare` | ✅ | build |
@@ -456,7 +456,7 @@
 - ✅ **Trigger:** `push: [main]` + `pull_request` — poprawne
 - ✅ **Concurrency:** `ci-${{ github.ref }}` z `cancel-in-progress: true` — zapobiega zbędnym buildom
 - ✅ **Matrix strategy:** `fail-fast: false` — wszystkie kombinacje uruchamiane
-- ✅ **Matrix coverage:** Node 20/22/24 × HB 1.11.2 (full), Node 22 × HB beta (full), Node 24 × HB beta (smoke)
+- ✅ **Matrix coverage:** Node 22/24 × HB 2.0.2 (full), Node 22 × HB beta (full), Node 24 × HB beta (smoke)
 - ✅ **Smoke lane:** pomija upload coverage, ale uruchamia lint+typecheck+test
 - ✅ **npm ci** zamiast `npm install` — reprodukowalność
 - ✅ **homebridge@beta install** z `--no-save` — nie modyfikuje package-lock.json

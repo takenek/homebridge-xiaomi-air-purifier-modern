@@ -28,9 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **Homebridge 2.0.2 is now the minimum supported version.** `engines.homebridge` and `peerDependencies.homebridge` were tightened from `^1.11.1 || ^2.0.0` to `^2.0.2`. Homebridge 1.x is no longer supported — users on Homebridge 1.x must stay on plugin v1.x or upgrade Homebridge.
+- **Node.js 20 dropped (end-of-life).** Supported runtimes are now **Node 22.x** and **Node 24.x** only. CI matrix updated accordingly.
+- **CI matrix bumped to Homebridge 2.0.2** in the full lanes (Node 22 / 24), with the `beta` lane retained for 2.x pre-release validation.
+
 ### Removed
 
 - **Buzzer support** — completely removed buzzer switch, `enableBuzzerControl` config option, `setBuzzerVolume()` API method, `buzzer_volume` device state property, and all MIOT/legacy buzzer protocol mappings due to operational issues.
+
+### Dependencies
+
+- `homebridge` (devDependency) bumped from `1.11.4` to `2.0.2`.
 
 ### Fixed
 

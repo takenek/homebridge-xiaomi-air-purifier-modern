@@ -20,10 +20,10 @@ jobs:
       matrix:
         include:
           - node: 22
-            homebridge: "1.11.2"
+            homebridge: "2.0.2"
             lane: full
           - node: 24
-            homebridge: "1.11.2"
+            homebridge: "2.0.2"
             lane: full
           - node: 22
             homebridge: "beta"

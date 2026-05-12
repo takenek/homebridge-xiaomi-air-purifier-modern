@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-xiaomi-air-purifier-modern)](https://www.npmjs.com/package/homebridge-xiaomi-air-purifier-modern)
-[![Homebridge](https://img.shields.io/badge/Homebridge-1.11.1%2B%20%7C%202.0%2B-blueviolet)](https://homebridge.io)
+[![Homebridge](https://img.shields.io/badge/Homebridge-2.0.2%2B-blueviolet)](https://homebridge.io)
+[![Node](https://img.shields.io/badge/Node.js-22.x%20%7C%2024.x-green)](https://nodejs.org)
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 3 / 3H / 4 / Pro).
 
@@ -14,7 +15,7 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 | HomeKit Service | Description |
 |-----------------|-------------|
-| AirPurifier (HB 2.x) / Switch: Power (HB 1.x) | Main purifier power ON/OFF. On Homebridge 2.x the native AirPurifier service is used with Active, CurrentAirPurifierState, TargetAirPurifierState, and RotationSpeed characteristics. On Homebridge 1.x a Switch fallback is used. |
+| AirPurifier | Main purifier power ON/OFF. Uses the native AirPurifier service with `Active`, `CurrentAirPurifierState`, `TargetAirPurifierState`, and `RotationSpeed` characteristics. |
 | Air Quality Sensor | AQI mapped to Excellent/Good/Fair/Poor + PM2.5 Density |
 | Temperature Sensor | Current temperature |
 | Humidity Sensor | Current relative humidity |
@@ -30,8 +31,9 @@ This plugin replaces the unmaintained [homebridge-xiaomi-mi-air-purifier](https:
 
 ## Requirements
 
-- Homebridge **1.11.1+** or **2.x**
-- Node.js **20.x**, **22.x**, or **24.x**
+- Homebridge **2.0.2** or newer (Homebridge 1.x is no longer supported)
+- Node.js **22.x** or **24.x** (Node 20 reached end-of-life and is no longer supported)
+- npm **>=10.0.0**
 - Xiaomi Mi Air Purifier on the same LAN (UDP 54321)
 - Device token (32-char hex)
 
@@ -98,7 +100,7 @@ This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a
 | `operationPollIntervalMs` | integer | No | Polling interval for control-related state refresh in milliseconds (default `10000`, min `1000`) |
 | `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |
 | `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
-| `_bridge` | object | No | Optional child bridge configuration (Homebridge 1.x) |
+| `_bridge` | object | No | Optional child bridge configuration |
 
 ### Known model strings
 
@@ -206,8 +208,10 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 
 ## Support & deprecation policy
 
-- Supported runtime: active LTS Node versions listed in `package.json` engines.
-- Homebridge support target: latest 1.x and current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
+- Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.x** and **Node 24.x**).
+- Homebridge support target: stable **2.0.2+** and the current 2.x pre-release line (`beta`) validated in CI (full + smoke lanes).
+- Homebridge **1.x** support has been dropped — install plugin **v1.x** if you still run Homebridge 1.x.
+- Node.js **20.x** support has been dropped (end-of-life) — install plugin **v1.x** if you still run Node 20.
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
 - **Dynamic Platform Plugin** — supports multiple devices in a single plugin instance with automatic cached accessory management. See `config.schema.json` for the full schema.
 
