@@ -183,90 +183,95 @@
     {
       "key": "devices",
       "type": "array",
-      "buttonText": "Add Device",
+      "add": "Add Device",
       "items": [
         {
-          "key": "devices[].name"
-        },
-        {
-          "key": "devices[].model"
-        },
-        {
-          "key": "devices[].address"
-        },
-        {
-          "key": "devices[].token"
-        },
-        {
-          "type": "help",
-          "helpvalue": "Please check the README for instruction about how to get a <em>token</em>."
-        },
-        {
           "type": "fieldset",
-          "title": "Sensors",
-          "expandable": true,
-          "expanded": true,
           "items": [
             {
-              "key": "devices[].enableAirQuality"
+              "key": "devices[].name"
             },
             {
-              "key": "devices[].enableTemperature"
+              "key": "devices[].model"
             },
             {
-              "key": "devices[].enableHumidity"
-            }
-          ]
-        },
-        {
-          "type": "fieldset",
-          "title": "Alerts & Controls",
-          "expandable": true,
-          "expanded": false,
-          "items": [
-            {
-              "key": "devices[].filterChangeThreshold"
+              "key": "devices[].address"
             },
             {
-              "key": "devices[].exposeFilterReplaceAlertSensor"
+              "key": "devices[].token"
             },
             {
-              "key": "devices[].enableChildLockControl"
-            }
-          ]
-        },
-        {
-          "type": "fieldset",
-          "title": "Privacy & Timing",
-          "expandable": true,
-          "expanded": false,
-          "items": [
-            {
-              "key": "devices[].maskDeviceAddressInLogs"
+              "type": "help",
+              "helpvalue": "Please check the README for instruction about how to get a <em>token</em>."
             },
             {
-              "key": "devices[].connectTimeoutMs"
+              "type": "fieldset",
+              "title": "Sensors",
+              "expandable": true,
+              "expanded": true,
+              "items": [
+                {
+                  "key": "devices[].enableAirQuality"
+                },
+                {
+                  "key": "devices[].enableTemperature"
+                },
+                {
+                  "key": "devices[].enableHumidity"
+                }
+              ]
             },
             {
-              "key": "devices[].operationTimeoutMs"
+              "type": "fieldset",
+              "title": "Alerts & Controls",
+              "expandable": true,
+              "expanded": false,
+              "items": [
+                {
+                  "key": "devices[].filterChangeThreshold"
+                },
+                {
+                  "key": "devices[].exposeFilterReplaceAlertSensor"
+                },
+                {
+                  "key": "devices[].enableChildLockControl"
+                }
+              ]
             },
             {
-              "key": "devices[].reconnectDelayMs"
-            },
-            {
-              "key": "devices[].keepAliveIntervalMs"
-            },
-            {
-              "key": "devices[].operationPollIntervalMs"
-            },
-            {
-              "key": "devices[].sensorPollIntervalMs"
-            },
-            {
-              "key": "devices[].transportResetThreshold"
-            },
-            {
-              "key": "devices[].transportResetCooldownMs"
+              "type": "fieldset",
+              "title": "Privacy & Timing",
+              "expandable": true,
+              "expanded": false,
+              "items": [
+                {
+                  "key": "devices[].maskDeviceAddressInLogs"
+                },
+                {
+                  "key": "devices[].connectTimeoutMs"
+                },
+                {
+                  "key": "devices[].operationTimeoutMs"
+                },
+                {
+                  "key": "devices[].reconnectDelayMs"
+                },
+                {
+                  "key": "devices[].keepAliveIntervalMs"
+                },
+                {
+                  "key": "devices[].operationPollIntervalMs"
+                },
+                {
+                  "key": "devices[].sensorPollIntervalMs"
+                },
+                {
+                  "key": "devices[].transportResetThreshold"
+                },
+                {
+                  "key": "devices[].transportResetCooldownMs"
+                }
+              ]
             }
           ]
         }
