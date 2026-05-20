@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.3...v1.0.4) (2026-05-20)
+
+
+### Bug Fixes
+
+* correct Homebridge config UI setup layout ([9c91045](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/9c91045b3705f38636198cd86ee1f5194c3c4cc6))
+
 ## [1.0.3](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.2...v1.0.3) (2026-05-12)
 
 
