@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Homebridge startup warnings** — stopped adding the unsupported `ConfiguredName` characteristic to operational services on Homebridge 2 / HAP 2.1.6.
+- **Homebridge Config UI layout** — fixed the `devices` array layout so one purifier device is rendered and validated as a single grouped form.
 - **Device-config diagnostics** — failing entries in the `devices` array are now logged with their position (`#4`) and quoted name (`"Air Purifier"`) plus the concrete missing or invalid fields (`missing required config fields: address, token, model`). Previously the platform reported a single generic `Invalid or missing config field: address` line that could not be traced back to a specific entry. Address validation now uses `net.isIP()` (IPv4 only), all required string fields are trimmed before validation so whitespace-only values are treated as missing, and tokens are never included in any log output.
 - **README configuration example** — updated from stale `"accessories"` / `"accessory"` pattern to correct Dynamic Platform Plugin format (`"platforms"` / `"platform"` with `devices` array). Matches the actual `registerPlatform` registration and `config.schema.json` layout.
 - **Audit report stale references** — corrected `registerAccessory` → `registerPlatform`, updated test counts (126 tests), and marked platform migration as completed.

@@ -18,9 +18,6 @@ import {
   resolveModeFromNightSwitch,
 } from "../core/mode-policy";
 
-const getOptionalProperty = (obj: object, key: string): unknown =>
-  (obj as Record<string, unknown>)[key];
-
 const getNumericEnum = (obj: object, key: string, fallback: number): number => {
   const value = (obj as Record<string, unknown>)[key];
   return typeof value === "number" ? value : fallback;
@@ -263,13 +260,6 @@ export class AirPurifierAccessory {
 
     for (const { service, name } of namedServices) {
       service.setCharacteristic(this.api.hap.Characteristic.Name, name);
-      const configuredName = getOptionalProperty(
-        this.api.hap.Characteristic,
-        "ConfiguredName",
-      );
-      if (configuredName) {
-        service.setCharacteristic(configuredName as never, name);
-      }
     }
   }
 

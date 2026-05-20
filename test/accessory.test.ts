@@ -93,7 +93,7 @@ describe("AirPurifierAccessory switch contract", () => {
       ).toBe(true);
       expect(
         typed.setCalls.some((call) => call.characteristic === "configuredName"),
-      ).toBe(true);
+      ).toBe(false);
     }
 
     const modeAutoService = accessory
@@ -660,7 +660,7 @@ describe("AirPurifierAccessory switch contract", () => {
     expect(serviceNames).not.toContain(expect.stringContaining("Contact"));
   });
 
-  it("falls back gracefully when ConfiguredName characteristic is unavailable", () => {
+  it("does not add ConfiguredName when the characteristic is unavailable", () => {
     const api = makeApi(false);
     const logger = makeLogger();
     const client = new FakeClient();
@@ -693,6 +693,29 @@ describe("AirPurifierAccessory switch contract", () => {
         ),
       ),
     ).toBe(false);
+  });
+
+  it("does not add ConfiguredName when Homebridge exposes the characteristic", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.3h",
+      10,
+    );
+
+    for (const service of accessory.getServices()) {
+      const typed = service as unknown as FakeService;
+      expect(
+        typed.setCalls.some((call) => call.characteristic === "configuredName"),
+      ).toBe(false);
+    }
   });
 
   it("logs initial connect failure", async () => {
