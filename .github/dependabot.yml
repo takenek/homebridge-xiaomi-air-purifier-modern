@@ -7,6 +7,15 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    ignore:
+      # @types/node must track the lowest supported Node.js runtime, not the
+      # latest release line. engines.node is "^22.0.0 || ^24.0.0", so the types
+      # stay pinned to ^22.x; a major bump (e.g. 25.x) would type-check against
+      # APIs absent from Node 22/24 and let runtime breakage pass CI.
+      # See docs/audit-report.md. Patch/minor updates within 22.x are allowed.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: "/"
