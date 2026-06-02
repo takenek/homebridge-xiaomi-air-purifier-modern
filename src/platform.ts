@@ -10,6 +10,7 @@ import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
 import { DEFAULT_RETRY_POLICY } from "./core/retry";
+import { createScopedLogger } from "./core/scoped-logger";
 import type { AirPurifierModel } from "./core/types";
 
 export const PLATFORM_NAME = "XiaomiMiAirPurifier";
@@ -315,15 +316,20 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
       isNew = true;
     }
 
+    // Per-device scoped logger so every device-level line is tagged with the
+    // configured name (`[<name>] ...`). Without this, low-level transport and
+    // poll-failure messages are indistinguishable across multiple purifiers.
+    const deviceLog = createScopedLogger(this.log, name);
+
     const transport = new ModernMiioTransport({
       address,
       token,
       model,
       connectTimeoutMs,
       operationTimeoutMs,
-      logger: this.log,
+      logger: deviceLog,
     });
-    const client = new DeviceClient(transport, this.log, {
+    const client = new DeviceClient(transport, deviceLog, {
       operationPollIntervalMs,
       sensorPollIntervalMs,
       keepAliveIntervalMs,
@@ -337,7 +343,7 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
 
     new AirPurifierAccessory(
       this.api,
-      this.log,
+      deviceLog,
       name,
       displayAddress,
       client,
