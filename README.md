@@ -208,12 +208,17 @@ Detailed resiliency and status scenarios (restart/reconnect, Wi-Fi outage behavi
 - `MIIO error -5001` and `-10000` are now retried with a tight cap of 2 attempts per call before propagating, instead of failing immediately on the first attempt.
 - Timers are cleaned on Homebridge shutdown
 
-The accessory logs connection lifecycle events per device:
+Every device-specific log line is prefixed with the configured device name
+(`[<name>]`), so with multiple purifiers you can always tell which one a message
+refers to — this covers low-level transport and poll-failure diagnostics, not
+just the connection lifecycle events:
 
 ```text
 [Office Purifier] Connected to "Office Purifier" @ 10.10.1.17!
 [Office Purifier] Disconnected from "Office Purifier" @ 10.10.1.17 (code ETIMEDOUT): MIIO timeout after 15000ms
 [Office Purifier] Reconnected to "Office Purifier" @ 10.10.1.17.
+[Office Purifier] Device read failed (attempt 1, code ETIMEDOUT): MIIO timeout after 15000ms
+[Office Purifier] Persistent device errors (12 consecutive failures, last code -5001) — recreating MIIO transport (new UDP socket, fresh handshake) to break stuck device-side state.
 ```
 
 ---

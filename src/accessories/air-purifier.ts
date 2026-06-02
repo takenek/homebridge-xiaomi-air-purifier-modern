@@ -1,7 +1,6 @@
 import type {
   API,
   CharacteristicValue,
-  Logging,
   PlatformAccessory,
   Service,
 } from "homebridge" with { "resolution-mode": "import" };
@@ -17,6 +16,7 @@ import {
   resolveModeFromAutoSwitch,
   resolveModeFromNightSwitch,
 } from "../core/mode-policy";
+import type { ScopedLogger } from "../core/scoped-logger";
 
 const getNumericEnum = (obj: object, key: string, fallback: number): number => {
   const value = (obj as Record<string, unknown>)[key];
@@ -49,7 +49,7 @@ export class AirPurifierAccessory {
 
   public constructor(
     private readonly api: API,
-    private readonly log: Logging,
+    private readonly log: ScopedLogger,
     private readonly name: string,
     displayAddress: string,
     private readonly client: DeviceClient,

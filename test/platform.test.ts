@@ -673,4 +673,47 @@ describe("platform accessory integration", () => {
       expect.any(String),
     );
   });
+
+  it("prefixes device-level log lines with the configured device name", async () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    // Force the first read to fail so both the device client and the accessory
+    // emit the failure lines users actually see in the console.
+    vi.spyOn(ModernMiioTransport.prototype, "getProperties").mockRejectedValue(
+      new Error("simulated read failure"),
+    );
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Oczyszczacz Hania",
+            address: "10.10.1.16",
+            token: "aabbccddeeff00112233445566778899",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    // Emitted by DeviceClient — the exact message the bug report was about.
+    await vi.waitFor(() => {
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("[Oczyszczacz Hania] Device read failed"),
+      );
+    });
+
+    // Emitted by the accessory's init() failure path.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "[Oczyszczacz Hania] Initial device connection failed",
+      ),
+    );
+  });
 });
