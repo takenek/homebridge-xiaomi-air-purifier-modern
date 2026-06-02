@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.4...v1.0.5) (2026-06-02)
+
+
+### Bug Fixes
+
+* prefix all device log lines with the configured device name ([#206](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/206)) ([d34005c](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/d34005cb8f867c837a547f028a3182374b0915dc))
+
 ## [1.0.4](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.3...v1.0.4) (2026-05-20)
 
 
