@@ -6,7 +6,7 @@
 **Audytor:** Claude Opus 4.6 — pełny code review, security audit, quality assessment
 **Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
 
-### Komendy weryfikacyjne (uruchomione z `env -u npm_config_http_proxy -u npm_config_https_proxy`):
+### Komendy weryfikacyjne:
 
 | Komenda | Wynik |
 |---------|-------|
@@ -253,7 +253,6 @@
 | npm audit job | ✅ | Oddzielny job z `--audit-level=high` |
 | Coverage artifact | ✅ | Upload na full lanes |
 | Action pinning | ✅ | SHA-pinned: checkout, setup-node, upload-artifact |
-| npm proxy cleanup | ✅ | `env -u npm_config_http_proxy -u npm_config_https_proxy` na każdym `npm` |
 | `fail-fast: false` | ✅ | Wszystkie kombinacje macierzy uruchamiane nawet po awarii jednej |
 
 ### 7.4 Release Pipeline (release.yml)
