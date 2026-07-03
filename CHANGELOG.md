@@ -1,3 +1,23 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+> Human-authored summaries of pending work on `main` go here. The
+> machine-generated version header (`## [x.y.z]`) and per-commit bullet list
+> are added by [semantic-release](https://semantic-release.gitbook.io/) on
+> the next merge to `main`, based on conventional commit messages.
+
+_Nothing pending._ Everything previously summarized in this section shipped in
+**v1.0.1 – v1.0.5** (transport auto-recovery, the retryable `-5001`/`-10000`
+handling, buzzer removal, the Homebridge 2.0.2 minimum, config-schema strict
+validation, and the diagnostics/UI fixes). The released version entries below
+are the source of truth for shipped versions.
+
 ## [1.0.5](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.4...v1.0.5) (2026-06-02)
 
 
@@ -33,34 +53,7 @@
 
 * replace slash in ConfiguredName to satisfy HAP-NodeJS validation ([73c36e1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/73c36e1ba641eec0fdfbf22f24b1710f55217d5e))
 
-# 1.0.0 (2026-05-05)
-
-
-### Bug Fixes
-
-* trigger initial npm release ([b5cc8f8](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/b5cc8f8137ae49dad32538d1b6a24b7bad0d7b1c))
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-> Human-authored summaries of pending work on `main` go here. The
-> machine-generated version header (`## [x.y.z]`) and per-commit bullet list
-> are added by [semantic-release](https://semantic-release.gitbook.io/) on
-> the next merge to `main`, based on conventional commit messages.
-
-_Nothing pending._ Everything previously summarized in this section shipped in
-**v1.0.1 – v1.0.5** (transport auto-recovery, the retryable `-5001`/`-10000`
-handling, buzzer removal, the Homebridge 2.0.2 minimum, config-schema strict
-validation, and the diagnostics/UI fixes). The machine-generated entries at the
-top of this file are the source of truth for released versions.
-
-## [1.0.0] — 2026-03-02
+## [1.0.0] (2026-05-05)
 
 Initial public release.
 
@@ -72,7 +65,6 @@ Initial public release.
 - **Air Quality Sensor** — AQI mapped to HomeKit `AirQuality` enum (Excellent / Good / Fair / Poor / Inferior) with PM2.5 Density. Configurable via `enableAirQuality` (default `true`).
 - **Temperature and Humidity sensors** — configurable via `enableTemperature` and `enableHumidity` (default `true`).
 - **Child Lock switch** — optional, controlled by `enableChildLockControl` (default `false`).
-
 - **LED Night Mode switch** — toggle LED indicator on/off.
 - **Mode AUTO ON/OFF and Mode NIGHT ON/OFF switches** — dedicated mode controls with guard logic (writes ignored when power is OFF).
 - **Filter Maintenance service** — `FilterLifeLevel` + `FilterChangeIndication` with configurable threshold (`filterChangeThreshold`, default `10`%).
