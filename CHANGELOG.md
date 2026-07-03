@@ -1,22 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-> Human-authored summaries of pending work on `main` go here. The
-> machine-generated version header (`## [x.y.z]`) and per-commit bullet list
-> are added by [semantic-release](https://semantic-release.gitbook.io/) on
-> the next merge to `main`, based on conventional commit messages.
-
-_Nothing pending._ Everything previously summarized in this section shipped in
-**v1.0.1 – v1.0.5** (transport auto-recovery, the retryable `-5001`/`-10000`
-handling, buzzer removal, the Homebridge 2.0.2 minimum, config-schema strict
-validation, and the diagnostics/UI fixes). The released version entries below
-are the source of truth for shipped versions.
+All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.5](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.4...v1.0.5) (2026-06-02)
 
