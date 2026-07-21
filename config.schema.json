@@ -20,6 +20,7 @@
       "devices": {
         "title": "Devices",
         "type": "array",
+        "maxItems": 50,
         "items": {
           "type": "object",
           "additionalProperties": false,
@@ -29,6 +30,7 @@
               "title": "Name",
               "type": "string",
               "minLength": 1,
+              "maxLength": 64,
               "placeholder": "Air Purifier",
               "description": "Display name for this accessory in HomeKit."
             },
@@ -111,6 +113,7 @@
               "type": "integer",
               "default": 15000,
               "minimum": 100,
+              "maximum": 600000,
               "description": "Timeout for MIIO handshake/connect operations."
             },
             "operationTimeoutMs": {
@@ -118,6 +121,7 @@
               "type": "integer",
               "default": 15000,
               "minimum": 100,
+              "maximum": 600000,
               "description": "Timeout for read/write operations after connection."
             },
             "reconnectDelayMs": {
@@ -125,6 +129,7 @@
               "type": "integer",
               "default": 15000,
               "minimum": 100,
+              "maximum": 600000,
               "description": "Maximum delay cap used by reconnect backoff policy (first retry starts fast, then increases up to this value)."
             },
             "keepAliveIntervalMs": {
@@ -132,6 +137,7 @@
               "type": "integer",
               "default": 60000,
               "minimum": 1000,
+              "maximum": 3600000,
               "description": "Background keep-alive poll interval."
             },
             "exposeFilterReplaceAlertSensor": {
@@ -145,6 +151,7 @@
               "type": "integer",
               "default": 10000,
               "minimum": 1000,
+              "maximum": 3600000,
               "description": "Polling interval for control-related state refresh."
             },
             "sensorPollIntervalMs": {
@@ -152,19 +159,21 @@
               "type": "integer",
               "default": 30000,
               "minimum": 1000,
+              "maximum": 3600000,
               "description": "Polling interval for slower sensor updates."
             },
             "maskDeviceAddressInLogs": {
               "title": "Mask Device IP in Logs",
               "type": "boolean",
-              "default": false,
-              "description": "Mask device IP address in runtime logs (for privacy-sensitive deployments)."
+              "default": true,
+              "description": "Mask device IP address in runtime logs (enabled by default; disable only if you need the full IP in logs)."
             },
             "transportResetThreshold": {
               "title": "Auto Transport Reset Threshold",
               "type": "integer",
               "default": 12,
               "minimum": 0,
+              "maximum": 1000,
               "description": "After this many consecutive failed polls, the plugin recreates the underlying UDP socket and MIIO session — equivalent to restarting Homebridge, but automatic. Recovers from device-side stuck states (e.g. <code>MIIO error -5001</code>). Set to <code>0</code> to disable."
             },
             "transportResetCooldownMs": {
@@ -172,6 +181,7 @@
               "type": "integer",
               "default": 300000,
               "minimum": 1000,
+              "maximum": 3600000,
               "description": "Minimum delay between two consecutive automatic transport resets. Prevents reset thrashing when the device is genuinely unreachable."
             }
           }

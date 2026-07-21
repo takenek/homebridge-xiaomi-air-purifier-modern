@@ -450,6 +450,65 @@ describe("device client uncovered branches", () => {
     await client.shutdown();
   });
 
+  it("applies backpressure by rejecting operations once the queue is full (A-04)", async () => {
+    const transport = new BranchTransport();
+    // Block writes so the operation chain cannot drain and the queue fills.
+    transport.setProperty = (): Promise<void> => new Promise<void>(() => {});
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 600_000,
+      sensorPollIntervalMs: 600_000,
+      maxQueuedOperations: 3,
+    });
+
+    const initPromise = client.init();
+    await vi.advanceTimersByTimeAsync(5);
+    await initPromise;
+
+    // First write runs and blocks on setProperty; the next two wait behind it.
+    // Queue depth reaches the cap (3).
+    const blocked = [
+      client.setPower(true),
+      client.setPower(false),
+      client.setPower(true),
+    ];
+    for (const p of blocked) {
+      p.catch(() => {});
+    }
+
+    // The next enqueue exceeds the cap and is rejected — the chain does not grow.
+    await expect(client.setLed(true)).rejects.toMatchObject({
+      code: "EQUEUEFULL",
+    });
+
+    await client.shutdown();
+  });
+
+  it("recovers autonomously after a failed init once the device comes back (A-06)", async () => {
+    const transport = new BranchTransport();
+    transport.throwsNonRetryable = true;
+    const logger = makeLogger();
+    const client = new DeviceClient(transport, logger, {
+      operationPollIntervalMs: 10,
+      sensorPollIntervalMs: 600_000,
+      keepAliveIntervalMs: 600_000,
+    });
+
+    // First init poll fails and init() still rejects (contract preserved) — but
+    // the polling timers are now running regardless.
+    await expect(client.init()).rejects.toBeInstanceOf(Error);
+
+    // Device comes back; a later timer poll reconnects with no Homebridge restart.
+    const events: string[] = [];
+    client.onConnectionEvent((event) => events.push(event.state));
+    transport.throwsNonRetryable = false;
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(client.state).toEqual(state);
+    expect(events).toContain("connected");
+    await client.shutdown();
+  });
+
   it("resolves delay immediately after shutdown without scheduling timer", async () => {
     const transport = new BranchTransport();
     const logger = makeLogger();

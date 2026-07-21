@@ -192,6 +192,41 @@ describe("platform plugin", () => {
     expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
   });
 
+  it("skips null and non-object device entries without aborting discovery (A-09)", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          null,
+          42,
+          {
+            name: "Valid",
+            address: "1.1.1.9",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Skipping invalid device entry #1: expected an object, received null.",
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Skipping invalid device entry #2: expected an object, received number.",
+    );
+    // The valid third device is still configured — a bad entry no longer
+    // aborts discovery for the rest of the list.
+    expect(api.registerPlatformAccessories).toHaveBeenCalledTimes(1);
+  });
+
   it("logs and continues when a device config is invalid", () => {
     const api = makeApi();
     const logger = makeLogger();
@@ -303,6 +338,32 @@ describe("platform plugin", () => {
             sensorPollIntervalMs: 5000,
             exposeFilterReplaceAlertSensor: true,
             maskDeviceAddressInLogs: true,
+          },
+        ],
+      } as never,
+      api as never,
+    );
+
+    api.emit("didFinishLaunching");
+
+    expect(api.registerPlatformAccessories).toHaveBeenCalled();
+  });
+
+  it("keeps the full device address in logs when masking is explicitly disabled (A-08)", () => {
+    const api = makeApi();
+    const logger = makeLogger();
+
+    new XiaomiAirPurifierPlatform(
+      logger as never,
+      {
+        platform: PLATFORM_NAME,
+        devices: [
+          {
+            name: "Unmasked",
+            address: "1.1.1.5",
+            token: "00112233445566778899aabbccddeeff",
+            model: "zhimi.airpurifier.3h",
+            maskDeviceAddressInLogs: false,
           },
         ],
       } as never,

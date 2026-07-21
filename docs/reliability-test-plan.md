@@ -94,6 +94,21 @@ All scenarios below are covered in tests (`test/network-scenarios.test.ts` and a
    - **When** next state refresh runs.
    - **Then** `FilterChangeIndication` is reset from `1` to `0` (`FILTER_OK`).
 
+10. **[S10] Device offline at startup, recovered later (A-06)**
+    - **Given** the device is unreachable when the plugin starts, so the first
+      poll fails and `init()` rejects (the accessory logs the initial failure).
+    - **When** the device later comes back online.
+    - **Then** the supervised polling timers — which now start regardless of the
+      initial poll outcome — reconnect and emit `connected` **without** a
+      Homebridge restart.
+
+11. **[S11] Operation queue backpressure (A-04)**
+    - **Given** the device is slow/unreachable so operations cannot drain.
+    - **When** queued operations reach `maxQueuedOperations` (default 64).
+    - **Then** further enqueues are rejected with `EQUEUEFULL` instead of the
+      chain (and its retained memory) growing without bound; the poll path logs
+      it and a HAP write surfaces the error.
+
 ## How to run
 
 ```bash

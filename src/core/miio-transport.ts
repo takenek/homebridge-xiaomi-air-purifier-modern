@@ -740,26 +740,25 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     const encryptedPayload = response.subarray(32);
-
-    /* c8 ignore start -- checksum verification is best-effort diagnostic; both branches tested via corrupt-checksum test + normal happy-path tests, but v8 branch counter requires both in the same compiled function frame. */
-    if (encryptedPayload.length > 0) {
-      const expectedChecksum = toMd5(
-        response.subarray(0, 16),
-        this.token,
-        encryptedPayload,
-      );
-      const actualChecksum = response.subarray(16, 32);
-      if (!expectedChecksum.equals(actualChecksum)) {
-        this.reportSuppressedError(
-          "checksum",
-          new Error("Response checksum mismatch — possible corrupt packet"),
-        );
-      }
-    }
-    /* c8 ignore stop */
-
     if (encryptedPayload.length === 0) {
       return null;
+    }
+
+    // A-01 (CWE-345 / CWE-346): the token-keyed MD5 checksum is the only
+    // secret-dependent authenticity/integrity control on a MIIO reply. Enforce
+    // it fail-closed — a mismatch means the datagram was corrupted, spoofed or
+    // replayed by a party that does not hold the device token, so it is rejected
+    // and treated as a transport error (retry path via EPROTO), never decrypted
+    // or parsed. A genuine device reply can never legitimately fail this check.
+    const expectedChecksum = toMd5(
+      response.subarray(0, 16),
+      this.token,
+      encryptedPayload,
+    );
+    if (!expectedChecksum.equals(response.subarray(16, 32))) {
+      throw Object.assign(new Error("Response checksum mismatch"), {
+        code: "EPROTO",
+      });
     }
 
     let parsed: MiioResponsePayload;
@@ -771,6 +770,16 @@ export class ModernMiioTransport implements MiioTransport {
       /* c8 ignore next -- JSON.parse always throws SyntaxError (an Error subclass) in Node.js; the non-Error branch is a defensive TypeScript guard. */
       const reason = error instanceof Error ? error.message : String(error);
       throw new Error(`Malformed MIIO JSON response for ${method}: ${reason}`);
+    }
+
+    // A-01 (CWE-345): correlate the decrypted response id with the request id so
+    // a captured/replayed reply belonging to a different request cannot be
+    // accepted as the answer to this one. Firmware that omits `id` is tolerated
+    // (undefined); a present-but-mismatched id is rejected as a transport error.
+    if (parsed.id !== undefined && parsed.id !== requestId) {
+      throw Object.assign(new Error("Response id mismatch"), {
+        code: "EPROTO",
+      });
     }
 
     if (parsed.error) {
@@ -815,7 +824,20 @@ export class ModernMiioTransport implements MiioTransport {
         reject(error);
       }, options.timeoutMs);
 
-      const onMessage = (message: Buffer) => {
+      const onMessage = (message: Buffer, rinfo?: dgram.RemoteInfo) => {
+        // A-03 (CWE-346 / CWE-940): only accept datagrams that actually came
+        // from the configured device endpoint (address + MIIO port). Node's
+        // dgram always supplies `rinfo` on the 'message' event, so in production
+        // a foreign/spoofed sender is dropped here; this narrows the window for
+        // response substitution/replay (defence-in-depth for A-01) and rejects
+        // injected packets that would otherwise force a decrypt/parse failure.
+        if (
+          rinfo !== undefined &&
+          (rinfo.address !== this.options.address || rinfo.port !== MIIO_PORT)
+        ) {
+          return;
+        }
+
         if (message.length < 16) {
           return;
         }

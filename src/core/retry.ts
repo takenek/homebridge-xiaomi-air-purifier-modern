@@ -26,6 +26,10 @@ export const computeBackoffDelay = (
 
 export const RETRYABLE_ERROR_CODES = new Set<string>([
   "EDEVICEUNAVAILABLE",
+  // A-01: rejected response (bad token-keyed checksum or mismatched response id)
+  // is surfaced as EPROTO and treated as a transient transport fault — retry the
+  // request rather than trusting a corrupt/spoofed/replayed datagram.
+  "EPROTO",
   "ETIMEDOUT",
   "ESOCKETTIMEDOUT",
   "ECONNRESET",

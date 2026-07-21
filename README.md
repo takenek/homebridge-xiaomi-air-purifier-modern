@@ -118,7 +118,7 @@ This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a
 | `sensorPollIntervalMs` | integer | No | Polling interval for slower sensor updates (temperature, humidity, AQI) in milliseconds (default `30000`, min `1000`) |
 | `transportResetThreshold` | integer | No | After this many consecutive failed polls the plugin recreates the underlying UDP socket and MIIO session — equivalent to restarting Homebridge, but automatic. Set to `0` to disable. Default `12` (≈2 min at the default 10 s operation cadence). |
 | `transportResetCooldownMs` | integer | No | Minimum delay between two consecutive automatic transport resets, in milliseconds. Prevents reset thrashing when the device is genuinely unreachable. Default `300000` (5 min). |
-| `maskDeviceAddressInLogs` | boolean | No | Masks device IP address in plugin logs (`10.10.*.*`) for privacy-sensitive setups (default `false`) |
+| `maskDeviceAddressInLogs` | boolean | No | Masks the device IP address in plugin logs (`10.10.*.*`). **Enabled by default**; set to `false` only if you need the full IP in logs |
 | `_bridge` | object | No | Optional child bridge configuration |
 
 ### Known model strings
@@ -231,7 +231,17 @@ Because MIIO uses local UDP (54321) without TLS, treat purifier traffic as trust
 1. Put IoT devices in a dedicated VLAN / SSID.
 2. Allow only Homebridge host ↔ purifier UDP 54321 in ACL/firewall rules.
 3. Block WAN egress from IoT VLAN when possible.
-4. Enable `maskDeviceAddressInLogs` when log forwarding goes to shared SIEM or external support channels.
+4. Keep `maskDeviceAddressInLogs` enabled (the default) when log forwarding goes to a shared SIEM or external support channels.
+
+### Device response integrity
+
+Responses from the device are authenticated defensively before they are trusted:
+
+- The token-keyed MD5 checksum on every reply is **enforced fail-closed** — a datagram whose checksum does not match is rejected (treated as a transient transport error and retried), never decrypted or acted upon. Only a party holding the device token can produce a valid checksum.
+- The decrypted response id is correlated with the request id, so a captured/replayed reply belonging to a different request is not accepted.
+- Only datagrams originating from the configured device address and MIIO port are accepted; packets from any other source on the LAN are ignored.
+
+These checks reduce the risk of response spoofing/replay on an untrusted LAN, but they are defence-in-depth — network segmentation (above) is still the primary control.
 
 ---
 

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createScopedLogger } from "../src/core/scoped-logger";
+import {
+  createScopedLogger,
+  sanitizeLogMessage,
+} from "../src/core/scoped-logger";
 
 const makeBase = () => ({
   debug: vi.fn(),
@@ -50,5 +53,25 @@ describe("createScopedLogger", () => {
       "[Bedroom] Device read failed",
     );
     expect(base.warn).toHaveBeenNthCalledWith(2, "[Office] Device read failed");
+  });
+
+  it("neutralizes control characters in the label and every message (A-07)", () => {
+    const base = makeBase();
+    const log = createScopedLogger(base, "Bed\r\nroom");
+
+    log.info("device said: ok\r\nFAKE ERROR line");
+
+    // Both the injected CR/LF in the label and in the message are collapsed to
+    // spaces, so a crafted name or device error text cannot forge a log line.
+    expect(base.info).toHaveBeenCalledWith(
+      "[Bed  room] device said: ok  FAKE ERROR line",
+    );
+  });
+});
+
+describe("sanitizeLogMessage", () => {
+  it("replaces CR, LF and other control characters with spaces (A-07)", () => {
+    expect(sanitizeLogMessage("line1\r\nline2\tend")).toBe("line1  line2 end");
+    expect(sanitizeLogMessage("clean text")).toBe("clean text");
   });
 });

@@ -1,5 +1,13 @@
 name: Label PRs
 
+# SECURITY GUARDRAIL (I-04): this workflow uses `pull_request_target`, which runs
+# with repository write scope and secrets in the context of the BASE repo. It is
+# safe ONLY because it never checks out or executes PR-authored code — it just
+# runs actions/labeler against changed file paths. DO NOT add `actions/checkout`
+# of the PR head, `npm ci`/build/test of PR code, or any step that executes
+# untrusted PR content here (classic Poisoned Pipeline Execution vector). If PR
+# code must run, move it to a `pull_request`-triggered workflow with least
+# privilege. Keep `permissions` minimal.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]

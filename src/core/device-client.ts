@@ -42,10 +42,19 @@ export interface DeviceClientOptions {
    * unreachable. Default 5 minutes.
    */
   transportResetCooldownMs?: number;
+  /**
+   * Upper bound on the number of operations (polls + HAP writes) that may be
+   * queued at once. Enforces backpressure (A-04, CWE-400): once the serialized
+   * operation chain reaches this depth, further enqueues are rejected with an
+   * `EQUEUEFULL` error instead of growing the chain (and memory) without limit
+   * when the device is slow/unreachable. Default 64.
+   */
+  maxQueuedOperations?: number;
 }
 
 const DEFAULT_TRANSPORT_RESET_THRESHOLD = 12;
 const DEFAULT_TRANSPORT_RESET_COOLDOWN_MS = 5 * 60 * 1000;
+const DEFAULT_MAX_QUEUED_OPERATIONS = 64;
 
 export type ConnectionStateEvent = {
   state: "connected" | "disconnected" | "reconnected";
@@ -61,6 +70,8 @@ export class DeviceClient {
   private readonly randomFn: () => number;
   private readonly transportResetThreshold: number;
   private readonly transportResetCooldownMs: number;
+  private readonly maxQueuedOperations: number;
+  private queuedOperationCount = 0;
   private operationTimer: NodeJS.Timeout | undefined;
   private sensorTimer: NodeJS.Timeout | undefined;
   private keepAliveTimer: NodeJS.Timeout | undefined;
@@ -98,6 +109,8 @@ export class DeviceClient {
       options.transportResetThreshold ?? DEFAULT_TRANSPORT_RESET_THRESHOLD;
     this.transportResetCooldownMs =
       options.transportResetCooldownMs ?? DEFAULT_TRANSPORT_RESET_COOLDOWN_MS;
+    this.maxQueuedOperations =
+      options.maxQueuedOperations ?? DEFAULT_MAX_QUEUED_OPERATIONS;
   }
 
   public get state(): DeviceState | null {
@@ -125,14 +138,29 @@ export class DeviceClient {
   }
 
   public async init(): Promise<void> {
-    await this.enqueueOperation(async () => {
-      await this.pollWithRetry();
-    });
+    // A-06 (CWE-755): start the supervised polling timers even when the first
+    // poll fails, so a device that is offline at startup recovers on its own
+    // once it comes back — instead of staying dead until Homebridge is
+    // restarted. The initial failure is still surfaced to the caller (the
+    // accessory logs it), but recovery no longer depends on it succeeding.
+    let initError: unknown;
+    try {
+      await this.enqueueOperation(async () => {
+        await this.pollWithRetry();
+      });
+    } catch (error: unknown) {
+      initError = error;
+    }
+
     if (this.destroyed) {
       return;
     }
 
     this.startPolling();
+
+    if (initError !== undefined) {
+      throw initError;
+    }
   }
 
   public async shutdown(): Promise<void> {
@@ -200,6 +228,21 @@ export class DeviceClient {
   }
 
   private async enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    // A-04 (CWE-400): bound the serialized operation chain. Three poll timers
+    // and HAP writes all append to this chain; if the device is slow/unreachable
+    // the chain (and its retained memory) would otherwise grow without limit.
+    // Reject once the depth cap is hit — the poll path logs it, a HAP write
+    // surfaces it — instead of degrading the whole Homebridge process.
+    if (this.queuedOperationCount >= this.maxQueuedOperations) {
+      throw Object.assign(
+        new Error(
+          `Operation queue is full (${this.queuedOperationCount} pending); rejecting request to apply backpressure.`,
+        ),
+        { code: "EQUEUEFULL" },
+      );
+    }
+
+    this.queuedOperationCount += 1;
     let release: (() => void) | undefined;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
@@ -218,6 +261,7 @@ export class DeviceClient {
       return await operation();
     } finally {
       release?.();
+      this.queuedOperationCount -= 1;
     }
   }
 

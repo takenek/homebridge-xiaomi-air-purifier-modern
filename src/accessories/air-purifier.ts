@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   API,
   CharacteristicValue,
@@ -594,7 +595,13 @@ export class AirPurifierAccessory {
   }
 
   private buildSerialNumber(ipAddress: string): string {
-    return `miap-${ipAddress.replaceAll(".", "-")}`;
+    // A-08 (CWE-200): derive a stable, non-reversible SerialNumber from the
+    // address instead of embedding the raw IP. The SerialNumber is visible to
+    // paired HomeKit controllers, so the previous `miap-<ip>` form leaked LAN
+    // topology. The hash is deterministic per address (stable HomeKit identity)
+    // but does not disclose the address itself.
+    const digest = createHash("sha256").update(ipAddress).digest("hex");
+    return `miap-${digest.slice(0, 12)}`;
   }
 
   private logConnectionEvent(event: ConnectionStateEvent): void {

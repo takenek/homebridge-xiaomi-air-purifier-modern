@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
 import { ModernMiioTransport } from "../src/core/miio-transport";
@@ -191,7 +192,15 @@ describe("AirPurifierAccessory switch contract", () => {
     const serialCall = infoService.setCalls.find(
       (call) => call.characteristic === "serial",
     );
-    expect(serialCall?.value).toBe("miap-10-0-*-*");
+    // A-08: SerialNumber is a stable, non-reversible hash of the address — it
+    // must be deterministic per address but must not embed the raw address.
+    const expectedSerial = `miap-${createHash("sha256")
+      .update("10.0.*.*")
+      .digest("hex")
+      .slice(0, 12)}`;
+    expect(serialCall?.value).toBe(expectedSerial);
+    expect(serialCall?.value).toMatch(/^miap-[0-9a-f]{12}$/);
+    expect(serialCall?.value).not.toContain("10-0");
 
     client.connectionListeners[0]?.({ state: "connected" });
     client.connectionListeners[0]?.({ state: "reconnected" });

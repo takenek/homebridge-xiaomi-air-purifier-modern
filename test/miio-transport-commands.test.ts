@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +38,27 @@ const createTransport = () =>
     connectTimeoutMs: 20,
     operationTimeoutMs: 20,
   });
+
+// A-01: build a MIIO command-response envelope with a VALID token-keyed
+// checksum, so the fail-closed verification in sendCommand accepts it exactly
+// as it would a genuine device reply. Payloads without an `id` field are
+// tolerated by the id-correlation check (undefined id).
+const signResponse = (
+  transport: ModernMiioTransport,
+  encryptedPayload: Buffer,
+): Buffer => {
+  const token = (transport as unknown as { token: Buffer }).token;
+  const header = Buffer.alloc(32, 0);
+  header.writeUInt16BE(0x2131, 0);
+  header.writeUInt16BE(32 + encryptedPayload.length, 2);
+  const checksum = createHash("md5")
+    .update(header.subarray(0, 16))
+    .update(token)
+    .update(encryptedPayload)
+    .digest();
+  checksum.copy(header, 16);
+  return Buffer.concat([header, encryptedPayload]);
+};
 
 describe("ModernMiioTransport commands and low-level transport", () => {
   it("validates token and supports logger-based suppressed error reporting", async () => {
@@ -125,7 +147,7 @@ describe("ModernMiioTransport commands and low-level transport", () => {
 
     const cipherPayload = internals.encrypt(Buffer.from("not-json", "utf8"));
     vi.spyOn(internals, "sendAndReceive").mockResolvedValue(
-      Buffer.concat([Buffer.alloc(32), cipherPayload]),
+      signResponse(transport, cipherPayload),
     );
     await expect(internals.sendCommand("x", [])).rejects.toThrow(
       "Malformed MIIO JSON response",
@@ -138,7 +160,7 @@ describe("ModernMiioTransport commands and low-level transport", () => {
       ),
     );
     vi.spyOn(internals, "sendAndReceive").mockResolvedValue(
-      Buffer.concat([Buffer.alloc(32), errPayload]),
+      signResponse(transport, errPayload),
     );
     await expect(internals.sendCommand("x", [])).rejects.toMatchObject({
       code: "-1",
@@ -148,7 +170,7 @@ describe("ModernMiioTransport commands and low-level transport", () => {
       Buffer.from(JSON.stringify({ result: ["ok"] }), "utf8"),
     );
     vi.spyOn(internals, "sendAndReceive").mockResolvedValue(
-      Buffer.concat([Buffer.alloc(32), okPayload]),
+      signResponse(transport, okPayload),
     );
     await expect(internals.sendCommand("x", [])).resolves.toEqual(["ok"]);
 
@@ -349,7 +371,7 @@ it("does not re-handshake for unrecoverable MIIO command errors", async () => {
     ),
   );
   vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
-    Buffer.concat([Buffer.alloc(32), errPayload]),
+    signResponse(transport, errPayload),
   );
 
   try {
@@ -392,7 +414,7 @@ it("does re-handshake for recoverable MIIO command errors (-5001)", async () => 
     ),
   );
   vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
-    Buffer.concat([Buffer.alloc(32), errPayload]),
+    signResponse(transport, errPayload),
   );
 
   try {
@@ -438,7 +460,7 @@ it("covers suppressed error formatting branches and MIIO error without code", as
     Buffer.from(JSON.stringify({ error: { message: undefined } }), "utf8"),
   );
   vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
-    Buffer.concat([Buffer.alloc(32), errPayload]),
+    signResponse(transport, errPayload),
   );
   await expect(internals.sendCommand("x", [])).rejects.toThrow(
     "MIIO error: Unknown",
@@ -586,7 +608,7 @@ it("covers remaining branch variants in MIOT helpers", async () => {
 
   internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
   vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
-    Buffer.concat([Buffer.alloc(32), Buffer.from([1, 2, 3])]),
+    signResponse(transport, Buffer.from([1, 2, 3])),
   );
   vi.spyOn(internals, "decrypt").mockImplementation(() => {
     throw "not-an-error";
@@ -598,7 +620,7 @@ it("covers remaining branch variants in MIOT helpers", async () => {
   await transport.close();
 });
 
-it("reports suppressed error on response checksum mismatch", async () => {
+it("rejects a response with an invalid token-keyed checksum (fail-closed, A-01)", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
     session: {
@@ -617,26 +639,159 @@ it("reports suppressed error on response checksum mismatch", async () => {
       method: string,
       params: readonly unknown[],
     ) => Promise<unknown>;
-    reportSuppressedError: (context: string, error: unknown) => void;
   };
 
   internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
   const okPayload = internals.encrypt(
     Buffer.from(JSON.stringify({ result: ["ok"] }), "utf8"),
   );
-  // Build a response with correct header but corrupted checksum (bytes 16-32)
+  // Correct header magic/length but a deliberately wrong checksum (bytes 16-32),
+  // as a corrupt/spoofed datagram would present. It must be rejected, never
+  // decrypted or parsed.
   const header = Buffer.alloc(32, 0);
-  header.fill(0xff, 16, 32); // wrong checksum
-  const corruptResponse = Buffer.concat([header, okPayload]);
+  header.writeUInt16BE(0x2131, 0);
+  header.writeUInt16BE(32 + okPayload.length, 2);
+  header.fill(0xff, 16, 32);
+  const forgedResponse = Buffer.concat([header, okPayload]);
 
-  vi.spyOn(internals, "sendAndReceive").mockResolvedValue(corruptResponse);
-  const spy = vi.spyOn(internals, "reportSuppressedError");
+  vi.spyOn(internals, "sendAndReceive").mockResolvedValue(forgedResponse);
 
-  await internals.sendCommand("get_prop", []);
-  expect(spy).toHaveBeenCalledWith(
-    "checksum",
-    expect.objectContaining({ message: expect.stringContaining("checksum") }),
+  await expect(internals.sendCommand("get_prop", [])).rejects.toMatchObject({
+    code: "EPROTO",
+    message: expect.stringContaining("checksum"),
+  });
+
+  await transport.close();
+});
+
+it("rejects a valid-checksum response whose decrypted id mismatches the request (A-01)", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    session: {
+      deviceId: number;
+      deviceStamp: number;
+      handshakeAtEpochSec: number;
+    } | null;
+    nextMessageId: number;
+    encrypt: (payload: Buffer) => Buffer;
+    sendAndReceive: (
+      packet: Buffer,
+      expectEncrypted: boolean,
+      expectedResponseId?: number,
+      options?: { timeoutMs: number },
+    ) => Promise<Buffer>;
+    sendCommand: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<unknown>;
+  };
+
+  internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
+  // A correctly-signed reply, but carrying the id of a DIFFERENT request
+  // (a replay/substitution). Must be rejected even though the checksum is valid.
+  const foreignId = internals.nextMessageId + 12345;
+  const payload = internals.encrypt(
+    Buffer.from(JSON.stringify({ id: foreignId, result: ["stale"] }), "utf8"),
   );
+  vi.spyOn(internals, "sendAndReceive").mockResolvedValue(
+    signResponse(transport, payload),
+  );
+
+  await expect(internals.sendCommand("get_prop", [])).rejects.toMatchObject({
+    code: "EPROTO",
+    message: expect.stringContaining("id mismatch"),
+  });
+
+  await transport.close();
+});
+
+it("accepts a valid-checksum response whose decrypted id matches the request (A-01)", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    session: {
+      deviceId: number;
+      deviceStamp: number;
+      handshakeAtEpochSec: number;
+    } | null;
+    nextMessageId: number;
+    encrypt: (payload: Buffer) => Buffer;
+    sendAndReceive: (
+      packet: Buffer,
+      expectEncrypted: boolean,
+      expectedResponseId?: number,
+      options?: { timeoutMs: number },
+    ) => Promise<Buffer>;
+    sendCommand: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<unknown>;
+  };
+
+  internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
+  const requestId = internals.nextMessageId;
+  const payload = internals.encrypt(
+    Buffer.from(JSON.stringify({ id: requestId, result: ["fresh"] }), "utf8"),
+  );
+  vi.spyOn(internals, "sendAndReceive").mockResolvedValue(
+    signResponse(transport, payload),
+  );
+
+  await expect(internals.sendCommand("get_prop", [])).resolves.toEqual([
+    "fresh",
+  ]);
+
+  await transport.close();
+});
+
+it("ignores datagrams from a foreign source address or port (A-03)", async () => {
+  const fakeSocket = new FakeSocket();
+  vi.spyOn(dgram, "createSocket").mockReturnValue(
+    fakeSocket as unknown as dgram.Socket,
+  );
+  const transport = createTransport(); // configured address 127.0.0.1
+  const internals = transport as unknown as {
+    sendAndReceive: (
+      packet: Buffer,
+      expectEncrypted: boolean,
+      expectedResponseId?: number,
+      options?: { timeoutMs: number },
+    ) => Promise<Buffer>;
+  };
+
+  const pending = internals.sendAndReceive(Buffer.alloc(32), false, undefined, {
+    timeoutMs: 50,
+  });
+
+  const makeFrame = () => {
+    const frame = Buffer.alloc(40);
+    frame.writeUInt16BE(0x2131, 0);
+    return frame;
+  };
+
+  // Foreign source address → dropped.
+  fakeSocket.emit("message", makeFrame(), {
+    address: "10.9.9.9",
+    port: 54321,
+    family: "IPv4",
+    size: 40,
+  });
+  // Configured address but wrong source port → dropped.
+  fakeSocket.emit("message", makeFrame(), {
+    address: "127.0.0.1",
+    port: 12345,
+    family: "IPv4",
+    size: 40,
+  });
+  // Correct source endpoint → accepted.
+  const ok = makeFrame();
+  fakeSocket.emit("message", ok, {
+    address: "127.0.0.1",
+    port: 54321,
+    family: "IPv4",
+    size: 40,
+  });
+
+  await expect(pending).resolves.toBe(ok);
 
   await transport.close();
 });

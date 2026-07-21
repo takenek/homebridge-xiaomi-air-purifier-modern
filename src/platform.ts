@@ -10,7 +10,7 @@ import { AirPurifierAccessory } from "./accessories/air-purifier";
 import { DeviceClient } from "./core/device-client";
 import { ModernMiioTransport } from "./core/miio-transport";
 import { DEFAULT_RETRY_POLICY } from "./core/retry";
-import { createScopedLogger } from "./core/scoped-logger";
+import { createScopedLogger, sanitizeLogMessage } from "./core/scoped-logger";
 import type { AirPurifierModel } from "./core/types";
 
 export const PLATFORM_NAME = "XiaomiMiAirPurifier";
@@ -72,7 +72,9 @@ export const formatDeviceLabel = (
   index: number,
 ): string => {
   const number = `#${index + 1}`;
-  const name = trimOrEmpty(config.name);
+  // A-07/A-09: tolerate a null/non-object entry (optional chaining) and strip
+  // control characters from the untrusted name before it reaches the log.
+  const name = sanitizeLogMessage(trimOrEmpty(config?.name));
   return name ? `${number} ("${name}")` : number;
 };
 
@@ -148,6 +150,17 @@ export const normalizeThreshold = (value: unknown): number => {
   return Math.max(0, Math.min(100, Math.round(numericValue)));
 };
 
+// A-05 (CWE-20 / CWE-400): hard upper bound for any value that feeds a Node.js
+// timer. Node clamps a delay above the signed-32-bit limit (~24.8 days) to 1 ms,
+// so an unbounded "very long" interval silently degrades into a 1 ms busy loop.
+// 24 h sits comfortably below that ceiling while covering every realistic
+// interval/timeout, and stops a misconfigured value from becoming a hot loop.
+export const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+// A-05: defence-in-depth cap for the auto-reset threshold. A genuinely useful
+// value is a handful; anything beyond this is a configuration mistake.
+export const MAX_RESET_THRESHOLD = 1000;
+
 export const normalizeTimeout = (
   value: unknown,
   fallbackMs: number,
@@ -157,18 +170,19 @@ export const normalizeTimeout = (
     return fallbackMs;
   }
 
-  return Math.max(minMs, Math.round(value));
+  return Math.min(MAX_TIMEOUT_MS, Math.max(minMs, Math.round(value)));
 };
 
 export const normalizeNonNegativeInt = (
   value: unknown,
   fallback: number,
+  max = Number.MAX_SAFE_INTEGER,
 ): number => {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return fallback;
   }
 
-  return Math.max(0, Math.round(value));
+  return Math.min(max, Math.max(0, Math.round(value)));
 };
 
 export const normalizeBoolean = (
@@ -211,6 +225,19 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
 
   private discoverDevices(): void {
     this.devices.forEach((deviceConfig, index) => {
+      // A-09 (CWE-20): reject a null/non-object list entry with an index-based
+      // label BEFORE any dereference. Otherwise a `null` entry throws inside
+      // setupDevice, and the catch block's formatDeviceLabel dereferences it
+      // again — the secondary exception escapes forEach and aborts discovery
+      // (and stale-accessory cleanup) for every remaining device.
+      if (deviceConfig === null || typeof deviceConfig !== "object") {
+        const received = deviceConfig === null ? "null" : typeof deviceConfig;
+        this.log.error(
+          `Skipping invalid device entry #${index + 1}: expected an object, received ${received}.`,
+        );
+        return;
+      }
+
       try {
         this.setupDevice(deviceConfig);
       } catch (error: unknown) {
@@ -280,6 +307,7 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
     const transportResetThreshold = normalizeNonNegativeInt(
       deviceConfig.transportResetThreshold,
       12,
+      MAX_RESET_THRESHOLD,
     );
     const transportResetCooldownMs = normalizeTimeout(
       deviceConfig.transportResetCooldownMs,
@@ -295,9 +323,11 @@ export class XiaomiAirPurifierPlatform implements DynamicPlatformPlugin {
       false,
     );
 
+    // A-08 (CWE-200): mask the device IP in logs by default so the LAN topology
+    // is not exposed in runtime logs unless the operator explicitly opts out.
     const maskDeviceAddressInLogs = normalizeBoolean(
       deviceConfig.maskDeviceAddressInLogs,
-      false,
+      true,
     );
     const displayAddress = maskDeviceAddressInLogs
       ? maskAddress(address)

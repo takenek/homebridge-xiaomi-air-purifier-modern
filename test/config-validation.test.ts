@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatDeviceLabel,
+  MAX_TIMEOUT_MS,
   maskAddress,
   normalizeBoolean,
   normalizeNonNegativeInt,
@@ -181,6 +182,19 @@ describe("formatDeviceLabel", () => {
   it("trims the displayed name", () => {
     expect(formatDeviceLabel({ name: "  Hania  " }, 2)).toBe('#3 ("Hania")');
   });
+
+  it("tolerates a null/non-object entry without dereferencing it (A-09)", () => {
+    expect(formatDeviceLabel(null as unknown as { name?: string }, 5)).toBe(
+      "#6",
+    );
+    expect(formatDeviceLabel(42 as unknown as { name?: string }, 0)).toBe("#1");
+  });
+
+  it("strips control characters from the displayed name (A-07)", () => {
+    expect(formatDeviceLabel({ name: "Bed\r\nroom" }, 0)).toBe(
+      '#1 ("Bed  room")',
+    );
+  });
 });
 
 describe("normalize helpers", () => {
@@ -201,6 +215,20 @@ describe("normalize helpers", () => {
     expect(normalizeTimeout(50, 5000)).toBe(100); // min 100
     expect(normalizeTimeout(200, 5000)).toBe(200);
     expect(normalizeTimeout(500, 5000, 1000)).toBe(1000); // custom min
+  });
+
+  it("normalizeTimeout caps values above the safe upper bound (A-05)", () => {
+    // A value beyond Node's 32-bit timer ceiling must be clamped, not passed
+    // through (where it would silently become a 1 ms busy loop).
+    expect(normalizeTimeout(Number.MAX_SAFE_INTEGER, 5000)).toBe(
+      MAX_TIMEOUT_MS,
+    );
+    expect(normalizeTimeout(MAX_TIMEOUT_MS + 1, 5000)).toBe(MAX_TIMEOUT_MS);
+  });
+
+  it("normalizeNonNegativeInt caps values above the provided max (A-05)", () => {
+    expect(normalizeNonNegativeInt(5000, 12, 1000)).toBe(1000); // capped
+    expect(normalizeNonNegativeInt(500, 12, 1000)).toBe(500); // under cap
   });
 
   it("normalizeBoolean handles edge cases", () => {

@@ -1,5 +1,20 @@
 # Homebridge Plugin Audit Report — v13
 
+> **HISTORICAL DOCUMENT — describes v1.0.0 (audited 2026-03-24).**
+> This report reflects the state of the codebase at v1.0.0 and is retained for
+> historical context only. Some statements are no longer an accurate description
+> of the current code. In particular, following the Stage 5 security remediation
+> (see `STAGE_5_REMEDIATION_IMPLEMENTATION.md`):
+> - the MIIO response checksum is now **enforced fail-closed** and the response
+>   id is correlated with the request (previously the checksum was computed but
+>   only logged on mismatch — the "Checksum verification ✅" row in §6.2 was
+>   aspirational for v1.0.0 and is only now backed by enforcement);
+> - the HomeKit `SerialNumber` is now a **non-reversible hash** of the address,
+>   not the raw IP (§6.1);
+> - device IP masking in logs is now **enabled by default** (§5.6 / §6.1).
+> Do not treat the ✅ marks below as a description of the current release; consult
+> the Stage 4/Stage 5 security artifacts for the authoritative current state.
+
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
 **Data audytu:** 2026-03-24
