@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.5...v1.0.6) (2026-07-21)
+
+
+### Bug Fixes
+
+* harden MIIO transport, device client, config and release pipeline ([4cc3bc6](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/4cc3bc6937406711531504c397af0b2cf7e97fd9))
+
 ## [1.0.5](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.4...v1.0.5) (2026-06-02)
 
 
