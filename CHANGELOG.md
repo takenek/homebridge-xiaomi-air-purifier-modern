@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.6...v1.0.7) (2026-07-31)
+
+
+### Bug Fixes
+
+* **deps:** bump postcss to 8.5.25 to fix GHSA-r28c-9q8g-f849 ([#243](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/243)) ([7d41ca1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/7d41ca1edaccd3805706e5614d07670aec931cae)), closes [hi#severity](https://github.com/hi/issues/severity)
+
 ## [1.0.6](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.5...v1.0.6) (2026-07-21)
 
 
