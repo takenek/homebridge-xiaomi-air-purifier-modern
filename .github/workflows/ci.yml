@@ -20,10 +20,8 @@ jobs:
       matrix:
         include:
           - node: 22
-            homebridge: "2.0.2"
             lane: full
           - node: 24
-            homebridge: "2.0.2"
             lane: full
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,7 +30,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm install --no-save homebridge@${{ matrix.homebridge }}
+      - run: npm install --no-save --package-lock=false homebridge@2.0.2
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -40,7 +38,7 @@ jobs:
         if: always() && matrix.lane == 'full'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage-node-${{ matrix.node }}-hb-${{ matrix.homebridge }}-lane-${{ matrix.lane }}
+          name: coverage-node-${{ matrix.node }}-lane-${{ matrix.lane }}
           path: coverage
 
   audit:
