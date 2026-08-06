@@ -12,7 +12,9 @@
 
 Please do **not** open public GitHub issues for security vulnerabilities.
 
-Report vulnerabilities by opening a private GitHub Security Advisory in this repository.
+Submit security vulnerabilities privately using the
+[GitHub private vulnerability reporting form](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/security/advisories/new).
+
 Include:
 
 - affected version,
