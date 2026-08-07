@@ -473,7 +473,7 @@
 - ✅ **Matrix coverage:** Node 22/24 × HB 2.0.2 stable (full lanes only); HB 2.0 GA, więc `beta` lane jest niepotrzebny i został usunięty.
 - ✅ **Smoke lane:** pomija upload coverage, ale uruchamia lint+typecheck+test
 - ✅ **npm ci** zamiast `npm install` — reprodukowalność
-- ✅ **`homebridge@2.0.2` install** z `--no-save` — nie modyfikuje package-lock.json (CI matrix instaluje wersję per-cell przez `npm install --no-save`)
+- ✅ **`homebridge@2.0.2` install** z `--no-save` — instaluje minimalną wspieraną wersję (test „podłogi" zakresu `^2.0.2`) bez modyfikowania `package.json` ani `package-lock.json`. Samo `--no-save` wystarcza, by lockfile nie został przepisany. Towarzysząca mu wcześniej flaga `--package-lock=false` została usunięta, ponieważ sprawiała, że npm ignorował lockfile także jako **wejście** rozwiązywania zależności i przeliczał całe drzewo z zakresów semver — dryfowało 39 pakietów zamiast 16, w tym `@biomejs/biome`, `vite` i `postcss` (to ostatnie cofało pin 8.5.25 z GHSA-r28c-9q8g-f849). Uwaga: krok nadal nie jest w pełni deterministyczny — 4 pakiety wewnątrz poddrzewa `homebridge` (`@homebridge/dbus-native`, `@noble/curves`, `@noble/hashes`, `sax`) są rozwiązywane na świeżo z zakresów `^`, ponieważ `@homebridge/hap-nodejs@2.1.6` nie występuje w lockfile. Nie dotyczą one toolchainu lint/typecheck/test.
 - ✅ **Artifact naming:** unique per matrix combination
 - ✅ **Audit job:** oddzielny, parallel z test matrix
 
