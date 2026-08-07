@@ -30,7 +30,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm install --no-save --package-lock=false homebridge@2.0.2
+      - run: npm install --no-save homebridge@2.0.2
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
