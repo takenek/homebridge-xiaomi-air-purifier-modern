@@ -287,7 +287,7 @@
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
 | SBOM | ✅ | CycloneDX via `npm sbom --omit dev` |
-| OSV Scanner | ✅ | google/osv-scanner-action v2.3.3 |
+| OSV Scanner | ✅ | google/osv-scanner-action v2.5.0 |
 | Trigger | ✅ | push to main + PRs |
 
 ### 7.6 Dodatkowe workflows
