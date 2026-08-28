@@ -14,6 +14,14 @@
 > - device IP masking in logs is now **enabled by default** (§5.6 / §6.1).
 > Do not treat the ✅ marks below as a description of the current release; consult
 > the Stage 4/Stage 5 security artifacts for the authoritative current state.
+>
+> **What is frozen vs. maintained.** Everything here describes v1.0.0 and is
+> deliberately left alone — version numbers, test and file counts, tool versions,
+> the §8.1 tree, the CI lanes of the day. Do not "correct" those against the
+> current tree; they are the record of what was audited. The one exception is the
+> `homebridge@2.0.2` floor-install note in §11 (`ci.yml`), which documents a live
+> CI decision — why `--package-lock=false` was dropped — and is re-measured
+> whenever the lockfile changes.
 
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
@@ -296,7 +304,7 @@
 |----------|-------|-----------|
 | scorecard.yml | ✅ | OpenSSF Scorecard, weekly schedule + push to main, SARIF upload |
 | stale.yml | ✅ | Automatyczne oznaczanie stale issues/PRs (60d stale, 14d close) |
-| labeler.yml | ✅ | Automatyczne etykiety PR (src, test, ci, docs, dependencies) |
+| labeler.yml | ✅ | Automatyczne etykiety PR (src, test, ci, documentation, dependencies) |
 
 ### 7.7 Dependabot
 
@@ -411,7 +419,7 @@
 | `license` | ✅ | `MIT` |
 | `author` | ✅ | name + URL |
 | `displayName` | ✅ | `Xiaomi Mi Air Purifier Modern` |
-| `files` | ✅ | Whitelist: dist, config.schema.json, docs |
+| `files` | ✅ | Whitelist: dist, config.schema.json, README.md, CHANGELOG.md, LICENSE, SECURITY.md, CODE_OF_CONDUCT.md |
 | `peerDependencies` | ✅ | `homebridge: ^2.0.2` |
 | `type` | ✅ | `commonjs` (wymagane przez Homebridge) |
 | `scripts.prepublishOnly` | ✅ | lint + typecheck + test + build |
@@ -473,7 +481,7 @@
 - ✅ **Matrix coverage:** Node 22/24 × HB 2.0.2 stable (full lanes only); HB 2.0 GA, więc `beta` lane jest niepotrzebny i został usunięty.
 - ✅ **Smoke lane:** pomija upload coverage, ale uruchamia lint+typecheck+test
 - ✅ **npm ci** zamiast `npm install` — reprodukowalność
-- ✅ **`homebridge@2.0.2` install** z `--no-save` — instaluje minimalną wspieraną wersję (test „podłogi" zakresu `^2.0.2`) bez modyfikowania `package.json` ani `package-lock.json`. Samo `--no-save` wystarcza, by lockfile nie został przepisany. Towarzysząca mu wcześniej flaga `--package-lock=false` została usunięta, ponieważ sprawiała, że npm ignorował lockfile także jako **wejście** rozwiązywania zależności i przeliczał całe drzewo z zakresów semver — dryfowało 39 pakietów zamiast 16, w tym `@biomejs/biome`, `vite` i `postcss` (to ostatnie cofało pin 8.5.25 z GHSA-r28c-9q8g-f849). Uwaga: krok nadal nie jest w pełni deterministyczny. Zmierzone na lockfile z `homebridge` 2.4.0: instalacja podłogi zmienia wersję 12 pakietów w poddrzewie `homebridge` — samego `homebridge` 2.4.0 → 2.0.2, `@homebridge/hap-nodejs` 2.2.2 → 2.1.6, `chalk` 6.0.0 → 5.6.2, `commander` 15.0.0 → 14.0.3, `fs-extra` 11.4.0 → 11.3.5 oraz całe `@matter/*` (7 pakietów) 0.17.9 → `0.17.0-alpha.0-20260508-96d5c3a88` (wydanie alpha) — obok `semver` 7.8.5 stawia drugą kopię 7.8.0 i dokłada `mkdirp`, `node-persist` oraz `q`, porzucone przez HAP-NodeJS 2.2.2 (120 → 123 nazwy pakietów w drzewie). Wersje te są rozwiązywane na świeżo z zakresów `^`, ponieważ `@homebridge/hap-nodejs@2.1.6` nie występuje w lockfile. Wymieniony tu wcześniej zestaw (`@homebridge/dbus-native`, `@noble/curves`, `@noble/hashes`, `sax`) akurat się nie zmienia, bo zablokowane wersje mieszczą się w zakresach żądanych przez 2.1.6 — po kolejnym wydaniu upstream znów zacznie dryfować, więc lista jest migawką, nie gwarancją. Żaden z tych pakietów nie należy do toolchainu lint/typecheck/test.
+- ✅ **`homebridge@2.0.2` install** z `--no-save` — instaluje minimalną wspieraną wersję (test „podłogi" zakresu `^2.0.2`) bez modyfikowania `package.json` ani `package-lock.json`. Samo `--no-save` wystarcza, by lockfile nie został przepisany. Towarzysząca mu wcześniej flaga `--package-lock=false` została usunięta, ponieważ sprawiała, że npm ignorował lockfile także jako **wejście** rozwiązywania zależności i przeliczał całe drzewo z zakresów semver — dryfowało 39 pakietów zamiast 16, w tym `@biomejs/biome`, `vite` i `postcss` (to ostatnie cofało pin 8.5.25 z GHSA-r28c-9q8g-f849). Uwaga: krok nadal nie jest w pełni deterministyczny. Zmierzone na lockfile z `homebridge` 2.4.0: instalacja podłogi zmienia wersję 14 pakietów w poddrzewie `homebridge` — samego `homebridge` 2.4.0 → 2.0.2, `@homebridge/hap-nodejs` 2.2.2 → 2.1.6, `chalk` 6.0.0 → 5.6.2, `commander` 15.0.0 → 14.0.3, `fs-extra` 11.4.0 → 11.3.5, `@noble/curves` i `@noble/hashes` 2.3.0 → 2.4.0 oraz całe `@matter/*` (7 pakietów) 0.17.9 → `0.17.0-alpha.0-20260508-96d5c3a88` (wydanie alpha) — obok `semver` 7.8.5 stawia drugą kopię 7.8.0 i dokłada `mkdirp`, `node-persist` oraz `q`, porzucone przez HAP-NodeJS 2.2.2 (120 → 123 nazwy pakietów w drzewie). Wersje te są rozwiązywane na świeżo z zakresów `^`, ponieważ `@homebridge/hap-nodejs@2.1.6` nie występuje w lockfile. Lista jest migawką, nie gwarancją: `@noble/curves` i `@noble/hashes` figurowały tu wcześniej jako niezmieniane, a po wydaniu 2.4.0 przez upstream dryfują — mimo że żaden bump w repozytorium ich nie dotyka (ten sam pomiar na poprzednim lockfile daje identyczny wynik). Z wcześniejszego zestawu nie zmieniają się nadal `@homebridge/dbus-native` i `sax`, bo zablokowane wersje mieszczą się w zakresach żądanych przez 2.1.6. Żaden z tych pakietów nie należy do toolchainu lint/typecheck/test.
 - ✅ **Artifact naming:** unique per matrix combination
 - ✅ **Audit job:** oddzielny, parallel z test matrix
 
