@@ -19,7 +19,7 @@
 
 **Data audytu:** 2026-03-24
 **Audytor:** Claude Opus 4.6 — pełny code review, security audit, quality assessment
-**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
+**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.mts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
 
 ### Komendy weryfikacyjne:
 
@@ -241,7 +241,7 @@
 | Framework | ✅ | vitest v4 + v8 coverage provider |
 | Ilość testów | ✅ | 126 testów w 13 plikach |
 | Coverage | ✅ 100% | statements=100%, branches=100%, functions=100%, lines=100% |
-| Coverage thresholds | ✅ | Wymuszone w vitest.config.ts (`thresholds: { lines: 100, ... }`) |
+| Coverage thresholds | ✅ | Wymuszone w vitest.config.mts (`thresholds: { lines: 100, ... }`) |
 | Organizacja | ✅ | Tematyczne pliki: accessory, platform, config-validation, mappers, mode-policy, device-api, device-client-branches, crypto-roundtrip, miio-transport-protocol, miio-transport-commands, miio-transport-reliability, network-scenarios, reliability |
 | Test helpers | ✅ | FakeService, FakeCharacteristic, FakePlatformAccessory, FakeClient, makeApi, makeState, makeLogger |
 | Network scenarios | ✅ | 9 scenariuszy (reconnect, Wi-Fi outage, filter lifecycle) |
@@ -354,7 +354,7 @@
 ├── package-lock.json
 ├── tsconfig.json
 ├── tsconfig.test.json
-├── vitest.config.ts
+├── vitest.config.mts
 ├── biome.json
 ├── config.schema.json
 ├── .releaserc.json
