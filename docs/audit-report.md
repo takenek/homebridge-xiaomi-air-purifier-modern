@@ -14,12 +14,20 @@
 > - device IP masking in logs is now **enabled by default** (§5.6 / §6.1).
 > Do not treat the ✅ marks below as a description of the current release; consult
 > the Stage 4/Stage 5 security artifacts for the authoritative current state.
+>
+> **What is frozen vs. maintained.** Everything here describes v1.0.0 and is
+> deliberately left alone — version numbers, test and file counts, tool versions,
+> the §8.1 tree, the CI lanes of the day. Do not "correct" those against the
+> current tree; they are the record of what was audited. The one exception is the
+> `homebridge@2.0.2` floor-install note in §11 (`ci.yml`), which documents a live
+> CI decision — why `--package-lock=false` was dropped — and is re-measured
+> whenever the lockfile changes.
 
 ## homebridge-xiaomi-air-purifier-modern v1.0.0
 
 **Data audytu:** 2026-03-24
 **Audytor:** Claude Opus 4.6 — pełny code review, security audit, quality assessment
-**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.mts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
+**Metoda:** Kompletna analiza każdego pliku repozytorium: 9 plików źródłowych (`src/`), 14 plików testowych (`test/` + helpers), 6 workflows GitHub Actions, konfiguracje (biome.json, tsconfig.json, tsconfig.test.json, vitest.config.ts, .releaserc.json, config.schema.json, .editorconfig, .npmrc, .gitignore, package.json, package-lock.json), dokumentacja (README.md, CHANGELOG.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, RELEASE_CHECKLIST.md, LICENSE), szablony GitHub (.github/ISSUE_TEMPLATE/*, pull_request_template.md, CODEOWNERS, labeler.yml, dependabot.yml). Analiza ostatnich 10 commitów. Wszystkie komendy weryfikacyjne uruchomione lokalnie i wyniki udokumentowane poniżej.
 
 ### Komendy weryfikacyjne:
 
@@ -241,7 +249,7 @@
 | Framework | ✅ | vitest v4 + v8 coverage provider |
 | Ilość testów | ✅ | 126 testów w 13 plikach |
 | Coverage | ✅ 100% | statements=100%, branches=100%, functions=100%, lines=100% |
-| Coverage thresholds | ✅ | Wymuszone w vitest.config.mts (`thresholds: { lines: 100, ... }`) |
+| Coverage thresholds | ✅ | Wymuszone w vitest.config.ts (`thresholds: { lines: 100, ... }`) |
 | Organizacja | ✅ | Tematyczne pliki: accessory, platform, config-validation, mappers, mode-policy, device-api, device-client-branches, crypto-roundtrip, miio-transport-protocol, miio-transport-commands, miio-transport-reliability, network-scenarios, reliability |
 | Test helpers | ✅ | FakeService, FakeCharacteristic, FakePlatformAccessory, FakeClient, makeApi, makeState, makeLogger |
 | Network scenarios | ✅ | 9 scenariuszy (reconnect, Wi-Fi outage, filter lifecycle) |
@@ -251,7 +259,7 @@
 
 | Aspekt | Ocena | Szczegóły |
 |--------|-------|-----------|
-| Linter | ✅ | Biome v2.5.10, `recommended: true`, `noExplicitAny: error` |
+| Linter | ✅ | Biome v2.4.8, `recommended: true`, `noExplicitAny: error` |
 | Formatter | ✅ | Biome formatter, `indentStyle: space` |
 | EditorConfig | ✅ | 2-space indent, LF, UTF-8, trailing whitespace trim |
 | TypeScript strict | ✅ | `strict: true` + dodatkowe flagi |
@@ -296,7 +304,7 @@
 |----------|-------|-----------|
 | scorecard.yml | ✅ | OpenSSF Scorecard, weekly schedule + push to main, SARIF upload |
 | stale.yml | ✅ | Automatyczne oznaczanie stale issues/PRs (60d stale, 14d close) |
-| labeler.yml | ✅ | Automatyczne etykiety PR (src, test, ci, docs, dependencies) |
+| labeler.yml | ✅ | Automatyczne etykiety PR (src, test, ci, documentation, dependencies) |
 
 ### 7.7 Dependabot
 
@@ -354,7 +362,7 @@
 ├── package-lock.json
 ├── tsconfig.json
 ├── tsconfig.test.json
-├── vitest.config.mts
+├── vitest.config.ts
 ├── biome.json
 ├── config.schema.json
 ├── .releaserc.json
@@ -411,7 +419,7 @@
 | `license` | ✅ | `MIT` |
 | `author` | ✅ | name + URL |
 | `displayName` | ✅ | `Xiaomi Mi Air Purifier Modern` |
-| `files` | ✅ | Whitelist: dist, config.schema.json, docs |
+| `files` | ✅ | Whitelist: dist, config.schema.json, README.md, CHANGELOG.md, LICENSE, SECURITY.md, CODE_OF_CONDUCT.md |
 | `peerDependencies` | ✅ | `homebridge: ^2.0.2` |
 | `type` | ✅ | `commonjs` (wymagane przez Homebridge) |
 | `scripts.prepublishOnly` | ✅ | lint + typecheck + test + build |
