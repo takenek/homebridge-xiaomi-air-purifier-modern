@@ -3,7 +3,7 @@
 [![CI](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-xiaomi-air-purifier-modern)](https://www.npmjs.com/package/homebridge-xiaomi-air-purifier-modern)
 [![Homebridge](https://img.shields.io/badge/Homebridge-2.0.2%2B-blueviolet)](https://homebridge.io)
-[![Node](https://img.shields.io/badge/Node.js-22.x%20%7C%2024.x-green)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node.js-22.12%2B%20%7C%2024.x-green)](https://nodejs.org)
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 3 / 3H / 4 / Pro).
 
@@ -49,7 +49,7 @@ This plugin is intended for users on Homebridge 2.x with the newer hardware (mod
 ## Requirements
 
 - Homebridge **2.0.2** or newer (Homebridge 1.x is no longer supported)
-- Node.js **22.x** or **24.x** (Node 20 reached end-of-life and is no longer supported)
+- Node.js **22.12.0** or newer on the 22.x line, or **24.x** (Node 20 reached end-of-life and is no longer supported)
 - npm **>=10.0.0**
 - Xiaomi Mi Air Purifier on the same LAN (UDP 54321)
 - Device token (32-char hex)
@@ -256,10 +256,11 @@ These checks reduce the risk of response spoofing/replay on an untrusted LAN, bu
 
 ## Support & deprecation policy
 
-- Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.x** and **Node 24.x**).
+- Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.12+** and **Node 24.x**).
 - Homebridge support target: stable **2.0.2+** validated in CI on Node 22 and Node 24.
 - Homebridge **1.x** support has been dropped — users on Homebridge 1.x must **stay on plugin v1.0.2** or upgrade Homebridge to 2.x.
-- Node.js **20.x** support has been dropped (end-of-life) — users on Node 20 must **stay on plugin v1.0.2** or upgrade Node.js to 22 / 24.
+- Node.js **20.x** support has been dropped (end-of-life) — users on Node 20 must **stay on plugin v1.0.2** or upgrade Node.js to 22.12+ / 24.
+- Node.js **22.0.x – 22.11.x** are no longer supported — the minimum on the 22.x line is now **22.12.0** (the dev toolchain requires it, and it is the range Homebridge 2.x asks plugin authors to declare). Users on an earlier 22.x release must **stay on plugin v1.0.8** or upgrade Node.js to 22.12+ / 24.x.
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
 - **Dynamic Platform Plugin** — supports multiple devices in a single plugin instance with automatic cached accessory management. See `config.schema.json` for the full schema.
 
