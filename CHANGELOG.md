@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.8...v1.0.9) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deps:** raise the Node floor to 22.12 for vitest 5 ([8cf0724](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/8cf0724787d1759e831f715117ed72a2dcab6f57))
+
 ## [1.0.8](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.7...v1.0.8) (2026-08-14)
 
 
