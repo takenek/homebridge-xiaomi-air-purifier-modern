@@ -7,6 +7,20 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    groups:
+      # vitest and @vitest/coverage-v8 must be bumped together. coverage-v8
+      # declares an EXACT peer on vitest (`"vitest": "5.0.0"`, not a range), so a
+      # split bump leaves the tree unresolvable: `npm ci` dies with ERESOLVE
+      # before lint/typecheck/test run, and every job in ci.yml and
+      # supply-chain.yml fails. Dependabot opened #264 and #265 as two separate,
+      # permanently red PRs for exactly this reason, and they had to be merged by
+      # hand as one integration branch (#267). Grouping them yields one
+      # mergeable PR instead. Dependencies matching no group keep getting their
+      # own PR, so biome/typescript/homebridge are unaffected.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
     ignore:
       # @types/node must track the lowest supported Node.js runtime, not the
       # latest release line. engines.node is "^22.12.0 || ^24.0.0", so the types
