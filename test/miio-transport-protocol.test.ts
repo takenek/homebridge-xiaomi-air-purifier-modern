@@ -121,7 +121,7 @@ describe("ModernMiioTransport protocol detection and property paths", () => {
     };
 
     vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
-      new Map([
+      new Map<string, unknown>([
         ["power", "on"],
         ["fan_level", "7"],
         ["mode", 2],
@@ -143,7 +143,7 @@ describe("ModernMiioTransport protocol detection and property paths", () => {
     );
 
     vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
-      new Map([
+      new Map<string, unknown>([
         ["power", true],
         ["fan_level", 2],
         ["mode", "bogus"],
@@ -343,7 +343,7 @@ it("covers toMode direct string branch and legacy-empty fallback null path", asy
   };
 
   vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
-    new Map([
+    new Map<string, unknown>([
       ["power", true],
       ["fan_level", 1],
       ["mode", "auto"],
@@ -402,6 +402,7 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
     readViaMiot: () => Promise<DeviceState>;
     getProperties: (props: readonly string[]) => Promise<DeviceState>;
     protocolMode: "unknown" | "miot" | "legacy";
+    detectProtocolMode: () => Promise<"miot" | "legacy" | null>;
     readViaLegacy: (props: readonly string[]) => Promise<DeviceState>;
     setProperty: (method: string, params: readonly unknown[]) => Promise<void>;
     trySetViaMiot: (
@@ -412,7 +413,7 @@ it("covers remaining branch counters in getProperties/setProperty and toNumber N
   };
 
   vi.spyOn(internals, "readViaMiotBatch").mockResolvedValue(
-    new Map([
+    new Map<string, unknown>([
       ["power", true],
       ["fan_level", 2],
       ["mode", "auto"],
