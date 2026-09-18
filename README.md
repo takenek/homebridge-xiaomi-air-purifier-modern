@@ -324,6 +324,7 @@ export NODE_OPTIONS="--unhandled-rejections=strict --trace-warnings --trace-unca
 npm ci
 npm run lint
 npm run typecheck
+npm run typecheck:test
 npm test
 npm run build
 ```
