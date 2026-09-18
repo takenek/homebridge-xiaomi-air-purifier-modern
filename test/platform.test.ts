@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
 import { ModernMiioTransport } from "../src/core/miio-transport";
+import registerPlugin from "../src/index";
 import {
+  type DeviceConfig,
   PLATFORM_NAME,
   PLUGIN_NAME,
   XiaomiAirPurifierPlatform,
@@ -39,16 +41,11 @@ afterEach(() => {
 
 describe("platform plugin", () => {
   it("registers platform entrypoint", async () => {
-    const module = await import("../src/index");
-    const register = module.default;
     const api = makeApi();
     const registerPlatform = vi.fn();
     (api as unknown as Record<string, unknown>).registerPlatform =
       registerPlatform;
-    if (!register) {
-      throw new Error("Missing register function");
-    }
-    register(api as never);
+    registerPlugin(api as never);
 
     expect(registerPlatform).toHaveBeenCalledWith(
       PLUGIN_NAME,
@@ -425,7 +422,12 @@ describe("platform plugin", () => {
     // Directly test the non-Error path by manually invoking discoverDevices
     // via didFinishLaunching after adding a device that causes a non-Error throw
     const setupDevice = vi
-      .spyOn(platform as never, "setupDevice" as never)
+      .spyOn(
+        platform as unknown as {
+          setupDevice: (deviceConfig: DeviceConfig) => void;
+        },
+        "setupDevice",
+      )
       .mockImplementation(() => {
         throw "non-error-string";
       });

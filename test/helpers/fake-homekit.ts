@@ -281,7 +281,7 @@ export const makeApi = (withConfiguredName = true) => {
   };
 
   return api as unknown as {
-    hap: unknown;
+    hap: typeof api.hap;
     on: (event: string, cb: () => void) => void;
     emit: (event: string) => void;
     registerPlatformAccessories: ReturnType<typeof vi.fn>;

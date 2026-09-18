@@ -350,7 +350,10 @@ it("falls back to per-property MIOT reads when batch query is unsupported", asyn
         throw new Error("unsupported batch get_properties");
       }
 
-      const [item] = items;
+      const item = items[0];
+      if (item === undefined) {
+        throw new Error("empty get_properties batch");
+      }
       const value =
         item.siid === 2 && item.piid === 2
           ? true

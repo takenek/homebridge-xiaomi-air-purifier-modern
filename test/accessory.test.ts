@@ -220,9 +220,8 @@ describe("AirPurifierAccessory switch contract", () => {
   });
 
   it("drives native AirPurifier service characteristics (Active/Current/Target/RotationSpeed)", async () => {
-    const api = makeApi() as unknown as Record<string, unknown>;
-    const characteristics = (api.hap as Record<string, unknown>)
-      .Characteristic as Record<string, unknown>;
+    const api = makeApi();
+    const characteristics = api.hap.Characteristic;
 
     const logger = makeLogger();
     const client = new FakeClient();
@@ -248,23 +247,19 @@ describe("AirPurifierAccessory switch contract", () => {
       ) as unknown as FakeService;
 
     await purifierService
-      .getCharacteristic(characteristics.Active as { UUID: string })
+      .getCharacteristic(characteristics.Active)
       .onSetHandler?.(1);
     await purifierService
-      .getCharacteristic(characteristics.RotationSpeed as { UUID: string })
+      .getCharacteristic(characteristics.RotationSpeed)
       .onSetHandler?.(50);
 
     await purifierService
-      .getCharacteristic(
-        characteristics.TargetAirPurifierState as { UUID: string },
-      )
+      .getCharacteristic(characteristics.TargetAirPurifierState)
       .onSetHandler?.(characteristics.TargetAirPurifierState.AUTO);
     expect(client.calls).toContain("mode:auto");
 
     await purifierService
-      .getCharacteristic(
-        characteristics.TargetAirPurifierState as { UUID: string },
-      )
+      .getCharacteristic(characteristics.TargetAirPurifierState)
       .onSetHandler?.(characteristics.TargetAirPurifierState.MANUAL);
     expect(client.calls).toContain("mode:favorite");
 
