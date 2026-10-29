@@ -18,6 +18,7 @@ export const PLUGIN_NAME = "homebridge-xiaomi-air-purifier-modern";
 
 const SUPPORTED_MODELS: readonly AirPurifierModel[] = [
   "zhimi.airpurifier.2h",
+  "zhimi.airpurifier.2s",
   "zhimi.airpurifier.3",
   "zhimi.airpurifier.3h",
   "zhimi.airpurifier.4",
