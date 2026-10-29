@@ -366,6 +366,48 @@ it("reads a Mi Air Purifier 2S legacy response with temp_dec in tenths of a degr
   await transport.close();
 });
 
+it("maps legacy night mode 'silent' to sleep on read and sleep to 'silent' on write", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacy: (props: readonly string[]) => Promise<DeviceState>;
+  };
+
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", "on"],
+      ["fan_level", 10],
+      ["mode", "silent"],
+    ]),
+  );
+  expect((await internals.readViaLegacy([])).mode).toBe("sleep");
+
+  const call = vi.spyOn(internals, "call").mockResolvedValue(["ok"]);
+  internals.protocolMode = "legacy";
+  await transport.setProperty("set_mode", ["sleep"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["silent"]);
+
+  await transport.setProperty("set_mode", ["auto"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["auto"]);
+
+  // MIOT write rejected → legacy fallback also uses the legacy night mode name
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
+  await transport.setProperty("set_mode", ["sleep"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["silent"]);
+  expect(internals.protocolMode).toBe("legacy");
+
+  await transport.close();
+});
+
 it("covers trySetViaMiot command mappings and send() result branches", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {

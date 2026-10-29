@@ -93,6 +93,8 @@ const toNumber = (value: unknown): number => {
   return 0;
 };
 
+const LEGACY_NIGHT_MODE = "silent";
+
 const toMode = (value: unknown): DeviceState["mode"] => {
   if (
     value === "auto" ||
@@ -107,7 +109,7 @@ const toMode = (value: unknown): DeviceState["mode"] => {
     return "auto";
   }
 
-  if (value === 1) {
+  if (value === 1 || value === LEGACY_NIGHT_MODE) {
     return "sleep";
   }
 
@@ -117,6 +119,14 @@ const toMode = (value: unknown): DeviceState["mode"] => {
 
   return "idle";
 };
+
+// Legacy miIO purifiers (2S, 2H, 2, Pro) call night mode "silent" in both
+// get_prop and set_mode, and reject "sleep" with -5001.
+const toLegacyParams = (
+  method: string,
+  params: readonly unknown[],
+): readonly unknown[] =>
+  method === "set_mode" && params[0] === "sleep" ? [LEGACY_NIGHT_MODE] : params;
 
 const MIOT_DID = "0";
 const MIOT_POWER_PROBE: MiotProperty = { did: MIOT_DID, siid: 2, piid: 2 };
@@ -334,7 +344,7 @@ export class ModernMiioTransport implements MiioTransport {
       this.protocolMode = "legacy";
     }
 
-    await this.call(method, params);
+    await this.call(method, toLegacyParams(method, params));
   }
 
   public async close(): Promise<void> {
