@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [1.1.0](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.9...v1.1.0) (2026-10-29)
+
+
+### Bug Fixes
+
+* **transport:** scale legacy temp_dec from tenths of a degree ([#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297)) ([ae2d82d](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/ae2d82ddd84ae1c0bd622d6108efe372c8a60a56))
+* **transport:** use "silent" for night mode on legacy miIO devices ([cd2353a](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/cd2353a02d926bfbb566d7a5f4dd1e3803ac5634))
+
+
+### Features
+
+* add Mi Air Purifier 2S model ([#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297)) ([d31fb2b](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/d31fb2b0a319f409303b6b41adbf849c59714ded))
+
 ## [1.0.9](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.8...v1.0.9) (2026-09-11)
 
 
