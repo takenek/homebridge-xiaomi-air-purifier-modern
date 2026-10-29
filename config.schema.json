@@ -59,6 +59,10 @@
                   "enum": ["zhimi.airpurifier.2h"]
                 },
                 {
+                  "title": "Mi Air Purifier 2S",
+                  "enum": ["zhimi.airpurifier.2s"]
+                },
+                {
                   "title": "Mi Air Purifier 3",
                   "enum": ["zhimi.airpurifier.3"]
                 },

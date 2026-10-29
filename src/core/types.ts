@@ -1,5 +1,6 @@
 export type AirPurifierModel =
   | "zhimi.airpurifier.2h"
+  | "zhimi.airpurifier.2s"
   | "zhimi.airpurifier.3"
   | "zhimi.airpurifier.3h"
   | "zhimi.airpurifier.4"

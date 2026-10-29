@@ -274,19 +274,136 @@ it("covers detectProtocolMode outcomes and legacy batch parsing", async () => {
   expect(goodLegacy.get("power" as never)).toBe("ok");
 
   // M2: alias fallback — first alias null, second alias used
-  // "temperature" → aliases ["temperature", "temp_dec"]
-  vi.spyOn(internals, "call").mockResolvedValueOnce([null, "21"]);
-  const tempLegacy = await internals.readViaLegacyBatch([
+  // "humidity" → aliases ["humidity", "rh"]
+  vi.spyOn(internals, "call").mockResolvedValueOnce([null, "41"]);
+  const humidityLegacy = await internals.readViaLegacyBatch([
+    "humidity" as never,
+  ]);
+  expect(humidityLegacy.get("humidity" as never)).toBe("41");
+
+  // temp_dec is tenths of a degree Celsius (Mi Air Purifier 2S, #297)
+  // "temperature" → aliases ["temp_dec", "temperature"]
+  vi.spyOn(internals, "call").mockResolvedValueOnce([233, null]);
+  const tempDecLegacy = await internals.readViaLegacyBatch([
     "temperature" as never,
   ]);
-  expect(tempLegacy.get("temperature" as never)).toBe("21");
+  expect(tempDecLegacy.get("temperature" as never)).toBe(23.3);
+
+  // below 10 °C the raw temp_dec is <= 100 and must still be scaled
+  vi.spyOn(internals, "call").mockResolvedValueOnce(["95", ""]);
+  const coldTempDecLegacy = await internals.readViaLegacyBatch([
+    "temperature" as never,
+  ]);
+  expect(coldTempDecLegacy.get("temperature" as never)).toBe(9.5);
 
   // M2: first valid alias wins; second alias pair is skipped (covers has(key) guard)
-  vi.spyOn(internals, "call").mockResolvedValueOnce(["30", "ignored"]);
+  vi.spyOn(internals, "call").mockResolvedValueOnce([233, "ignored"]);
   const tempFirst = await internals.readViaLegacyBatch([
     "temperature" as never,
   ]);
-  expect(tempFirst.get("temperature" as never)).toBe("30");
+  expect(tempFirst.get("temperature" as never)).toBe(23.3);
+
+  // without temp_dec, "temperature" is already in °C and passed through unscaled
+  vi.spyOn(internals, "call").mockResolvedValueOnce([null, "21"]);
+  const tempFallback = await internals.readViaLegacyBatch([
+    "temperature" as never,
+  ]);
+  expect(tempFallback.get("temperature" as never)).toBe("21");
+
+  await transport.close();
+});
+
+it("reads a Mi Air Purifier 2S legacy response with temp_dec in tenths of a degree", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+  };
+  internals.protocolMode = "legacy";
+
+  // One reply value per requested alias, modelled on a real 2S
+  // (zhimi.airpurifier.mc1): it answers temp_dec, aqi, humidity,
+  // favorite_level and filter1_life, and has no "temperature" or "fan_level".
+  const replyByAlias: Record<string, unknown> = {
+    power: "on",
+    favorite_level: 10,
+    mode: "auto",
+    temp_dec: 233,
+    humidity: 48,
+    aqi: 12,
+    filter1_life: 87,
+    child_lock: "off",
+    led: "on",
+    motor1_speed: 700,
+    use_time: 12345,
+    purify_volume: 6789,
+  };
+  const call = vi
+    .spyOn(internals, "call")
+    .mockImplementation(async (_method, aliases) =>
+      aliases.map((alias) => replyByAlias[alias as string] ?? null),
+    );
+
+  const state = await transport.getProperties([]);
+
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call.mock.calls[0]?.[0]).toBe("get_prop");
+  expect(state).toEqual({
+    power: true,
+    fan_level: 10,
+    mode: "auto",
+    temperature: 23.3,
+    humidity: 48,
+    aqi: 12,
+    filter1_life: 87,
+    child_lock: false,
+    led: true,
+    motor1_speed: 700,
+    use_time: 12345,
+    purify_volume: 6789,
+  });
+
+  await transport.close();
+});
+
+it("maps legacy night mode 'silent' to sleep on read and sleep to 'silent' on write", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+    readViaLegacyBatch: (
+      props: readonly string[],
+    ) => Promise<Map<string, unknown>>;
+    readViaLegacy: (props: readonly string[]) => Promise<DeviceState>;
+  };
+
+  vi.spyOn(internals, "readViaLegacyBatch").mockResolvedValue(
+    new Map<string, unknown>([
+      ["power", "on"],
+      ["fan_level", 10],
+      ["mode", "silent"],
+    ]),
+  );
+  expect((await internals.readViaLegacy([])).mode).toBe("sleep");
+
+  const call = vi.spyOn(internals, "call").mockResolvedValue(["ok"]);
+  internals.protocolMode = "legacy";
+  await transport.setProperty("set_mode", ["sleep"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["silent"]);
+
+  await transport.setProperty("set_mode", ["auto"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["auto"]);
+
+  // MIOT write rejected → legacy fallback also uses the legacy night mode name
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
+  await transport.setProperty("set_mode", ["sleep"]);
+  expect(call).toHaveBeenLastCalledWith("set_mode", ["silent"]);
+  expect(internals.protocolMode).toBe("legacy");
 
   await transport.close();
 });

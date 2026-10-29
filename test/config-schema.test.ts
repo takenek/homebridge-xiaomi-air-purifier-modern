@@ -1,10 +1,26 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { validateDeviceConfig } from "../src/platform";
 
 const CONFIG_SCHEMA_PATH = join(process.cwd(), "config.schema.json");
+const BUG_REPORT_TEMPLATE_PATH = join(
+  process.cwd(),
+  ".github",
+  "ISSUE_TEMPLATE",
+  "bug_report.yml",
+);
 
 const REQUIRED_DEVICE_FIELDS = ["name", "address", "token", "model"];
+
+const SUPPORTED_MODELS: ReadonlyArray<readonly [string, string]> = [
+  ["zhimi.airpurifier.2h", "Mi Air Purifier 2H"],
+  ["zhimi.airpurifier.2s", "Mi Air Purifier 2S"],
+  ["zhimi.airpurifier.3", "Mi Air Purifier 3"],
+  ["zhimi.airpurifier.3h", "Mi Air Purifier 3H"],
+  ["zhimi.airpurifier.4", "Mi Air Purifier 4"],
+  ["zhimi.airpurifier.pro", "Mi Air Purifier Pro"],
+];
 
 const DEVICE_LAYOUT_KEYS = [
   "devices[].name",
@@ -170,18 +186,35 @@ describe("config.schema.json", () => {
       model.oneOf,
       "devices.items.properties.model.oneOf must be an array",
     );
-    const proModelOption = modelOptions.find((option) => {
-      if (!isRecord(option)) {
-        return false;
-      }
-
-      return (
-        option.title === "Mi Air Purifier Pro" &&
-        Array.isArray(option.enum) &&
-        option.enum.includes("zhimi.airpurifier.pro")
+    const titleByModel = new Map<string, unknown>();
+    for (const option of modelOptions) {
+      const record = requireRecord(
+        option,
+        "each model option must be an object",
       );
-    });
-    expect(proModelOption).toBeDefined();
+      const values = requireStringArray(
+        record.enum,
+        "each model option enum must be a string array",
+      );
+      expect(values).toHaveLength(1);
+      titleByModel.set(values[0] as string, record.title);
+    }
+    expect(titleByModel).toEqual(new Map(SUPPORTED_MODELS));
+  });
+
+  it("offers only models accepted by the platform and listed in the bug report template", () => {
+    const bugReportTemplate = readFileSync(BUG_REPORT_TEMPLATE_PATH, "utf8");
+    for (const [model] of SUPPORTED_MODELS) {
+      expect(
+        validateDeviceConfig({
+          name: "Air Purifier",
+          address: "10.10.1.17",
+          token: "00112233445566778899aabbccddeeff",
+          model,
+        }).model,
+      ).toBe(model);
+      expect(bugReportTemplate).toContain(`- ${model}\n`);
+    }
   });
 
   it("keeps the Homebridge Config UI array item layout grouped as one device form", () => {
