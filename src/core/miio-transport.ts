@@ -144,7 +144,7 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   power: ["power"],
   fan_level: ["fan_level", "favorite_level"],
   mode: ["mode"],
-  temperature: ["temperature", "temp_dec"],
+  temperature: ["temp_dec", "temperature"],
   humidity: ["humidity", "rh"],
   aqi: ["aqi", "pm25"],
   filter1_life: ["filter1_life", "filter_life"],
@@ -154,6 +154,14 @@ const LEGACY_MAP: Record<string, readonly string[]> = {
   motor1_speed: ["motor1_speed"],
   use_time: ["use_time"],
   purify_volume: ["purify_volume"],
+};
+
+// Legacy aliases that report a fixed-point integer instead of the HomeKit unit.
+// temp_dec is tenths of a degree Celsius (233 = 23.3 °C) on every legacy zhimi
+// purifier (2S, 2H, 2, Pro); it is listed before "temperature", which is only a
+// whole-degree fallback.
+const LEGACY_ALIAS_DIVISORS: Partial<Record<string, number>> = {
+  temp_dec: 10,
 };
 
 const corePropertiesUnavailableError = (): Error =>
@@ -541,11 +549,15 @@ export class ModernMiioTransport implements MiioTransport {
     );
     const responses = Array.isArray(result) ? result : [];
     const valueByKey = new Map<ReadProperty, unknown>();
-    pairs.forEach(([key], i) => {
+    pairs.forEach(([key, alias], i) => {
       if (valueByKey.has(key)) return;
       const value = responses[i];
       if (value !== undefined && value !== null && value !== "") {
-        valueByKey.set(key, value);
+        const divisor = LEGACY_ALIAS_DIVISORS[alias];
+        valueByKey.set(
+          key,
+          divisor === undefined ? value : toNumber(value) / divisor,
+        );
       }
     });
 
