@@ -8,7 +8,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-import { ModernMiioTransport } from "../src/core/miio-transport";
+import {
+  MiioCommandError,
+  ModernMiioTransport,
+} from "../src/core/miio-transport";
 import type { DeviceState } from "../src/core/types";
 
 const emptyState: DeviceState = {
@@ -404,6 +407,57 @@ it("maps legacy night mode 'silent' to sleep on read and sleep to 'silent' on wr
   await transport.setProperty("set_mode", ["sleep"]);
   expect(call).toHaveBeenLastCalledWith("set_mode", ["silent"]);
   expect(internals.protocolMode).toBe("legacy");
+
+  await transport.close();
+});
+
+it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows errors the fallback cannot fix (#298)", async () => {
+  const transport = createTransport();
+  const internals = transport as unknown as {
+    protocolMode: "unknown" | "miot" | "legacy";
+    call: (method: string, params: readonly unknown[]) => Promise<unknown>;
+    trySetViaMiot: (
+      method: string,
+      params: readonly unknown[],
+    ) => Promise<boolean>;
+  };
+
+  // MIOT write rejected → legacy fallback uses the favorite level too
+  internals.protocolMode = "miot";
+  vi.spyOn(internals, "trySetViaMiot").mockResolvedValueOnce(false);
+  const call = vi.spyOn(internals, "call").mockResolvedValue(["ok"]);
+  await transport.setProperty("set_level_fan", [5]);
+  expect(call.mock.calls).toEqual([
+    ["set_mode", ["favorite"]],
+    ["set_level_favorite", [5]],
+  ]);
+  expect(internals.protocolMode).toBe("legacy");
+
+  const failFavoriteLevelWith = (error: unknown) =>
+    call.mockReset().mockImplementation(async (method: string) => {
+      if (method === "set_level_favorite") {
+        throw error;
+      }
+      return ["ok"];
+    });
+
+  const timeout = Object.assign(new Error("MIIO timeout after 20ms"), {
+    code: "ETIMEDOUT",
+  });
+  failFavoriteLevelWith(timeout);
+  await expect(transport.setProperty("set_level_fan", [16])).rejects.toBe(
+    timeout,
+  );
+
+  const notFound = new MiioCommandError(
+    -32601,
+    "MIIO error -32601: Method not found.",
+  );
+  failFavoriteLevelWith(notFound);
+  await expect(transport.setProperty("set_level_fan", [16])).rejects.toBe(
+    notFound,
+  );
+  expect(call).not.toHaveBeenCalledWith("set_level_favorite", [14]);
 
   await transport.close();
 });
