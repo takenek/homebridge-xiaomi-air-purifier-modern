@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.1.2...v1.1.3) (2026-11-02)
+
+
+### Bug Fixes
+
+* **transport:** stay on MIOT when a purifier refuses a property value ([ca69406](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/ca69406b956b87d5a29bed2b06754bbe0788da58))
+
 ## [1.1.2](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.1.1...v1.1.2) (2026-11-02)
 
 
