@@ -501,10 +501,17 @@ it("covers trySetViaMiot command mappings and send() result branches", async () 
     false,
   );
 
-  vi.spyOn(internals, "call").mockResolvedValue([{ code: 1 }]);
-  await expect(internals.trySetViaMiot("set_mode", ["auto"])).resolves.toBe(
-    false,
-  );
+  // A result list proves MIOT works: a failed item is a rejected value, not a
+  // reason to fall back to legacy.
+  vi.spyOn(internals, "call").mockResolvedValue([
+    { did: "0", siid: 2, piid: 5, code: -4005 },
+  ]);
+  await expect(
+    internals.trySetViaMiot("set_mode", ["auto"]),
+  ).rejects.toMatchObject({
+    code: "-4005",
+    message: "MIOT property 2.5 rejected the value (code -4005)",
+  });
 
   vi.spyOn(internals, "call").mockResolvedValue([{ code: 0 }]);
   await expect(internals.trySetViaMiot("set_mode", ["sleep"])).resolves.toBe(
@@ -578,14 +585,66 @@ it("covers MIOT candidate selection branches and fan level clamp upper bound", a
   const map = await internals.readViaMiotBatch(["fan_level"]);
   expect(map.get("fan_level")).toBe(11);
 
-  const call = vi
-    .spyOn(internals, "call")
-    .mockResolvedValue([{ code: 0 }, { code: 0 }]);
+  const call = vi.spyOn(internals, "call").mockResolvedValue([{ code: 0 }]);
+  call.mockClear();
   await expect(internals.trySetViaMiot("set_level_fan", [99])).resolves.toBe(
     true,
   );
-  const payload = call.mock.calls.at(-1)?.[1] as Array<{ value: unknown }>;
-  expect(payload[1]?.value).toBe(16);
+  expect(call.mock.calls).toEqual([
+    ["set_properties", [{ did: "0", siid: 2, piid: 5, value: 2 }]],
+    ["set_properties", [{ did: "0", siid: 10, piid: 10, value: 16 }]],
+  ]);
+
+  // Mode accepted but no result list for the level: an error, not a
+  // protocol switch, and not a refused value either, so no step-down.
+  call
+    .mockReset()
+    .mockResolvedValueOnce([{ code: 0 }])
+    .mockResolvedValueOnce("bad");
+  await expect(internals.trySetViaMiot("set_level_fan", [16])).rejects.toThrow(
+    "MIOT set_properties returned no result list",
+  );
+  expect(call).toHaveBeenCalledTimes(2);
+
+  // A MIIO-level error on the level write is not a refused value either.
+  const busy = new MiioCommandError(-5001, "MIIO error -5001: command error");
+  call
+    .mockReset()
+    .mockResolvedValueOnce([{ code: 0 }])
+    .mockRejectedValueOnce(busy);
+  await expect(internals.trySetViaMiot("set_level_fan", [16])).rejects.toBe(
+    busy,
+  );
+  expect(call).toHaveBeenCalledTimes(2);
+
+  // A refused level without an item code still steps down.
+  call
+    .mockReset()
+    .mockResolvedValueOnce([{ code: 0 }])
+    .mockResolvedValueOnce([{ did: "0", siid: 10, piid: 10 }])
+    .mockResolvedValueOnce([{ code: 0 }]);
+  await expect(internals.trySetViaMiot("set_level_fan", [13])).resolves.toBe(
+    true,
+  );
+  expect(call.mock.calls.at(-1)).toEqual([
+    "set_properties",
+    [{ did: "0", siid: 10, piid: 10, value: 12 }],
+  ]);
+
+  // Mode refused: the write fails before any favorite level is sent.
+  call
+    .mockReset()
+    .mockResolvedValueOnce([{ did: "0", siid: 2, piid: 5, code: -4005 }]);
+  await expect(
+    internals.trySetViaMiot("set_level_fan", [16]),
+  ).rejects.toMatchObject({ code: "-4005" });
+  expect(call).toHaveBeenCalledTimes(1);
+
+  // Mode not answered with a result list: fall back to legacy as before.
+  call.mockReset().mockResolvedValueOnce("bad");
+  await expect(internals.trySetViaMiot("set_level_fan", [8])).resolves.toBe(
+    false,
+  );
 
   await transport.close();
 });

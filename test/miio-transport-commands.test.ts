@@ -601,10 +601,16 @@ it("covers remaining branch variants in MIOT helpers", async () => {
     internals.readMiotOne([{ did: "0", siid: 2, piid: 2 }]),
   ).resolves.toBeUndefined();
 
-  vi.spyOn(internals, "call").mockResolvedValueOnce([{ code: undefined }]);
-  await expect(internals.trySetViaMiot("set_power", ["on"])).resolves.toBe(
-    false,
-  );
+  // An item without a code counts as rejected.
+  vi.spyOn(internals, "call").mockResolvedValueOnce([
+    { did: "0", siid: 2, piid: 2 },
+  ]);
+  await expect(
+    internals.trySetViaMiot("set_power", ["on"]),
+  ).rejects.toMatchObject({
+    code: undefined,
+    message: "MIOT property 2.2 rejected the value (code missing)",
+  });
 
   internals.session = { deviceId: 1, deviceStamp: 1, handshakeAtEpochSec: 1 };
   vi.spyOn(internals, "sendAndReceive").mockResolvedValueOnce(
