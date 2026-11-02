@@ -285,8 +285,10 @@ export class AirPurifierAccessory {
     this.purifierService
       .getCharacteristic(this.api.hap.Characteristic.Active)
       .onSet(async (value: CharacteristicValue) =>
-        this.client.setPower(
-          Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
+        this.writeOrFail("Active", () =>
+          this.client.setPower(
+            Number(value) === this.api.hap.Characteristic.Active.ACTIVE,
+          ),
         ),
       );
     this.bindOnGet(
@@ -310,12 +312,16 @@ export class AirPurifierAccessory {
         const isAuto =
           Number(value) ===
           Number(this.api.hap.Characteristic.TargetAirPurifierState.AUTO);
-        await this.client.setMode(isAuto ? "auto" : "favorite");
+        await this.writeOrFail("Target Air Purifier State", () =>
+          this.client.setMode(isAuto ? "auto" : "favorite"),
+        );
       });
     this.purifierService
       .getCharacteristic(this.api.hap.Characteristic.RotationSpeed)
       .onSet(async (value: CharacteristicValue) => {
-        await this.client.setFanLevel(rotationSpeedToFanLevel(Number(value)));
+        await this.writeOrFail("Rotation Speed", () =>
+          this.client.setFanLevel(rotationSpeedToFanLevel(Number(value))),
+        );
       });
     this.bindOnGet(
       this.purifierService,
@@ -326,7 +332,9 @@ export class AirPurifierAccessory {
     this.childLockService
       ?.getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) =>
-        this.client.setChildLock(Boolean(value)),
+        this.writeOrFail("Child Lock", () =>
+          this.client.setChildLock(Boolean(value)),
+        ),
       );
     if (this.childLockService) {
       this.bindOnGet(
@@ -339,7 +347,7 @@ export class AirPurifierAccessory {
     this.ledService
       .getCharacteristic(this.api.hap.Characteristic.On)
       .onSet(async (value: CharacteristicValue) =>
-        this.client.setLed(Boolean(value)),
+        this.writeOrFail("LED", () => this.client.setLed(Boolean(value))),
       );
     this.bindOnGet(this.ledService, this.api.hap.Characteristic.On, false);
 
@@ -351,7 +359,7 @@ export class AirPurifierAccessory {
           Boolean(value),
           Boolean(state?.power),
         );
-        await this.handleModeSwitch(mode);
+        await this.writeOrFail("Mode AUTO", () => this.handleModeSwitch(mode));
       });
     this.bindOnGet(this.modeAutoService, this.api.hap.Characteristic.On, false);
 
@@ -363,7 +371,7 @@ export class AirPurifierAccessory {
           Boolean(value),
           Boolean(state?.power),
         );
-        await this.handleModeSwitch(mode);
+        await this.writeOrFail("Mode NIGHT", () => this.handleModeSwitch(mode));
       });
     this.bindOnGet(
       this.modeNightService,
@@ -413,6 +421,23 @@ export class AirPurifierAccessory {
         this.filterAlertService,
         this.api.hap.Characteristic.ContactSensorState,
         Number(this.api.hap.Characteristic.ContactSensorState.CONTACT_DETECTED),
+      );
+    }
+  }
+
+  // Report a failed device write to HomeKit as a communication failure and log
+  // the cause, instead of letting Homebridge flag it as an unhandled error.
+  private async writeOrFail(
+    characteristic: string,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await write();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.warn(`Setting ${characteristic} failed: ${message}`);
+      throw new this.api.hap.HapStatusError(
+        this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
       );
     }
   }

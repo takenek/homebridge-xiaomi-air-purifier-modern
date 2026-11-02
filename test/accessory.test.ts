@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AirPurifierAccessory } from "../src/accessories/air-purifier";
-import { ModernMiioTransport } from "../src/core/miio-transport";
+import {
+  MiioCommandError,
+  ModernMiioTransport,
+} from "../src/core/miio-transport";
 import {
   FakeClient,
+  FakeHapStatusError,
   FakeService,
   makeApi,
   makeLogger,
@@ -904,5 +908,101 @@ describe("services without onGet and cached onGet values", () => {
         ) => void;
       }
     ).updateCharacteristicIfNeeded(new FakeService("custom"), null, 1);
+  });
+});
+
+describe("AirPurifierAccessory write failures", () => {
+  const notFound = new MiioCommandError(
+    -32601,
+    "MIIO error -32601: Method not found.",
+  );
+
+  const setUp = () => {
+    const api = makeApi();
+    const logger = makeLogger();
+    const client = new FakeClient();
+    const accessory = new AirPurifierAccessory(
+      api as never,
+      logger as never,
+      "Office",
+      "10.0.0.1",
+      client as never,
+      "zhimi.airpurifier.2h",
+      10,
+    );
+    const characteristicOf = (
+      serviceName: string,
+      characteristic:
+        | "Active"
+        | "TargetAirPurifierState"
+        | "RotationSpeed"
+        | "On",
+    ) =>
+      (
+        accessory
+          .getServices()
+          .find(
+            (service) =>
+              (service as unknown as FakeService).name === serviceName,
+          ) as unknown as FakeService
+      ).getCharacteristic(api.hap.Characteristic[characteristic]);
+    return { api, logger, client, characteristicOf };
+  };
+
+  it.each([
+    ["Active", "AirPurifier:Office", "Active", 1, "setPower"],
+    [
+      "Target Air Purifier State",
+      "AirPurifier:Office",
+      "TargetAirPurifierState",
+      0,
+      "setMode",
+    ],
+    [
+      "Rotation Speed",
+      "AirPurifier:Office",
+      "RotationSpeed",
+      50,
+      "setFanLevel",
+    ],
+    ["Child Lock", "Switch:Child Lock", "On", true, "setChildLock"],
+    ["LED", "Switch:LED Night Mode", "On", true, "setLed"],
+    ["Mode AUTO", "Switch:Mode AUTO On Off", "On", true, "setMode"],
+    ["Mode NIGHT", "Switch:Mode NIGHT On Off", "On", true, "setMode"],
+  ] as const)(
+    "reports a failed %s write to HomeKit as a communication failure and logs the cause",
+    async (label, serviceName, characteristic, value, method) => {
+      const { api, logger, client, characteristicOf } = setUp();
+      client[method] = async () => {
+        throw notFound;
+      };
+
+      const write = characteristicOf(
+        serviceName,
+        characteristic,
+      ).onSetHandler?.(value);
+
+      await expect(write).rejects.toBeInstanceOf(FakeHapStatusError);
+      await expect(write).rejects.toMatchObject({
+        hapStatus: api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
+      });
+      expect(logger.warn).toHaveBeenCalledWith(
+        `Setting ${label} failed: MIIO error -32601: Method not found.`,
+      );
+    },
+  );
+
+  it("logs a non-Error rejection as text", async () => {
+    const { logger, client, characteristicOf } = setUp();
+    client.setLed = async () => {
+      throw "raw-led-error";
+    };
+
+    await expect(
+      characteristicOf("Switch:LED Night Mode", "On").onSetHandler?.(true),
+    ).rejects.toBeInstanceOf(FakeHapStatusError);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Setting LED failed: raw-led-error",
+    );
   });
 });
