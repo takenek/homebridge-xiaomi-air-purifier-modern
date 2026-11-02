@@ -176,6 +176,12 @@ export class FakeClient {
   }
 }
 
+export class FakeHapStatusError extends Error {
+  public constructor(public readonly hapStatus: number) {
+    super(`HAP status ${hapStatus}`);
+  }
+}
+
 export const makeApi = (withConfiguredName = true) => {
   const events = new Map<string, Array<() => void>>();
   const api = {
@@ -263,6 +269,8 @@ export const makeApi = (withConfiguredName = true) => {
       uuid: {
         generate: (input: string) => `uuid-${input}`,
       },
+      HapStatusError: FakeHapStatusError,
+      HAPStatus: { SERVICE_COMMUNICATION_FAILURE: -70402 },
     },
     on: (event: string, cb: () => void) => {
       const arr = events.get(event) ?? [];

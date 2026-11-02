@@ -136,8 +136,8 @@ This is a **Dynamic Platform Plugin**. Add it under the `platforms` array with a
 
 | Model | Firmware support level | Notes |
 |-------|-------------------------|-------|
-| Mi Air Purifier 2H (`zhimi.airpurifier.2h`) | Validated | Covered by integration-style read/write tests. Legacy miIO (Xiaomi id `zhimi.airpurifier.mc2`), sharing the legacy transport with the 2S: `temp_dec` temperature scaling and night mode (`silent`) apply. Rotation Speed writes are tracked in [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298). |
-| Mi Air Purifier 2S (`zhimi.airpurifier.2s`) | Community-reported | Legacy miIO only (Xiaomi ids `zhimi.airpurifier.ma1`, `ma2`, `mc1`, `mb1`). Power, AQI/PM2.5, humidity, filter and the `temp_dec` temperature scale were confirmed on real hardware in [#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297). Night mode (`silent`) follows the legacy miIO protocol and is covered by unit tests. Rotation Speed writes are tracked in [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298). |
+| Mi Air Purifier 2H (`zhimi.airpurifier.2h`) | Validated | Legacy miIO (Xiaomi id `zhimi.airpurifier.mc2`), sharing the legacy transport with the 2S. The purifier from [#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297), reported there as a 2S and identified in [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298) as an `mc2` (firmware 1.4.3_23101), confirmed power, auto/manual mode, AQI/PM2.5, humidity, filter and the `temp_dec` temperature scale on plugin 1.0.9. In [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298) it rejected `set_level_fan` and accepted favorite levels 0–16, which is how Rotation Speed is now written. Night mode (`silent`) is covered by unit tests. |
+| Mi Air Purifier 2S (`zhimi.airpurifier.2s`) | Best effort | Legacy miIO only (Xiaomi ids `zhimi.airpurifier.ma1`, `ma2`, `mc1`, `mb1`), on the same transport as the 2H. The purifier reported as a 2S in [#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297) identified itself via `miIO.info` in [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298) as `zhimi.airpurifier.mc2` (2H), so no 2S has been confirmed on real hardware yet. The `ma2` is documented to accept favorite levels up to 14; see [Rotation Speed and fan mode](#rotation-speed-and-fan-mode). |
 | Mi Air Purifier 3 / 3H (`zhimi.airpurifier.3`, `zhimi.airpurifier.3h`) | Validated | Legacy + MIOT fallback paths validated. |
 | Mi Air Purifier 4 / Pro (`zhimi.airpurifier.4`, `zhimi.airpurifier.pro`) | Validated | Primary MIOT mode and fallback paths validated. |
 | Other `zhimi.airpurifier.*` variants | Best effort | Transport supports MIOT + legacy probing, but behavior may differ by firmware branch. |
@@ -181,11 +181,14 @@ The Air Quality Sensor service exposes `PM2_5Density` set to the raw AQI value r
 
 ### Temperature
 
-`CurrentTemperature` is published in °C. MIOT models report degrees directly, and the value is passed through unchanged. Legacy miIO firmware (**Mi Air Purifier 2S**, 2H, 2, Pro) reports the temperature as `temp_dec`, in tenths of a degree (`233` = 23.3 °C). The plugin reads `temp_dec` first and divides it by 10, so the reading is correct at any room temperature, including below 10 °C. The legacy `temperature` property, which is already in degrees, is used only as a fallback when `temp_dec` is not available.
+`CurrentTemperature` is published in °C. MIOT models report degrees directly, and the value is passed through unchanged. Legacy miIO firmware (2S, 2H, 2, Pro) reports the temperature as `temp_dec`, in tenths of a degree (`233` = 23.3 °C). The plugin reads `temp_dec` first and divides it by 10, so the reading is correct at any room temperature, including below 10 °C. The legacy `temperature` property, which is already in degrees, is used only as a fallback when `temp_dec` is not available.
 
 ### Rotation Speed and fan mode
 
-Setting **Rotation Speed** in HomeKit automatically switches the device to `favorite` mode. This is required by the MIOT protocol for manual fan speed control. The mode change is reflected in the HomeKit Mode switches after the next state poll.
+Setting **Rotation Speed** in HomeKit automatically switches the device to `favorite` mode, because the manual fan speed only applies there, and maps 0–100 % to level 1–16. The mode change is reflected in the HomeKit Mode switches after the next state poll.
+
+- MIOT models receive the mode and the fan level in one `set_properties` call.
+- Legacy miIO firmware (2S, 2H, 2, Pro) does not implement `set_level_fan`: the 2H (`mc2`) rejects it with `MIIO error -32601: Method not found` ([#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298)), and python-miio, Home Assistant and other Xiaomi integrations never send it to these models. The plugin sends `set_mode ["favorite"]` followed by `set_level_favorite [level]` instead. The 2H accepts favorite levels 0–16. The 2S `ma2` is documented to accept favorite levels only up to 14 (miot-spec, home-assistant/core#94437); if the firmware rejects a level above 14 with `MIIO error -5001`, the plugin retries with level 14.
 
 ### Mode switch (AUTO/NIGHT)
 
@@ -287,11 +290,17 @@ These checks reduce the risk of response spoofing/replay on an untrusted LAN, bu
 - Token must be exactly 32 hex characters
 - Regenerate token after device reset if needed
 
-### Temperature shows 100 °C or Homebridge logs `exceeded maximum of 100` (Mi Air Purifier 2S)
+### Temperature shows 100 °C or Homebridge logs `exceeded maximum of 100` (Mi Air Purifier 2S / 2H)
 
 Up to version 1.0.9 the plugin published the legacy `temp_dec` value (tenths of a degree, e.g. `233` for 23.3 °C) without scaling it. HomeKit clamped it to 100 °C, and Homebridge logged `characteristic was supplied illegal value: number 233 exceeded maximum of 100`. Below 10 °C the raw value is 100 or less, so it was shown as e.g. 95 °C without any warning.
 
-Update the plugin and select **Mi Air Purifier 2S** (`zhimi.airpurifier.2s`) as the model. The temperature is scaled correctly whichever model you select, and the HomeKit accessory is kept. If you patched `dist/accessories/air-purifier.js` by hand (the workaround from [#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297)), the update replaces the patched file, so there is nothing to revert.
+Update the plugin. The temperature is scaled correctly whichever model you select, and the HomeKit accessory is kept. If you patched `dist/accessories/air-purifier.js` by hand (the workaround from [#297](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/297)), the update replaces the patched file, so there is nothing to revert.
+
+### Rotation Speed slider jumps back and Homebridge logs `Method not found` (legacy miIO, e.g. 2H / 2S)
+
+Up to version 1.1.0 the plugin wrote Rotation Speed on legacy miIO purifiers with `set_level_fan`, a method this firmware does not have. Every slider change failed, the slider jumped back after a few seconds, and Homebridge logged `This plugin threw an error from the characteristic 'Rotation Speed': Unhandled error thrown inside write handler for characteristic: MIIO error -32601: Method not found.` ([#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298)).
+
+Update the plugin. It now switches the purifier to favorite mode and sets the favorite level; see [Rotation Speed and fan mode](#rotation-speed-and-fan-mode). A write the purifier still rejects is logged as `Setting Rotation Speed failed: <reason>` and reported to HomeKit as a communication failure.
 
 ### `Failed to configure device: Invalid or missing config field: address`
 
@@ -331,7 +340,7 @@ Some properties are model/firmware-specific. The transport supports both legacy 
 - **Protocol is auto-detected, not taken from `model`.** The `model` field only sets the Model shown in HomeKit. The plugin probes MIOT first and falls back to legacy miIO, which is what the 2S and 2H use. The accessory UUID is derived from the IP address, so changing `model` keeps the existing HomeKit accessory, rooms and automations.
 - **Temperature on legacy miIO** is read from `temp_dec` (tenths of a degree) and scaled to °C; see [Temperature](#temperature).
 - **Night mode on legacy miIO** is called `silent`; see [Mode switch (AUTO/NIGHT)](#mode-switch-autonight).
-- **Rotation Speed on legacy miIO** (2S / 2H / 2 / Pro) is still under investigation in [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298).
+- **Rotation Speed on legacy miIO** is written as favorite mode + favorite level; see [Rotation Speed and fan mode](#rotation-speed-and-fan-mode).
 
 ---
 

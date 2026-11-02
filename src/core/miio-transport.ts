@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash } from "node:crypto";
 import dgram, { type Socket } from "node:dgram";
+import { FAN_LEVEL_MAX, FAN_LEVEL_MIN } from "./mappers";
 import { isRetryableError, MIIO_COMMAND_RETRY_CODES } from "./retry";
 import {
   type DeviceState,
@@ -92,6 +93,8 @@ const toNumber = (value: unknown): number => {
 
   return 0;
 };
+const toFanLevel = (value: unknown): number =>
+  Math.max(FAN_LEVEL_MIN, Math.min(FAN_LEVEL_MAX, toNumber(value)));
 
 const LEGACY_NIGHT_MODE = "silent";
 
@@ -127,6 +130,13 @@ const toLegacyParams = (
   params: readonly unknown[],
 ): readonly unknown[] =>
   method === "set_mode" && params[0] === "sleep" ? [LEGACY_NIGHT_MODE] : params;
+
+// Legacy miIO purifiers have no `set_level_fan`: a 2H (zhimi.airpurifier.mc2)
+// answers it with -32601 "Method not found" (#298). Their manual fan speed is
+// the favorite level, which takes effect in favorite mode. The 2H accepts
+// favorite levels 0-16 and rejects 17 with -5001; the 2S (ma2) tops out at 14,
+// so a level it rejects is retried at that ceiling.
+const LEGACY_FAVORITE_LEVEL_FALLBACK = 14;
 
 const MIOT_DID = "0";
 const MIOT_POWER_PROBE: MiotProperty = { did: MIOT_DID, siid: 2, piid: 2 };
@@ -344,7 +354,7 @@ export class ModernMiioTransport implements MiioTransport {
       this.protocolMode = "legacy";
     }
 
-    await this.call(method, toLegacyParams(method, params));
+    await this.setViaLegacy(method, params);
   }
 
   public async close(): Promise<void> {
@@ -601,6 +611,32 @@ export class ModernMiioTransport implements MiioTransport {
     return undefined;
   }
 
+  private async setViaLegacy(
+    method: string,
+    params: readonly unknown[],
+  ): Promise<void> {
+    if (method !== "set_level_fan") {
+      await this.call(method, toLegacyParams(method, params));
+      return;
+    }
+
+    const level = toFanLevel(params[0]);
+    await this.call("set_mode", ["favorite"]);
+    try {
+      await this.call("set_level_favorite", [level]);
+    } catch (error: unknown) {
+      if (
+        !(error instanceof MiioCommandError) ||
+        error.code !== "-5001" ||
+        level <= LEGACY_FAVORITE_LEVEL_FALLBACK
+      ) {
+        throw error;
+      }
+
+      await this.call("set_level_favorite", [LEGACY_FAVORITE_LEVEL_FALLBACK]);
+    }
+  }
+
   private async trySetViaMiot(
     method: string,
     params: readonly unknown[],
@@ -649,7 +685,7 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (method === "set_level_fan") {
-      const level = Math.max(1, Math.min(16, toNumber(params[0])));
+      const level = toFanLevel(params[0]);
       return send([
         { did, siid: 2, piid: 5, value: 2 },
         { did, siid: 10, piid: 10, value: level },
