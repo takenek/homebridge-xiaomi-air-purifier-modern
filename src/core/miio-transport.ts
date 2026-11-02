@@ -62,6 +62,10 @@ export class MiioCommandError extends Error {
   }
 }
 
+// A MIOT set_properties reply that refuses one property's value. The reply
+// itself proves the device speaks MIOT, so this is not a protocol mismatch.
+class MiotPropertyError extends MiioCommandError {}
+
 const MIIO_PORT = 54321;
 const MIIO_MAGIC = 0x2131;
 
@@ -131,15 +135,21 @@ const toLegacyParams = (
 ): readonly unknown[] =>
   method === "set_mode" && params[0] === "sleep" ? [LEGACY_NIGHT_MODE] : params;
 
+// Manual fan speed is the favorite level, which takes effect in favorite mode.
 // Legacy miIO purifiers have no `set_level_fan`: a 2H (zhimi.airpurifier.mc2)
-// answers it with -32601 "Method not found" (#298). Their manual fan speed is
-// the favorite level, which takes effect in favorite mode. The 2H accepts
-// favorite levels 0-16 and rejects 17 with -5001, while the 2S (ma2) tops out
-// at 14. A level rejected with -5001 is retried one level lower, down to this
-// floor, and the level the device accepts is remembered as its ceiling unless
-// it already accepted a higher one. Below the floor a -5001 is more likely the
-// stuck-daemon state described in retry.ts than a range limit.
+// answers it with -32601 "Method not found" (#298). Ceilings differ by model:
+// the 2H accepts favorite levels 0-16 and rejects 17 with -5001, while the 2S
+// (ma2) and the 3H (MIOT siid 10 piid 10) top out at 14. A rejected level is
+// retried one level lower, and the level the device accepts is remembered as
+// its ceiling unless it already accepted a higher one. A MIOT refusal is
+// explicit, so MIOT steps down as far as level 1; legacy stops at this floor,
+// because below it a -5001 is more likely the stuck-daemon state described in
+// retry.ts than a range limit.
 const LEGACY_FAVORITE_LEVEL_FLOOR = 10;
+
+// MIOT item codes a lower value cannot fix: -4002 not writable, -4003 does not
+// exist.
+const MIOT_UNFIXABLE_CODES = new Set(["-4002", "-4003"]);
 
 // python-miio documents that a legacy get_prop "is limited to 16 properties"
 // and reads these purifiers 15 names at a time.
@@ -209,8 +219,8 @@ export class ModernMiioTransport implements MiioTransport {
   private session: MiioSession | null = null;
   private nextMessageId = 1;
   private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
-  private legacyFavoriteLevelMax = FAN_LEVEL_MAX;
-  private legacyFavoriteLevelAccepted = 0;
+  private favoriteLevelMax = FAN_LEVEL_MAX;
+  private favoriteLevelAccepted = 0;
   private socketClosed = false;
 
   private reportSuppressedError(context: string, error: unknown): void {
@@ -260,8 +270,8 @@ export class ModernMiioTransport implements MiioTransport {
     this.session = null;
     this.nextMessageId = 1;
     this.protocolMode = "unknown";
-    this.legacyFavoriteLevelMax = FAN_LEVEL_MAX;
-    this.legacyFavoriteLevelAccepted = 0;
+    this.favoriteLevelMax = FAN_LEVEL_MAX;
+    this.favoriteLevelAccepted = 0;
 
     await new Promise<void>((resolve) => {
       let settled = false;
@@ -638,22 +648,31 @@ export class ModernMiioTransport implements MiioTransport {
       return;
     }
 
-    const firstLevel = Math.min(
-      toFanLevel(params[0]),
-      this.legacyFavoriteLevelMax,
-    );
     await this.call("set_mode", ["favorite"]);
+    await this.writeFavoriteLevel(
+      params[0],
+      async (level) => {
+        await this.call("set_level_favorite", [level]);
+      },
+      (error) => error instanceof MiioCommandError && error.code === "-5001",
+      LEGACY_FAVORITE_LEVEL_FLOOR,
+    );
+  }
+
+  private async writeFavoriteLevel(
+    value: unknown,
+    write: (level: number) => Promise<void>,
+    isRangeRejection: (error: unknown) => boolean,
+    floor: number,
+  ): Promise<void> {
+    const firstLevel = Math.min(toFanLevel(value), this.favoriteLevelMax);
     let level = firstLevel;
     for (;;) {
       try {
-        await this.call("set_level_favorite", [level]);
+        await write(level);
         break;
       } catch (error: unknown) {
-        if (
-          !(error instanceof MiioCommandError) ||
-          error.code !== "-5001" ||
-          !(level > LEGACY_FAVORITE_LEVEL_FLOOR)
-        ) {
+        if (!isRangeRejection(error) || !(level > floor)) {
           throw error;
         }
 
@@ -662,13 +681,10 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     // A one-off rejection must not cap a device below a level it has taken.
-    if (level < firstLevel && level >= this.legacyFavoriteLevelAccepted) {
-      this.legacyFavoriteLevelMax = level;
+    if (level < firstLevel && level >= this.favoriteLevelAccepted) {
+      this.favoriteLevelMax = level;
     }
-    this.legacyFavoriteLevelAccepted = Math.max(
-      this.legacyFavoriteLevelAccepted,
-      level,
-    );
+    this.favoriteLevelAccepted = Math.max(this.favoriteLevelAccepted, level);
   }
 
   private async trySetViaMiot(
@@ -677,6 +693,10 @@ export class ModernMiioTransport implements MiioTransport {
   ): Promise<boolean> {
     const did = MIOT_DID;
 
+    // A reply that is not a result list means the device may only speak legacy
+    // miIO, and the caller falls back to it. A result list proves MIOT works,
+    // so a failed item is thrown as a rejected value instead of switching the
+    // whole transport to legacy, which a MIOT device answers only with -5001.
     const send = async (
       items: readonly MiotValueResult[],
     ): Promise<boolean> => {
@@ -685,10 +705,17 @@ export class ModernMiioTransport implements MiioTransport {
         return false;
       }
 
-      return result.every((item) => {
-        const typed = item as MiotValueResult;
-        return (typed.code ?? -1) === 0;
-      });
+      const rejected = (result as MiotValueResult[]).find(
+        (item) => (item.code ?? -1) !== 0,
+      );
+      if (rejected) {
+        throw new MiotPropertyError(
+          rejected.code ?? null,
+          `MIOT property ${rejected.siid}.${rejected.piid} rejected the value (code ${rejected.code ?? "missing"})`,
+        );
+      }
+
+      return true;
     };
 
     if (method === "set_power") {
@@ -719,11 +746,23 @@ export class ModernMiioTransport implements MiioTransport {
     }
 
     if (method === "set_level_fan") {
-      const level = toFanLevel(params[0]);
-      return send([
-        { did, siid: 2, piid: 5, value: 2 },
-        { did, siid: 10, piid: 10, value: level },
-      ]);
+      if (!(await send([{ did, siid: 2, piid: 5, value: 2 }]))) {
+        return false;
+      }
+
+      await this.writeFavoriteLevel(
+        params[0],
+        async (level) => {
+          if (!(await send([{ did, siid: 10, piid: 10, value: level }]))) {
+            throw new Error("MIOT set_properties returned no result list");
+          }
+        },
+        (error) =>
+          error instanceof MiotPropertyError &&
+          !MIOT_UNFIXABLE_CODES.has(error.code ?? ""),
+        FAN_LEVEL_MIN,
+      );
+      return true;
     }
 
     return false;
