@@ -134,9 +134,16 @@ const toLegacyParams = (
 // Legacy miIO purifiers have no `set_level_fan`: a 2H (zhimi.airpurifier.mc2)
 // answers it with -32601 "Method not found" (#298). Their manual fan speed is
 // the favorite level, which takes effect in favorite mode. The 2H accepts
-// favorite levels 0-16 and rejects 17 with -5001; the 2S (ma2) tops out at 14,
-// so a level it rejects is retried at that ceiling.
-const LEGACY_FAVORITE_LEVEL_FALLBACK = 14;
+// favorite levels 0-16 and rejects 17 with -5001, while the 2S (ma2) tops out
+// at 14. A level rejected with -5001 is retried one level lower, down to this
+// floor, and the level the device accepts is remembered as its ceiling unless
+// it already accepted a higher one. Below the floor a -5001 is more likely the
+// stuck-daemon state described in retry.ts than a range limit.
+const LEGACY_FAVORITE_LEVEL_FLOOR = 10;
+
+// python-miio documents that a legacy get_prop "is limited to 16 properties"
+// and reads these purifiers 15 names at a time.
+const LEGACY_GET_PROP_MAX_NAMES = 15;
 
 const MIOT_DID = "0";
 const MIOT_POWER_PROBE: MiotProperty = { did: MIOT_DID, siid: 2, piid: 2 };
@@ -202,6 +209,8 @@ export class ModernMiioTransport implements MiioTransport {
   private session: MiioSession | null = null;
   private nextMessageId = 1;
   private protocolMode: "unknown" | "miot" | "legacy" = "unknown";
+  private legacyFavoriteLevelMax = FAN_LEVEL_MAX;
+  private legacyFavoriteLevelAccepted = 0;
   private socketClosed = false;
 
   private reportSuppressedError(context: string, error: unknown): void {
@@ -251,6 +260,8 @@ export class ModernMiioTransport implements MiioTransport {
     this.session = null;
     this.nextMessageId = 1;
     this.protocolMode = "unknown";
+    this.legacyFavoriteLevelMax = FAN_LEVEL_MAX;
+    this.legacyFavoriteLevelAccepted = 0;
 
     await new Promise<void>((resolve) => {
       let settled = false;
@@ -563,11 +574,18 @@ export class ModernMiioTransport implements MiioTransport {
       return new Map();
     }
 
-    const result = await this.call(
-      "get_prop",
-      pairs.map(([, alias]) => alias),
-    );
-    const responses = Array.isArray(result) ? result : [];
+    const aliases = pairs.map(([, alias]) => alias);
+    const responses: unknown[] = [];
+    for (
+      let start = 0;
+      start < aliases.length;
+      start += LEGACY_GET_PROP_MAX_NAMES
+    ) {
+      const chunk = aliases.slice(start, start + LEGACY_GET_PROP_MAX_NAMES);
+      const result = await this.call("get_prop", chunk);
+      const values = Array.isArray(result) ? result : [];
+      responses.push(...chunk.map((_, i) => values[i]));
+    }
     const valueByKey = new Map<ReadProperty, unknown>();
     pairs.forEach(([key, alias], i) => {
       if (valueByKey.has(key)) return;
@@ -620,21 +638,37 @@ export class ModernMiioTransport implements MiioTransport {
       return;
     }
 
-    const level = toFanLevel(params[0]);
+    const firstLevel = Math.min(
+      toFanLevel(params[0]),
+      this.legacyFavoriteLevelMax,
+    );
     await this.call("set_mode", ["favorite"]);
-    try {
-      await this.call("set_level_favorite", [level]);
-    } catch (error: unknown) {
-      if (
-        !(error instanceof MiioCommandError) ||
-        error.code !== "-5001" ||
-        level <= LEGACY_FAVORITE_LEVEL_FALLBACK
-      ) {
-        throw error;
-      }
+    let level = firstLevel;
+    for (;;) {
+      try {
+        await this.call("set_level_favorite", [level]);
+        break;
+      } catch (error: unknown) {
+        if (
+          !(error instanceof MiioCommandError) ||
+          error.code !== "-5001" ||
+          !(level > LEGACY_FAVORITE_LEVEL_FLOOR)
+        ) {
+          throw error;
+        }
 
-      await this.call("set_level_favorite", [LEGACY_FAVORITE_LEVEL_FALLBACK]);
+        level -= 1;
+      }
     }
+
+    // A one-off rejection must not cap a device below a level it has taken.
+    if (level < firstLevel && level >= this.legacyFavoriteLevelAccepted) {
+      this.legacyFavoriteLevelMax = level;
+    }
+    this.legacyFavoriteLevelAccepted = Math.max(
+      this.legacyFavoriteLevelAccepted,
+      level,
+    );
   }
 
   private async trySetViaMiot(
