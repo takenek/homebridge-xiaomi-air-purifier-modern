@@ -349,8 +349,13 @@ it("reads a Mi Air Purifier 2S legacy response with temp_dec in tenths of a degr
 
   const state = await transport.getProperties([]);
 
-  expect(call).toHaveBeenCalledTimes(1);
-  expect(call.mock.calls[0]?.[0]).toBe("get_prop");
+  // 18 aliases are requested 15 + 3, within the legacy get_prop limit.
+  expect(
+    call.mock.calls.map(([method, aliases]) => [method, aliases.length]),
+  ).toEqual([
+    ["get_prop", 15],
+    ["get_prop", 3],
+  ]);
   expect(state).toEqual({
     power: true,
     fan_level: 10,
@@ -411,7 +416,7 @@ it("maps legacy night mode 'silent' to sleep on read and sleep to 'silent' on wr
   await transport.close();
 });
 
-it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows errors the fallback cannot fix (#298)", async () => {
+it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows errors other than -5001 without stepping down (#298)", async () => {
   const transport = createTransport();
   const internals = transport as unknown as {
     protocolMode: "unknown" | "miot" | "legacy";
@@ -441,6 +446,12 @@ it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows 
       return ["ok"];
     });
 
+  // Only -5001 steps down; any other error surfaces after the first write.
+  const firstWriteOnly = [
+    ["set_mode", ["favorite"]],
+    ["set_level_favorite", [16]],
+  ];
+
   const timeout = Object.assign(new Error("MIIO timeout after 20ms"), {
     code: "ETIMEDOUT",
   });
@@ -448,6 +459,7 @@ it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows 
   await expect(transport.setProperty("set_level_fan", [16])).rejects.toBe(
     timeout,
   );
+  expect(call.mock.calls).toEqual(firstWriteOnly);
 
   const notFound = new MiioCommandError(
     -32601,
@@ -457,7 +469,19 @@ it("writes legacy Rotation Speed as favorite mode + favorite level and rethrows 
   await expect(transport.setProperty("set_level_fan", [16])).rejects.toBe(
     notFound,
   );
-  expect(call).not.toHaveBeenCalledWith("set_level_favorite", [14]);
+  expect(call.mock.calls).toEqual(firstWriteOnly);
+
+  // A non-finite level cannot step down forever: it is rejected once and
+  // surfaces. HomeKit never sends one; this guards direct callers.
+  const rejected = new MiioCommandError(-5001, "MIIO error -5001: invaild_arg");
+  failFavoriteLevelWith(rejected);
+  await expect(
+    transport.setProperty("set_level_fan", [Number.NaN]),
+  ).rejects.toBe(rejected);
+  expect(call.mock.calls).toEqual([
+    ["set_mode", ["favorite"]],
+    ["set_level_favorite", [Number.NaN]],
+  ]);
 
   await transport.close();
 });

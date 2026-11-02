@@ -43,10 +43,16 @@ type MiioReply =
 // handshake and command in the order received. Its answers replay what a
 // real Mi Air Purifier 2H (zhimi.airpurifier.mc2, fw 1.4.3_23101) returned in
 // #298: set_level_fan is "Method not found", favorite levels 0-16 are stored
-// as sent and 17 is rejected with -5001 "invaild_arg" (sic).
+// as sent and 17 is rejected with -5001 "invaild_arg" (sic). `maxFavoriteLevel`
+// models firmware with a lower ceiling (the 2S ma2 reportedly stops at 14; its
+// rejection code is unrecorded, so -5001 is assumed), `rejectNextFavoriteWrites`
+// models a one-off -5001, and
+// `getPropLimit` models firmware that cannot answer more than N names in one
+// get_prop, either by cutting the reply short or with an error.
 class FakeLegacyPurifier extends EventEmitter {
   public readonly requests: MiioRequest[] = [];
   public readonly wire: string[] = [];
+  public rejectNextFavoriteWrites = 0;
   public readonly state: Record<string, unknown> = {
     power: "on",
     mode: "auto",
@@ -62,7 +68,13 @@ class FakeLegacyPurifier extends EventEmitter {
   private readonly key = md5(this.token);
   private readonly iv = md5(this.key, this.token);
 
-  public constructor(private readonly maxFavoriteLevel = 16) {
+  public constructor(
+    public maxFavoriteLevel = 16,
+    private readonly getPropLimit?: {
+      names: number;
+      overflow: "truncate" | "error";
+    },
+  ) {
     super();
   }
 
@@ -147,15 +159,25 @@ class FakeLegacyPurifier extends EventEmitter {
 
   private handle({ method, params }: MiioRequest): MiioReply {
     switch (method) {
-      case "get_prop":
-        return {
-          result: params.map((name) => this.state[String(name)] ?? null),
-        };
+      case "get_prop": {
+        const values = params.map((name) => this.state[String(name)] ?? null);
+        const limit = this.getPropLimit;
+        if (limit && params.length > limit.names) {
+          return limit.overflow === "truncate"
+            ? { result: values.slice(0, limit.names) }
+            : { error: { code: -30001, message: "Resp invalid json." } };
+        }
+        return { result: values };
+      }
       case "set_mode":
         this.state.mode = params[0];
         return { result: ["ok"] };
       case "set_level_favorite": {
         const level = Number(params[0]);
+        if (this.rejectNextFavoriteWrites > 0) {
+          this.rejectNextFavoriteWrites -= 1;
+          return { error: { code: -5001, message: "invaild_arg" } };
+        }
         if (level < 0 || level > this.maxFavoriteLevel) {
           return { error: { code: -5001, message: "invaild_arg" } };
         }
@@ -186,6 +208,11 @@ const favoriteLevelWrites = (device: FakeLegacyPurifier): unknown[] =>
   device.requests
     .filter((request) => request.method === "set_level_favorite")
     .map((request) => request.params[0]);
+
+const getPropSizes = (device: FakeLegacyPurifier): number[] =>
+  device.requests
+    .filter((request) => request.method === "get_prop")
+    .map((request) => request.params.length);
 
 describe("Rotation Speed on legacy miIO purifiers (#298)", () => {
   it("fake device answers like the 2H recorded in #298", async () => {
@@ -255,46 +282,200 @@ describe("Rotation Speed on legacy miIO purifiers (#298)", () => {
     await transport.close();
   });
 
-  it.each([15, 16])(
-    "retries at favorite level 14 when a 2S (ma2) rejects fan level %i",
-    async (requested) => {
-      const device = new FakeLegacyPurifier(14);
+  it("steps down one level at a time when firmware capped at 14 (as reported for the 2S ma2) rejects higher levels with -5001", async () => {
+    const device = new FakeLegacyPurifier(14);
+    const transport = connect(device);
+
+    await transport.setProperty("set_level_fan", [16]);
+
+    // Each -5001 is resent once after a fresh handshake, then the next level
+    // down is tried.
+    const setModeAt = device.wire.lastIndexOf('set_mode ["favorite"]');
+    expect(device.wire.slice(setModeAt)).toEqual([
+      'set_mode ["favorite"]',
+      "set_level_favorite [16]",
+      "hello",
+      "set_level_favorite [16]",
+      "set_level_favorite [15]",
+      "hello",
+      "set_level_favorite [15]",
+      "set_level_favorite [14]",
+    ]);
+    expect(device.state).toMatchObject({
+      mode: "favorite",
+      favorite_level: 14,
+    });
+
+    await transport.close();
+  });
+
+  it.each([
+    [14, 15],
+    [13, 16],
+    [13, 14],
+    [10, 16],
+  ])(
+    "settles on the ceiling of a device capped at %i for fan level %i",
+    async (max, requested) => {
+      const device = new FakeLegacyPurifier(max);
       const transport = connect(device);
 
       await transport.setProperty("set_level_fan", [requested]);
 
-      // -5001 is resent once after a fresh handshake before the fallback applies.
-      const setModeAt = device.wire.lastIndexOf('set_mode ["favorite"]');
-      expect(device.wire.slice(setModeAt)).toEqual([
-        'set_mode ["favorite"]',
-        `set_level_favorite [${requested}]`,
-        "hello",
-        `set_level_favorite [${requested}]`,
-        "set_level_favorite [14]",
-      ]);
-      expect(device.state).toMatchObject({
-        mode: "favorite",
-        favorite_level: 14,
-      });
+      expect(favoriteLevelWrites(device).at(-1)).toBe(max);
+      expect(device.state.favorite_level).toBe(max);
 
       await transport.close();
     },
   );
 
+  it("remembers the ceiling it found and clamps later writes to it", async () => {
+    const device = new FakeLegacyPurifier(14);
+    const transport = connect(device);
+    await transport.setProperty("set_level_fan", [16]);
+    device.requests.length = 0;
+
+    await transport.setProperty("set_level_fan", [16]);
+    await transport.setProperty("set_level_fan", [9]);
+    await transport.setProperty("set_level_fan", [15]);
+
+    // An accepted level below the ceiling must not lower it.
+    expect(favoriteLevelWrites(device)).toEqual([14, 9, 14]);
+    expect(device.state.favorite_level).toBe(14);
+
+    await transport.close();
+  });
+
+  it("keeps the full range after an ordinary lower write", async () => {
+    const device = new FakeLegacyPurifier();
+    const transport = connect(device);
+
+    await transport.setProperty("set_level_fan", [9]);
+    await transport.setProperty("set_level_fan", [16]);
+
+    expect(favoriteLevelWrites(device)).toEqual([9, 16]);
+    expect(device.state.favorite_level).toBe(16);
+
+    await transport.close();
+  });
+
+  it("does not learn a ceiling from a one-off -5001 below a level the device already took", async () => {
+    const device = new FakeLegacyPurifier();
+    const transport = connect(device);
+    await transport.setProperty("set_level_fan", [16]);
+
+    // Both the write and its resend after a fresh handshake are rejected once.
+    device.rejectNextFavoriteWrites = 2;
+    await transport.setProperty("set_level_fan", [13]);
+    device.requests.length = 0;
+    await transport.setProperty("set_level_fan", [16]);
+
+    expect(favoriteLevelWrites(device)).toEqual([16]);
+    expect(device.state.favorite_level).toBe(16);
+
+    await transport.close();
+  });
+
+  it("forgets the ceiling when the transport is reset", async () => {
+    const device = new FakeLegacyPurifier(14);
+    const transport = connect(device);
+    await transport.setProperty("set_level_fan", [16]);
+
+    await transport.reset();
+    device.requests.length = 0;
+    await transport.setProperty("set_level_fan", [16]);
+
+    expect(favoriteLevelWrites(device)[0]).toBe(16);
+    expect(device.state.favorite_level).toBe(14);
+
+    await transport.close();
+  });
+
+  it("forgets the levels a device accepted when the transport is reset", async () => {
+    const device = new FakeLegacyPurifier();
+    const transport = connect(device);
+    await transport.setProperty("set_level_fan", [16]);
+
+    // After the reset the purifier caps lower; the earlier 16 must not block
+    // learning the new ceiling.
+    device.maxFavoriteLevel = 14;
+    await transport.reset();
+    await transport.setProperty("set_level_fan", [16]);
+    device.requests.length = 0;
+    await transport.setProperty("set_level_fan", [16]);
+
+    expect(favoriteLevelWrites(device)).toEqual([14]);
+
+    await transport.close();
+  });
+
+  it("stops stepping down at level 10 and keeps the ceiling unchanged", async () => {
+    const device = new FakeLegacyPurifier(8);
+    const transport = connect(device);
+
+    await expect(
+      transport.setProperty("set_level_fan", [12]),
+    ).rejects.toMatchObject({ code: "-5001" });
+    expect(favoriteLevelWrites(device)).toEqual([12, 12, 11, 11, 10, 10]);
+    expect(device.state.favorite_level).toBe(11);
+
+    device.requests.length = 0;
+    await expect(
+      transport.setProperty("set_level_fan", [16]),
+    ).rejects.toMatchObject({ code: "-5001" });
+    expect(favoriteLevelWrites(device)[0]).toBe(16);
+
+    await transport.close();
+  });
+
+  it("surfaces a -5001 for a level at or below 10 without stepping down", async () => {
+    const device = new FakeLegacyPurifier(5);
+    const transport = connect(device);
+
+    await expect(
+      transport.setProperty("set_level_fan", [8]),
+    ).rejects.toMatchObject({ code: "-5001" });
+    expect(favoriteLevelWrites(device)).toEqual([8, 8]);
+
+    await transport.close();
+  });
+
+  it("reads legacy status in get_prop requests of at most 15 names", async () => {
+    const device = new FakeLegacyPurifier();
+    const transport = connect(device);
+
+    await transport.getProperties([]);
+
+    const sizes = getPropSizes(device);
+    // The protocol probe asks for one name; the status read is split in two.
+    expect(sizes.slice(-2)).toEqual([15, 3]);
+
+    await transport.close();
+  });
+
   it.each([
-    [13, 14],
-    [10, 12],
-  ])(
-    "surfaces the rejection when a device capped at %i refuses fan level %i",
-    async (max, requested) => {
-      const device = new FakeLegacyPurifier(max);
+    [16, "truncate"],
+    [16, "error"],
+    // A reply cut short in the first request must not shift the second.
+    [14, "truncate"],
+  ] as const)(
+    "reads a device that cannot answer more than %i names (%s)",
+    async (names, overflow) => {
+      const device = new FakeLegacyPurifier(16, { names, overflow });
+      device.state.motor1_speed = 780;
+      device.state.use_time = 2_160_000;
+      device.state.purify_volume = 123_456;
       const transport = connect(device);
 
-      await expect(
-        transport.setProperty("set_level_fan", [requested]),
-      ).rejects.toMatchObject({ code: "-5001" });
-      expect(favoriteLevelWrites(device)).toEqual([requested, requested]);
-      expect(device.state.favorite_level).toBe(11);
+      await expect(transport.getProperties([])).resolves.toMatchObject({
+        power: true,
+        mode: "auto",
+        fan_level: 11,
+        temperature: 23.3,
+        motor1_speed: 780,
+        use_time: 2_160_000,
+        purify_volume: 123_456,
+      });
 
       await transport.close();
     },
