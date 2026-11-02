@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.1.0...v1.1.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **accessory:** report failed HomeKit writes as a communication failure ([e96d2bd](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/e96d2bd1a717e220edd3345527266e5475d1d3f4)), closes [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298) [#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298)
+* **transport:** write legacy Rotation Speed as the favorite level ([#298](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/issues/298)) ([0d3ae1f](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/0d3ae1fec0aa030754d8d819df3934afd1b7fcf6))
+
 # [1.1.0](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.0.9...v1.1.0) (2026-10-29)
 
 
