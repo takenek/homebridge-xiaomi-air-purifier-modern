@@ -18,10 +18,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each lane tests against the lowest Homebridge release that supports
+        # that Node.js line: 2.0.2 (the peerDependency floor) on Node 22/24, and
+        # 2.3.0 on Node 26 - Homebridge 2.0.x-2.2.x declare engines.node
+        # "^22 || ^24", so engine-strict refuses to install them on Node 26.
         include:
           - node: 22
+            homebridge: 2.0.2
             lane: full
           - node: 24
+            homebridge: 2.0.2
+            lane: full
+          - node: 26
+            homebridge: 2.3.0
             lane: full
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,7 +39,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm install --no-save homebridge@2.0.2
+      - run: npm install --no-save homebridge@${{ matrix.homebridge }}
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

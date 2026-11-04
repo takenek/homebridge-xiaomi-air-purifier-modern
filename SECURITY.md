@@ -4,7 +4,7 @@
 
 | Version | Supported | Runtime requirements |
 | --- | --- | --- |
-| 1.x (latest) | ✅ | Homebridge **2.0.2+**, Node **22.12+ / 24.x** |
+| 1.x (latest) | ✅ | Homebridge **2.0.2+** (**2.3.0+** on Node 26), Node **22.12+ / 24.x / 26.x** |
 | 1.x (older) | ❌ | superseded by latest 1.x |
 | < 1.0.0 | ❌ | unsupported |
 

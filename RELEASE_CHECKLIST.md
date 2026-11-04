@@ -14,7 +14,7 @@
 The `release.yml` workflow is split into two jobs:
 
 - **`verify`** — read-only (`contents: read`, no OIDC), runs `npm ci`,
-  `npm audit --audit-level=high` and `npm run check` across the full Node 22/24
+  `npm audit --audit-level=high` and `npm run check` across the full Node 22/24/26
   matrix for the exact commit being released.
 - **`publish`** — gains write/OIDC scopes only after `verify` succeeds
   (`needs: [verify]`), checks out with `persist-credentials: false`, and runs

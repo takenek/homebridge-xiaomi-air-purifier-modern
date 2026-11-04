@@ -9,7 +9,7 @@ on:
 permissions: {}
 
 jobs:
-  # A-02: read-only verification gate. Runs the full check matrix (Node 22 + 24)
+  # A-02: read-only verification gate. Runs the full check matrix (Node 22/24/26)
   # for the exact commit being released, decoupled from the privileged publish
   # step. `publish` depends on this, so a commit that fails lint/typecheck/test/
   # build/audit on any supported Node version is never published.
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        node: [22, 24]
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

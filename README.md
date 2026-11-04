@@ -3,11 +3,11 @@
 [![CI](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml/badge.svg)](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-xiaomi-air-purifier-modern)](https://www.npmjs.com/package/homebridge-xiaomi-air-purifier-modern)
 [![Homebridge](https://img.shields.io/badge/Homebridge-2.0.2%2B-blueviolet)](https://homebridge.io)
-[![Node](https://img.shields.io/badge/Node.js-22.12%2B%20%7C%2024.x-green)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/Node.js-22.12%2B%20%7C%2024.x%20%7C%2026.x-green)](https://nodejs.org)
 
 Modern, production-quality Homebridge plugin for **Xiaomi Mi Air Purifier** (2H / 2S / 3 / 3H / 4 / Pro).
 
-Built from scratch in TypeScript on top of Node.js built-ins (no native dependencies, no external HTTP traffic), targeting Homebridge 2.x and current LTS Node.js (22.x / 24.x).
+Built from scratch in TypeScript on top of Node.js built-ins (no native dependencies, no external HTTP traffic), targeting Homebridge 2.x and current LTS Node.js (22.x / 24.x / 26.x).
 
 ---
 
@@ -31,7 +31,7 @@ Built from scratch in TypeScript on top of Node.js built-ins (no native dependen
 | Capability | `homebridge-xiaomi-mi-air-purifier` (verified, last release 2020) | `homebridge-xiaomi-air-purifier-modern` (this plugin) |
 |------------|-------------------------------------------------------------------|--------------------------------------------------------|
 | Homebridge target | Homebridge 1.x | **Homebridge 2.x** (native `AirPurifier` service with `Active` / `CurrentAirPurifierState` / `TargetAirPurifierState` / `RotationSpeed`) |
-| Node.js | Legacy (Node 10/12) | **Node 22 LTS and Node 24 LTS** |
+| Node.js | Legacy (Node 10/12) | **Node 22 LTS, Node 24 LTS and Node 26 LTS** |
 | Implementation | JavaScript + abandoned `miio` dependency | **TypeScript**, Node `dgram` only, zero runtime deps |
 | Supported models | 2 / 2S (`zhimi.airpurifier.m1`, `m2`) | **2H, 2S, 3, 3H, 4, Pro** (`zhimi.airpurifier.2h/2s/3/3h/4/pro`) — MIOT + legacy MIIO transports |
 | Multi-device | Single accessory | **Dynamic platform** with multiple devices in one instance |
@@ -49,7 +49,8 @@ This plugin is intended for users on Homebridge 2.x with the newer hardware (mod
 ## Requirements
 
 - Homebridge **2.0.2** or newer (Homebridge 1.x is no longer supported)
-- Node.js **22.12.0** or newer on the 22.x line, or **24.x** (Node 20 reached end-of-life and is no longer supported)
+- Node.js **22.12.0** or newer on the 22.x line, **24.x** or **26.x** (Node 20 reached end-of-life and is no longer supported)
+  - on **Node 26** you need Homebridge **2.3.0** or newer — that is the first Homebridge release that itself runs on Node 26
 - npm **>=10.0.0**
 - Xiaomi Mi Air Purifier on the same LAN (UDP 54321)
 - Device token (32-char hex)
@@ -267,11 +268,12 @@ These checks reduce the risk of response spoofing/replay on an untrusted LAN, bu
 
 ## Support & deprecation policy
 
-- Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.12+** and **Node 24.x**).
-- Homebridge support target: stable **2.0.2+** validated in CI on Node 22 and Node 24.
+- Supported runtime: active LTS Node versions listed in `package.json` engines (currently **Node 22.12+**, **Node 24.x** and **Node 26.x**).
+- Homebridge support target: stable **2.0.2+**, validated in CI against Homebridge **2.0.2** on Node 22 and Node 24, and against Homebridge **2.3.0** on Node 26 (Homebridge 2.0.x – 2.2.x do not support Node 26).
+- Node.js **26.x** (LTS since October 2026) is supported from plugin **v1.1.4** (with Homebridge **2.3.0+**). On Node 26, plugin **v1.0.9 – v1.1.3** make Homebridge log the warning *"requires a Node.js version of ^22.12.0 || ^24.0.0 which does not satisfy the current Node.js version"* (older releases print the same warning with their own range). Homebridge still loads the plugin, but those releases were never tested on Node 26 — update the plugin to clear the warning.
 - Homebridge **1.x** support has been dropped — users on Homebridge 1.x must **stay on plugin v1.0.2** or upgrade Homebridge to 2.x.
-- Node.js **20.x** support has been dropped (end-of-life) — users on Node 20 must **stay on plugin v1.0.2** or upgrade Node.js to 22.12+ / 24.
-- Node.js **22.0.x – 22.11.x** are no longer supported — the minimum on the 22.x line is now **22.12.0** (the dev toolchain requires it, and it is the range Homebridge 2.x asks plugin authors to declare). Users on an earlier 22.x release must **stay on plugin v1.0.8** or upgrade Node.js to 22.12+ / 24.x.
+- Node.js **20.x** support has been dropped (end-of-life) — users on Node 20 must **stay on plugin v1.0.2** or upgrade Node.js to 22.12+ / 24.x / 26.x.
+- Node.js **22.0.x – 22.11.x** are no longer supported — the minimum on the 22.x line is now **22.12.0** (the dev toolchain requires it, and it is the range Homebridge 2.x asks plugin authors to declare). Users on an earlier 22.x release must **stay on plugin v1.0.8** or upgrade Node.js to 22.12+ / 24.x / 26.x.
 - Deprecations are announced in `CHANGELOG.md` before removal in the next major version.
 - **Dynamic Platform Plugin** — supports multiple devices in a single plugin instance with automatic cached accessory management. See `config.schema.json` for the full schema.
 
