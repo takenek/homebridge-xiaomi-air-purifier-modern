@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file. Version headers and the per-commit bullets below are generated automatically by [semantic-release](https://semantic-release.gitbook.io/) from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.1.3...v1.1.4) (2026-11-04)
+
+
+### Bug Fixes
+
+* **engines:** support Node.js 26 LTS ([de84a08](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/commit/de84a086bb820ef46bc36e53bf88262203892d9e))
+
 ## [1.1.3](https://github.com/takenek/homebridge-xiaomi-air-purifier-modern/compare/v1.1.2...v1.1.3) (2026-11-02)
 
 
