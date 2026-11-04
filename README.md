@@ -39,7 +39,7 @@ Built from scratch in TypeScript on top of Node.js built-ins (no native dependen
 | Mode handling | One switch, `auto` only | **Separate AUTO / NIGHT switches** with state sync after writes |
 | Filter status | None | `FilterMaintenance` (life + change indication) + optional `Filter Replace Alert` contact sensor |
 | Settings GUI | Minimal | **Full `config.schema.json`** with grouped fieldsets, validation, password-masked token field |
-| Tests | None | **100 % coverage** (statements / branches / functions / lines) on Vitest v4 + v8 |
+| Tests | None | **100 % coverage** (statements / branches / functions / lines) on Vitest v5 + v8 |
 | Maintenance | Last release 2020 | Active — semantic-release pipeline with GitHub releases per version |
 
 This plugin is intended for users on Homebridge 2.x with the newer hardware (model **3 / 3H / 4 / Pro**), where the legacy verified plugin does not provide working transport.
@@ -371,7 +371,7 @@ npm test                  # run all tests
 npx vitest --coverage     # run tests with coverage report
 ```
 
-Tests enforce **100% coverage** (statements, branches, functions, lines) via vitest v4 + v8 provider. The test suite covers 9 automated scenarios for network resilience, device status synchronization, and filter lifecycle — see [`docs/reliability-test-plan.md`](./docs/reliability-test-plan.md) for details.
+Tests enforce **100% coverage** (statements, branches, functions, lines) via vitest v5 + v8 provider. The test suite covers 9 automated scenarios for network resilience, device status synchronization, and filter lifecycle — see [`docs/reliability-test-plan.md`](./docs/reliability-test-plan.md) for details.
 
 ---
 
